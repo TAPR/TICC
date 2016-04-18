@@ -2,6 +2,8 @@
 // to "BigBobby" of the Programming Questions board at forum.arduino.cc
 // Initial version -- 27 March 2016
 
+#include <stdint.h>               // define unint16_t, uint32_t
+
 #define PS_PER_SEC        (1e12)  // ps/s
 #define CLOCK_FREQ        (1e8)   // Hz
 #define CLOCK_PERIOD_PS   (uint32_t)(PS_PER_SEC/CLOCK_FREQ)  // ps
@@ -13,7 +15,7 @@ uint16_t TIME1 = 3;
 uint16_t TIME2 = 4;
 uint32_t CLOCK_COUNT1 = 5;
 
-  {
+void dummy_function_name()  {
     // Calculation from 8.4.2.2.1 of datasheet.
 
     // These registers are 23 bits, but in example never

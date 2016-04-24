@@ -1,0 +1,17 @@
+Errors on Rev. B board -- 24 April 2016
+
+1.  Add 2.7k pullups on INTBA and INTBB. ADDED (at U4 and U6 inputs)
+
+2.  Route STOPA and STOPB to Arduino Pins 6 and 7 respectively.  ADDED
+
+3.  Add 100K pulldowns on STARTA and STARTB. ADDED (at SMA connectors)
+
+Additional Changes for Rev. C:
+
+4.  Add voltage translators for STOPA and STOPB
+
+5.  Add jumpers so that channel A stop signal can come from stop gate,
+    or directly from channel B SMA.  This would provide a single channel
+    configuration that would allow more measurements/second but with a
+    maximum time interval limited by the TDC chip.
+

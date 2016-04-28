@@ -7,52 +7,32 @@
 // Portions Copyright George Byrkit K9TRV 2016
 // Licensed under BSD 2-clause license
 
+
+#include "TICC.h"     //Register and structure definitions
+
 // the TI TDC7200 communicates using SPI, so include the library:
 #include <SPI.h>
 
-// set up for ISR
-int interrupt = 1; // interrupt for Uno pin 3
-int int_pin = 3; // physical pin
-volatile unsigned long long coarse_count = 0;
+volatile unsigned long long coarseCount = 0;
 
-// hardware connections to TDC2700 -- need to reassign these more logically (todo in Eagle)
-const int ENABLE_A = 13;
-const int INTB_A = 12;
-const int CSB_A = 11;
-const int ENABLE_B = 10;
-const int INTB_B = 9;
-const int CSB_B = 8;
-const int STOP_A = 7;
-const int STOP_B = 8;
+// Enumerate the TDC7200 channel structures
+static chanTDC7200 ChanA = {
+  .ID = 'A',
+  .ENABLE = ENABLE_A,
+  .INTB = INTB_A,
+  .CSB = CSB_A,
+  .STOP = STOP_A };
 
-const int ChA = 0;	// channel A
-const int ChB = 1;	// channel B
+static chanTDC7200 ChanB = {
+  .ID = 'B',
+  .ENABLE = ENABLE_B,
+  .INTB = INTB_B,
+  .CSB = CSB_B,
+  .STOP = STOP_B };
 
-// TDC7200 register addresses
-const int CONFIG1 = 0x00;                 // default 0x00
-const int CONFIG2 = 0x01;                 // default 0x40
-const int INT_STATUS = 0x02;              // default 0x00
-const int INT_MASK = 0x03;                // default 0x07
-const int COARSE_CNTR_OVF_H = 0x04;       // default 0xff
-const int COARSE_CNTR_OVF_L = 0x05;       // default 0xff
-const int CLOCK_CNTR_OVF_H = 0x06;        // default 0xff
-const int CLOCK_CNTR_OVF_L = 0x07;        // default 0xff
-const int CLOCK_CNTR_STOP_MASK_H = 0x08;  // default 0xff
-const int CLOCK_CNTR_STOP_MASK_L = 0x09;  // default 0xff
-// gap from 0x0A thru 0x0F...
-const int TIME1 = 0x10;                   // default 0x00_0000
-const int CLOCK_COUNT1 = 0x11;            // default 0x00_0000
-const int TIME2 = 0x12;                   // default 0x00_0000
-const int CLOCK_COUNT2 = 0x13;            // default 0x00_0000
-const int TIME3 = 0x14;                   // default 0x00_0000
-const int CLOCK_COUNT3 = 0x15;            // default 0x00_0000
-const int TIME4 = 0x16;                   // default 0x00_0000
-const int CLOCK_COUNT4 = 0x17;            // default 0x00_0000
-const int TIME5 = 0x18;                   // default 0x00_0000
-const int CLOCK_COUNT5 = 0x19;            // default 0x00_0000
-const int TIME6 = 0x1A;                   // default 0x00_0000
-const int CALIBRATION1 = 0x1B;            // default 0x00_0000
-const int CALIBRATION2 = 0x1C;            // default 0x00_0000
+chanTDC7200* ChA = &ChanA;  // pointer to Channel A
+chanTDC7200* ChB = &ChanB;
+
 
 // properties of the TDC7200 chip:
 // Most Significant Bit is clocked first (MSBFIRST)
@@ -61,37 +41,23 @@ const int CALIBRATION2 = 0x1C;            // default 0x00_0000
 // max clock speed: 20 mHz
 // Using TDC7200 timing mode 1...
 
-// global vars
-long long unsigned stop_time_A;
-long long unsigned stop_time_B;
-long result_A;
-long result_B;
-int CSB;
-int ENABLE;
-
-  int timeresult_A = 0;
-  int clockresult_A = 0;
-  int calresult_A = 0;
-  int timeresult_B = 0;
-  int clockresult_B = 0;
-  int calresult_B = 0;
 
 void setup() {
   // start the SPI library:
   SPI.begin();
   
-  pinMode(int_pin, INPUT);
+  pinMode(intPin, INPUT);
   
-  pinMode(ENABLE_A,OUTPUT);
-  pinMode(INTB_A,INPUT);
-  pinMode(CSB_A,OUTPUT);
-  pinMode(STOP_A,INPUT);
-  pinMode(ENABLE_B,OUTPUT);
-  pinMode(INTB_B,INPUT);
-  pinMode(CSB_B,OUTPUT);
-  pinMode(STOP_B,INPUT);
+  pinMode(ChA->ENABLE,OUTPUT);
+  pinMode(ChA->INTB,INPUT);
+  pinMode(ChA->CSB,OUTPUT);
+  pinMode(ChA->STOP,INPUT);
+  pinMode(ChB->ENABLE,OUTPUT);
+  pinMode(ChB->INTB,INPUT);
+  pinMode(ChB->CSB,OUTPUT);
+  pinMode(ChB->STOP,INPUT);
   
-  attachInterrupt(interrupt, coarse_timer, RISING);
+  attachInterrupt(interrupt, coarseTimer, RISING);
   
   TDC_setup(ChA);
   TDC_setup(ChB);
@@ -105,65 +71,54 @@ void setup() {
 
 void loop() {
  
- if (STOP_A) {
-   stop_time_A = coarse_count; // capture time stamp of gated stop clock
- }
- if (STOP_B) {
-    stop_time_B = coarse_count;
- } 
+  if (ChA->STOP) 
+    ChA->stopTime = coarseCount; // capture time stamp of gated stop clock
+ 
+  if (ChB->STOP) 
+    ChB->stopTime = coarseCount;
 
-  if (INTB_A) { // channel 1 measurement complete
-    result_A = TDC_calc(0); // get registers and calc TOF
+  if (ChA->INTB) { // channel measurement complete
+    ChA->result = TDC_calc(ChA); // get registers and calc TOF
     ready_next(ChA); // enable next measurement
   }
-  if (INTB_B) {
-    result_B = TDC_calc(1);
+  
+  if (ChB->INTB) {
+    ChB->result = TDC_calc(ChB);
     ready_next(ChB);
   }
    
    // if we have both channels, subtract channel 0 from channel 1, print result, and reset vars
-   if (result_A && result_B) { 
+   if (ChanA.result && ChanB.result) { 
     output_ti();
-    result_A = 0;
-    result_B = 0;
-    stop_time_A = 0;
-    stop_time_B = 0;
+    ChA->result = 0;
+    ChB->result = 0;
+    ChA->stopTime = 0;
+    ChB->stopTime = 0;
    } 
-  
 }  
 
-// ISR for timer NOTE: need to deal with rollover
-void coarse_timer() {
-  coarse_count++;
+// ISR for timer. NOTE: uint_64 rollover would take
+// 62 million years at 100 usec interrupt rate.
+
+void coarseTimer() {
+  coarseCount++;
 }
 
 // Initial config for TDC7200
 
-int TDC_setup(int channel) {
-
-  if (!channel)
-    ENABLE = ENABLE_A;
-  else
-    ENABLE = ENABLE_B;
-  
-  digitalWrite(ENABLE, HIGH);
+int TDC_setup(chanTDC7200* channel) {
+  digitalWrite(channel->ENABLE, HIGH);
 }
 
 
 // Fetch and calculate results from TDC7200
-int TDC_calc(int channel) {
+int TDC_calc(chanTDC7200* channel) {
     TDC_read(channel);
     // calc the values (John...)
 }
 
-// Read TDC for channel (0=A or 1=B)
-void TDC_read(int channel) {
-
-  if (!channel)
-    CSB = CSB_A;
-  else
-    CSB = CSB_B;
-
+// Read TDC for channel
+void TDC_read(chanTDC7200* channel) {
 
   byte inByte = 0;
   int timeResult = 0;
@@ -172,7 +127,7 @@ void TDC_read(int channel) {
 
   // read the TIMER1 register
     // take the chip select low to select the device:
-  digitalWrite(CSB, LOW);
+  digitalWrite(channel->CSB, LOW);
 
   SPI.transfer(TIME1);
   inByte = SPI.transfer(0x00);
@@ -182,11 +137,11 @@ void TDC_read(int channel) {
   inByte = SPI.transfer(0x00);
   timeResult = timeResult<<8 | inByte;
   
-  digitalWrite(CSB, HIGH);
+  digitalWrite(channel->CSB, HIGH);
 
 // read the CLOCK1 register
     // take the chip select low to select the device:
-  digitalWrite(CSB, LOW);
+  digitalWrite(channel->CSB, LOW);
 
   SPI.transfer(CLOCK_COUNT1);
   inByte = SPI.transfer(0x00);
@@ -196,11 +151,11 @@ void TDC_read(int channel) {
   inByte = SPI.transfer(0x00);
   clockResult = clockResult<<8 | inByte;
   
-  digitalWrite(CSB, HIGH);
+  digitalWrite(channel->CSB, HIGH);
 
 // read the CALIBRATION1 register
    // take the chip select low to select the device:
-  digitalWrite(CSB, LOW);
+  digitalWrite(channel->CSB, LOW);
 
   SPI.transfer(CALIBRATION1);
   inByte = SPI.transfer(0x00);
@@ -210,25 +165,17 @@ void TDC_read(int channel) {
   inByte = SPI.transfer(0x00);
   calResult = calResult<<8 | inByte;
   
-  digitalWrite(CSB, HIGH);
+  digitalWrite(channel->CSB, HIGH);
 
-  if (!channel) {
-    timeresult_A = timeResult;
-    clockresult_A = clockResult;
-    calresult_A = calResult;
-    }
-  else {
-    timeresult_B = timeResult;
-    clockresult_B = clockResult;
-    calresult_B = calResult;
-    }
-
+  channel->timeResult = timeResult;
+  channel->clockResult = clockResult;
+  channel->calResult = calResult;
   return;  
 }
 
 
 // Enable next measurement cycle
-void ready_next(int channel) {
+void ready_next(chanTDC7200* channel) {
   // needs to set the enable bit (START_MEAS in CONFIG1)
     writeTDC7200(channel, CONFIG1, 0x03);  // measurement mode 2 ('01')
 }
@@ -237,37 +184,28 @@ void ready_next(int channel) {
 void output_ti() {
 }
 
-void writeTDC7200(int channel, byte address, byte value) {
-
-  if (!channel)
-    CSB = CSB_A;
-  else
-    CSB = CSB_B;
+void writeTDC7200(chanTDC7200* channel, byte address, byte value) {
 
   // take the chip select low to select the device:
-  digitalWrite(CSB, LOW);
+  digitalWrite(channel->CSB, LOW);
 
   SPI.transfer(address);
   SPI.transfer(value);
   
-  digitalWrite(CSB, HIGH);
+  digitalWrite(channel->CSB, HIGH);
 }
 
 
-byte readTDC7200(int channel, byte address) {
+byte readTDC7200(chanTDC7200* channel, byte address) {
   byte inByte = 0;
 
-  if(!channel)
-    CSB = CSB_A;
-  else
-    CSB = CSB_B;
     // take the chip select low to select the device:
-  digitalWrite(CSB, LOW);
+  digitalWrite(channel->CSB, LOW);
 
   SPI.transfer(address);
   inByte = SPI.transfer(0x00);
   
-  digitalWrite(CSB, HIGH);
+  digitalWrite(channel->CSB, HIGH);
 
   return inByte;
 }

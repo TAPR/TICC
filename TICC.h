@@ -1,5 +1,5 @@
 #ifndef TICC_H
-#define TICC_H			
+#define TICC_H
 
 // TICC Time interval Counter based on TICC Shield using TDC7200
 // version -0.5 6 March 2016
@@ -47,21 +47,31 @@ const int CALIBRATION2 =	0x1C;           // default 0x00_0000
 const int interrupt =   0x01;		// Interrupt number
 const int intPin =      0x03;		// Interrupt IDE Pin on Mega
 
-
 // Channel structure type representing one TDC7200 Channel
+class tdc7200Channel {
+private:
+	//  Some of these really should be private and hidden...
+	const char ID;
+	const int ENABLE;
+	const int CSB;
+	int timeResult;
+	int clockResult;
+	int calResult;
 
-struct chanTDC7200 {
-  const char ID;
-  const int ENABLE;
-  const int INTB;
-  const int CSB;
-  const int STOP;
-  int timeResult;
-  int clockResult;
-  int calResult;
-  long result;
-  long long unsigned stopTime;
+public:
+	const int STOP;
+	const int INTB;
+
+	long result;
+	unsigned long long stopTime;
+
+	tdc7200Channel(char id, int enable, int intb, int csb, int stop);
+	void setup();
+	int calc();
+	void read();
+	void ready_next();
+	void reset();
+	void write(byte address, byte value);
 };
-
 #endif	/* TICC_H */
 

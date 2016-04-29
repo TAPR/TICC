@@ -16,21 +16,9 @@ volatile unsigned long long coarseCount = 0;
 
 // Enumerate the TDC7200 channel structures
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
-static struct chanTDC7200 channels[] = {
-  {
-    .ID = 'A',
-    .ENABLE = ENABLE_A,
-    .INTB = INTB_A,
-    .CSB = CSB_A,
-    .STOP = STOP_A
-  },
-  {
-    .ID = 'B',
-    .ENABLE = ENABLE_B,
-    .INTB = INTB_B,
-    .CSB = CSB_B,
-    .STOP = STOP_B
-  },
+static tdc7200Channel channels[] = {
+	tdc7200Channel('A', ENABLE_A, INTB_A, CSB_A, STOP_A),
+	tdc7200Channel('B', ENABLE_B, INTB_B, CSB_B, STOP_B),
 };
 
 // properties of the TDC7200 chip:
@@ -43,24 +31,19 @@ void setup() {
   int i;
   // start the SPI library:
   SPI.begin();
-  
+
   pinMode(intPin, INPUT);
 
-  for(i = 0; i < ARRAY_SIZE(channels); ++i) {
-    pinMode(channels[i].ENABLE,OUTPUT);
-    pinMode(channels[i].INTB,INPUT);
-    pinMode(channels[i].CSB,OUTPUT);
-    pinMode(channels[i].STOP,INPUT);
-    TDC_setup(&channels[i]);
-  }
-  
+  for(i = 0; i < ARRAY_SIZE(channels); ++i)
+    channels[i].setup();
+
   attachInterrupt(interrupt, coarseTimer, RISING);
 
   delay(10);
-  
+
   for(i = 0; i < ARRAY_SIZE(channels); ++i)
-      ready_next(&channels[i]);
-  
+      channels[i].ready_next();
+
   Serial.begin(115200);
   Serial.println("Starting...");
 }
@@ -73,20 +56,18 @@ void loop() {
       channels[i].stopTime = coarseCount;
 
     if(channels[i].INTB) {
-      channels[i].result = TDC_calc(&channels[i]);
-      ready_next(&channels[i]);
+      channels[i].result = channels[i].calc();
+      channels[i].ready_next();
     }
   }
-     
+
    // if we have both channels, subtract channel 0 from channel 1, print result, and reset vars
-  if (channels[0].result && channels[1].result) { 
+  if (channels[0].result && channels[1].result) {
     output_ti();
-    for(i = 0; i < ARRAY_SIZE(channels); ++i) {
-      channels[i].result = 0;
-      channels[i].stopTime = 0;
-    }
+    for(i = 0; i < ARRAY_SIZE(channels); ++i)
+    	channels[i].reset();
   }
-}  
+}
 
 // ISR for timer. NOTE: uint_64 rollover would take
 // 62 million years at 100 usec interrupt rate.
@@ -95,21 +76,35 @@ void coarseTimer() {
   coarseCount++;
 }
 
+// Constructor
+tdc7200Channel::tdc7200Channel(char id, int enable, int intb, int csb, int stop):
+	ID(id), ENABLE(enable), INTB(intb), CSB(csb), STOP(stop) {
+
+	pinMode(ENABLE,OUTPUT);
+	pinMode(INTB,INPUT);
+	pinMode(CSB,OUTPUT);
+	pinMode(STOP,INPUT);
+};
+
 // Initial config for TDC7200
 
-int TDC_setup(struct chanTDC7200 *channel) {
-  digitalWrite(channel->ENABLE, HIGH);
+void tdc7200Channel::setup() {
+  digitalWrite(ENABLE, HIGH);
 }
 
+void tdc7200Channel::reset() {
+	result = 0;
+	stopTime = 0;
+}
 
 // Fetch and calculate results from TDC7200
-int TDC_calc(struct chanTDC7200 *channel) {
-    TDC_read(channel);
+int tdc7200Channel::calc() {
+    read();
     // calc the values (John...)
 }
 
 // Read TDC for channel
-void TDC_read(struct chanTDC7200 *channel) {
+void tdc7200Channel::read() {
   byte inByte = 0;
   int timeResult = 0;
   int clockResult = 0;
@@ -117,7 +112,7 @@ void TDC_read(struct chanTDC7200 *channel) {
 
   // read the TIMER1 register
   // take the chip select low to select the device:
-  digitalWrite(channel->CSB, LOW);
+  digitalWrite(CSB, LOW);
 
   SPI.transfer(TIME1);
   inByte = SPI.transfer(0x00);
@@ -126,12 +121,12 @@ void TDC_read(struct chanTDC7200 *channel) {
   timeResult = timeResult<<8 | inByte;
   inByte = SPI.transfer(0x00);
   timeResult = timeResult<<8 | inByte;
-  
-  digitalWrite(channel->CSB, HIGH);
+
+  digitalWrite(CSB, HIGH);
 
   // read the CLOCK1 register
   // take the chip select low to select the device:
-  digitalWrite(channel->CSB, LOW);
+  digitalWrite(CSB, LOW);
 
   SPI.transfer(CLOCK_COUNT1);
   inByte = SPI.transfer(0x00);
@@ -140,12 +135,12 @@ void TDC_read(struct chanTDC7200 *channel) {
   clockResult = clockResult<<8 | inByte;
   inByte = SPI.transfer(0x00);
   clockResult = clockResult<<8 | inByte;
-  
-  digitalWrite(channel->CSB, HIGH);
+
+  digitalWrite(CSB, HIGH);
 
   // read the CALIBRATION1 register
   // take the chip select low to select the device:
-  digitalWrite(channel->CSB, LOW);
+  digitalWrite(CSB, LOW);
 
   SPI.transfer(CALIBRATION1);
   inByte = SPI.transfer(0x00);
@@ -154,36 +149,36 @@ void TDC_read(struct chanTDC7200 *channel) {
   calResult = calResult<<8 | inByte;
   inByte = SPI.transfer(0x00);
   calResult = calResult<<8 | inByte;
-  
-  digitalWrite(channel->CSB, HIGH);
 
-  channel->timeResult = timeResult;
-  channel->clockResult = clockResult;
-  channel->calResult = calResult;
-  return;  
+  digitalWrite(CSB, HIGH);
+
+  timeResult = timeResult;
+  clockResult = clockResult;
+  calResult = calResult;
+  return;
 }
 
 // Enable next measurement cycle
-void ready_next(struct chanTDC7200 *channel) {
+void tdc7200Channel::ready_next() {
     // needs to set the enable bit (START_MEAS in CONFIG1)
-    writeTDC7200(channel, CONFIG1, 0x03);  // measurement mode 2 ('01')
+    write(CONFIG1, 0x03);  // measurement mode 2 ('01')
 }
 
 // Calculate and print time interval to serial
 void output_ti() {
 }
 
-void writeTDC7200(struct chanTDC7200 *channel, byte address, byte value) {
+void tdc7200Channel::write(byte address, byte value) {
   // take the chip select low to select the device:
-  digitalWrite(channel->CSB, LOW);
+  digitalWrite(CSB, LOW);
 
   SPI.transfer(address);
   SPI.transfer(value);
-  
-  digitalWrite(channel->CSB, HIGH);
+
+  digitalWrite(CSB, HIGH);
 }
 
-byte readTDC7200(struct chanTDC7200 *channel, byte address) {
+/* byte readTDC7200(struct chanTDC7200 *channel, byte address) {
   byte inByte = 0;
 
   // take the chip select low to select the device:
@@ -191,8 +186,8 @@ byte readTDC7200(struct chanTDC7200 *channel, byte address) {
 
   SPI.transfer(address);
   inByte = SPI.transfer(0x00);
-  
+
   digitalWrite(channel->CSB, HIGH);
 
   return inByte;
-}
+} */

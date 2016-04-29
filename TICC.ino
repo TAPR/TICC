@@ -103,59 +103,37 @@ int tdc7200Channel::calc() {
     // calc the values (John...)
 }
 
+int readReg24(uint8_t address) {
+	int value = 0;
+	SPI.transfer(address);
+
+	//  These values are 24-bit and we're reading them into a 32-bit
+	//  variable.
+	//
+	//  This does some fancy pointer games to read it into the int starting
+	//  at the 2nd byte in rather than the 1st.  That should get the correct
+	//  2-4bit value read.
+	SPI.transfer((uint8_t *) &value + 1, 3);
+
+	return value;
+}
+
 // Read TDC for channel
 void tdc7200Channel::read() {
-  byte inByte = 0;
-  int timeResult = 0;
-  int clockResult = 0;
-  int calResult = 0;
+	//  Start a SPI transaction
+	//  Max speed for the tdc7200 is 20MHz
+	//  CPOL = 0; CPHA = 0
+	SPI.beginTransaction(SPISettings(20000000, MSBFIRST, SPI_MODE0));
+	digitalWrite(CSB, LOW);
 
-  // read the TIMER1 register
-  // take the chip select low to select the device:
-  digitalWrite(CSB, LOW);
+	timeResult = readReg24(TIME1);
+	clockResult = readReg24(CLOCK_COUNT1);
+	calResult = readReg24(CALIBRATION1);
 
-  SPI.transfer(TIME1);
-  inByte = SPI.transfer(0x00);
-  timeResult |= inByte;
-  inByte = SPI.transfer(0x00);
-  timeResult = timeResult<<8 | inByte;
-  inByte = SPI.transfer(0x00);
-  timeResult = timeResult<<8 | inByte;
+	digitalWrite(CSB, HIGH);
+	SPI.endTransaction();
 
-  digitalWrite(CSB, HIGH);
-
-  // read the CLOCK1 register
-  // take the chip select low to select the device:
-  digitalWrite(CSB, LOW);
-
-  SPI.transfer(CLOCK_COUNT1);
-  inByte = SPI.transfer(0x00);
-  clockResult |= inByte;
-  inByte = SPI.transfer(0x00);
-  clockResult = clockResult<<8 | inByte;
-  inByte = SPI.transfer(0x00);
-  clockResult = clockResult<<8 | inByte;
-
-  digitalWrite(CSB, HIGH);
-
-  // read the CALIBRATION1 register
-  // take the chip select low to select the device:
-  digitalWrite(CSB, LOW);
-
-  SPI.transfer(CALIBRATION1);
-  inByte = SPI.transfer(0x00);
-  calResult |= inByte;
-  inByte = SPI.transfer(0x00);
-  calResult = calResult<<8 | inByte;
-  inByte = SPI.transfer(0x00);
-  calResult = calResult<<8 | inByte;
-
-  digitalWrite(CSB, HIGH);
-
-  timeResult = timeResult;
-  clockResult = clockResult;
-  calResult = calResult;
-  return;
+  	return;
 }
 
 // Enable next measurement cycle
@@ -170,12 +148,13 @@ void output_ti() {
 
 void tdc7200Channel::write(byte address, byte value) {
   // take the chip select low to select the device:
-  digitalWrite(CSB, LOW);
+  	SPI.beginTransaction(SPISettings(20000000, MSBFIRST, SPI_MODE0));
+	digitalWrite(CSB, LOW);
 
-  SPI.transfer(address);
-  SPI.transfer(value);
+	SPI.transfer16(address << 8 | value);
 
-  digitalWrite(CSB, HIGH);
+	digitalWrite(CSB, HIGH);
+	SPI.endTransaction();
 }
 
 /* byte readTDC7200(struct chanTDC7200 *channel, byte address) {

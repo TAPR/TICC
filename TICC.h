@@ -44,8 +44,7 @@ const int CALIBRATION1 =	0x1B;           // default 0x00_0000
 const int CALIBRATION2 =	0x1C;           // default 0x00_0000
 
 // Coarse count interrupt assignments
-const int interrupt =   0x01;		// Interrupt number
-const int intPin =      0x03;		// Interrupt IDE Pin on Mega
+const byte interruptPin =      3;		// Interrupt IDE Pin on Mega
 
 // Channel structure type representing one TDC7200 Channel
 class tdc7200Channel {

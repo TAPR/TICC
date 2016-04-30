@@ -32,12 +32,12 @@ void setup() {
   // start the SPI library:
   SPI.begin();
 
-  pinMode(intPin, INPUT);
+  pinMode(interruptPin, INPUT);
 
   for(i = 0; i < ARRAY_SIZE(channels); ++i)
     channels[i].setup();
 
-  attachInterrupt(interrupt, coarseTimer, RISING);
+  attachInterrupt(digitalPinToInterrupt(interruptPin), coarseTimer, RISING);
 
   delay(10);
 

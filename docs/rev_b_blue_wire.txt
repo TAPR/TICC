@@ -1,17 +1,29 @@
-Errors on Rev. B board -- 24 April 2016
+Changes to Rev. B board -- 1 May 2016
 
-1.  Add 2.7k pullups on INTBA and INTBB. ADDED (at U4 and U6 inputs)
+Implemented on boards #3 and #4:
+
+1.  Add 2.7k pullups on INTBA and INTBB. ADDED (at IC5 and IC6 inputs)
 
 2.  Route STOPA and STOPB to Arduino Pins 6 and 7 respectively.  ADDED
 
 3.  Add 100K pulldowns on STARTA and STARTB. ADDED (at SMA connectors)
 
+4.  Change IC1, IC2, IC5, IC6, IC15 from 74LVC1G07 (open drain buffer)
+    to 74LVC1G08 (ADD gate) with inputs paralleled. DONE
+
+5.  Change C9/C14 and C10/C11 from 0.001 to 0.1uF.  DONE
+
+6.  Add ground wire between C9/C14.
+
 Additional Changes for Rev. C:
 
-4.  Add voltage translators for STOPA and STOPB
+A.  Add voltage translators for STOPA and STOPB
 
-5.  Add jumpers so that channel A stop signal can come from stop gate,
+B.  Add jumpers so that channel A stop signal can come from stop gate,
     or directly from channel B SMA.  This would provide a single channel
     configuration that would allow more measurements/second but with a
     maximum time interval limited by the TDC chip.
 
+C.  Check bypass cap grounds for good ties to ground plane.
+
+D.  Consider location of input SMAs for clearance with Arduino USB jack.

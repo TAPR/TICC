@@ -8,14 +8,16 @@
 // Licensed under BSD 2-clause license
 
 // hardware connections to TDC2700. Defines Arduino IDE pin number.
-const int ENABLE_A =		13;
-const int INTB_A =		12;
-const int CSB_A	=  		11;
-const int STOP_A =		6;
-const int ENABLE_B =		10;
-const int INTB_B =		9;
-const int CSB_B	=	  	8;
-const int STOP_B =		7;
+// changed for Rev. C board
+const int ENABLE_A =		4;
+const int INTB_A =		10;
+const int CSB_A	=  		6;
+const int STOP_A =		12;
+
+const int ENABLE_B =		5;
+const int INTB_B =		11;
+const int CSB_B	=	  	7;
+const int STOP_B =		13;
 
 // TDC7200 register addresses
 const int CONFIG1 =		0x00;           // default 0x00
@@ -44,7 +46,8 @@ const int CALIBRATION1 =	0x1B;           // default 0x00_0000
 const int CALIBRATION2 =	0x1C;           // default 0x00_0000
 
 // Coarse count interrupt assignments
-const byte interruptPin =      3;		// Interrupt IDE Pin on Mega
+// changed for Rev. C board
+const byte interruptPin =      18;		// Interrupt IDE Pin on Mega
 
 // Channel structure type representing one TDC7200 Channel
 class tdc7200Channel {

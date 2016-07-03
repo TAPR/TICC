@@ -45,9 +45,14 @@ const int TIME6	=		0x1A;           // default 0x00_0000
 const int CALIBRATION1 =	0x1B;           // default 0x00_0000
 const int CALIBRATION2 =	0x1C;           // default 0x00_0000
 
+#define PS_PER_SEC        (1e12)  // ps/s
+#define CLOCK_FREQ        (1e7)   // Hz
+#define CLOCK_PERIOD_PS   (uint32_t)(PS_PER_SEC/CLOCK_FREQ)  // ps
+#define CALIBRATION2_PERIODS 20   // Can only be 2, 10, 20, or 40.
+
 // Coarse count interrupt assignments
 // changed for Rev. C board
-const byte interruptPin =      18;		// Interrupt IDE Pin on Mega
+const int interruptPin =      18;		// Interrupt IDE Pin on Mega
 
 // Channel structure type representing one TDC7200 Channel
 class tdc7200Channel {
@@ -56,21 +61,24 @@ private:
 	const char ID;
 	const int ENABLE;
 	const int CSB;
-	int timeResult;
-	int clockResult;
-	int calResult;
-
+	int time1Result;
+  int time2Result;
+	int clock1Result;
+	int cal1Result;
+  int cal2Result;
+  
 public:
 	const int STOP;
 	const int INTB;
 
-	long result;
-	unsigned long long stopTime;
+  // NOTE: changed to long from long long to make debugging easier
+	unsigned long stopTime;
+  unsigned long time_interval;
+  unsigned long time_stamp;
 
 	tdc7200Channel(char id, int enable, int intb, int csb, int stop);
 	void setup();
-	int calc();
-	void read();
+	long read();
 	void ready_next();
 	void reset();
 	void write(byte address, byte value);

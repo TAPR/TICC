@@ -1,7 +1,7 @@
-// TICC.ino -- master sketch file
+// TICC.ino - master sketch file
 
 // TICC Time interval Counter based on TICC Shield using TDC7200
-// version 0.5 29 June 2016
+// version 0.5 -- 3 July 2016
 
 // Copyright John Ackermann N8UR 2016
 // Portions Copyright George Byrkit K9TRV 2016
@@ -9,12 +9,13 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-#include "TICC.h"     //Register and structure definitions
-
-// the TI TDC7200 communicates using SPI, so include the library:
-#include <SPI.h>
+#include <stdint.h>   // define unint16_t, uint32_t
+#include <SPI.h>      // SPI support
+#include "TICC.h"     // Register and structure definitions
 
 volatile unsigned long long coarseCount = 0;
+long int ti_0;
+long int ti_1;
 
 // Enumerate the TDC7200 channel structures
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
@@ -28,7 +29,7 @@ static tdc7200Channel channels[] = {
 // clock is low when idle
 // data is clocked on the rising edge of the clock (seems to be SPI_MODE0)
 // max clock speed: 20 mHz
-// Using TDC7200 timing mode 1...
+// Using TDC7200 timing mode 2...
 void setup() {
   int i;
   // start the SPI library:
@@ -58,21 +59,22 @@ void loop() {
       channels[i].stopTime = coarseCount;
 
     if(channels[i].INTB) {
-      channels[i].result = channels[i].calc();
+      channels[i].time_interval = channels[i].read();
+      channels[i].time_stamp = channels[i].stopTime - channels[i].time_interval;
       channels[i].ready_next();
+      Serial.print("channel ");
+      Serial.print(i);
+      Serial.print(" time interval: ");
+      Serial.print(channels[i].time_interval);
+      Serial.print(" timestamp: ");
+      Serial.println(channels[i].time_stamp);
     }
-  }
-
-   // if we have both channels, subtract channel 0 from channel 1, print result, and reset vars
-  if (channels[0].result && channels[1].result) {
-    output_ti();
-    for(i = 0; i < ARRAY_SIZE(channels); ++i)
-    	channels[i].reset();
   }
 }
 
 // ISR for timer. NOTE: uint_64 rollover would take
 // 62 million years at 100 usec interrupt rate.
+// NOTE: change to uint32 for now
 
 void coarseTimer() {
   coarseCount++;
@@ -95,14 +97,8 @@ void tdc7200Channel::setup() {
 }
 
 void tdc7200Channel::reset() {
-	result = 0;
+	time_interval = 0;
 	stopTime = 0;
-}
-
-// Fetch and calculate results from TDC7200
-int tdc7200Channel::calc() {
-    read();
-    // calc the values (John...)
 }
 
 int readReg24(uint8_t address) {
@@ -121,21 +117,38 @@ int readReg24(uint8_t address) {
 }
 
 // Read TDC for channel
-void tdc7200Channel::read() {
+long int tdc7200Channel::read() {
 	//  Start a SPI transaction
 	//  Max speed for the tdc7200 is 20MHz
 	//  CPOL = 0; CPHA = 0
 	SPI.beginTransaction(SPISettings(20000000, MSBFIRST, SPI_MODE0));
 	digitalWrite(CSB, LOW);
 
-	timeResult = readReg24(TIME1);
-	clockResult = readReg24(CLOCK_COUNT1);
-	calResult = readReg24(CALIBRATION1);
+	time1Result = readReg24(TIME1);
+  time2Result  = readReg24(TIME2);
+	clock1Result = readReg24(CLOCK_COUNT1);
+	cal1Result = readReg24(CALIBRATION1);
+  cal2Result = readReg24(CALIBRATION2);
+  uint32_t calc_time;
+  uint16_t tempu16;
+  uint32_t tempu32;
 
+  // since time1Result will always be > time2Result, this is still 16 bit.
+  tempu16 = (time1Result - time2Result); 
+  // After multiplying by the constants, you will now be a 32 bit number.
+  tempu32 = tempu16 * (CLOCK_PERIOD_PS * (CALIBRATION2_PERIODS-1));
+  // This division sort of sucks, but since I assume these must be 
+  // variables there's no way around it.
+  tempu32 = (tempu32 + ((cal2Result - cal1Result + 1) >> 1)) /
+    (cal2Result - cal1Result);
+  // Add in another 32bit variable.  Given the limitations on
+  // inputs, these two 32 bits still won't overflow.
+  tempu32 += clock1Result * CLOCK_PERIOD_PS;
+  return tempu32;
 	digitalWrite(CSB, HIGH);
 	SPI.endTransaction();
 
-  	return;
+  	return (long)tempu32;
 }
 
 // Enable next measurement cycle
@@ -172,3 +185,4 @@ void tdc7200Channel::write(byte address, byte value) {
 
   return inByte;
 } */
+

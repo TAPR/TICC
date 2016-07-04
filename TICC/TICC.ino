@@ -114,8 +114,13 @@ void tdc7200Channel::reset() {
 	stopTime = 0;
 }
 
-unsigned long readReg24(uint8_t address) {
+unsigned long tdc7200Channel::readReg24(byte address) {
 	unsigned long value = 0;
+
+  // CSB needs to be toggled between 24-bit register reads
+
+  SPI.beginTransaction(SPISettings(20000000, MSBFIRST, SPI_MODE0));
+  digitalWrite(CSB, LOW);
 
 	SPI.transfer(address & 0x1f);
 
@@ -131,6 +136,9 @@ unsigned long readReg24(uint8_t address) {
   int lsb = SPI.transfer(0x00);
 
   value = (msb << 16) + (mid << 8) + lsb;
+
+  digitalWrite(CSB, HIGH);
+  SPI.endTransaction();
   
 //  This clobbers the stack at runtime:
 //	SPI.transfer((uint8_t *) &value + 1, 3);
@@ -143,8 +151,8 @@ long int tdc7200Channel::read() {
   //  Start a SPI transaction
   //  Max speed for the tdc7200 is 20MHz
   //  CPOL = 0; CPHA = 0
-  SPI.beginTransaction(SPISettings(20000000, MSBFIRST, SPI_MODE0));
-  digitalWrite(CSB, LOW);
+//  SPI.beginTransaction(SPISettings(20000000, MSBFIRST, SPI_MODE0));
+//  digitalWrite(CSB, LOW);
 
   time1Result = readReg24(TIME1);
   time2Result  = readReg24(TIME2);
@@ -174,8 +182,8 @@ long int tdc7200Channel::read() {
   // inputs, these two 32 bits still won't overflow.
   tempu32 += clock1Result * CLOCK_PERIOD_PS;
   // return tempu32;
-  digitalWrite(CSB, HIGH);
-  SPI.endTransaction();
+//  digitalWrite(CSB, HIGH);
+//  SPI.endTransaction();
 
   return (long)tempu32;
 }

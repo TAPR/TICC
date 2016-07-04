@@ -81,6 +81,7 @@ public:
 	tdc7200Channel(char id, int enable, int intb, int csb, int stop);
 	void setup();
 	long read();
+  unsigned long readReg24(byte address);
   byte readreg8(byte address);
 	void ready_next();
 	void reset();

@@ -47,7 +47,9 @@ const int CALIBRATION2 =	0x1C;           // default 0x00_0000
 
 #define PS_PER_SEC        (1e12)  // ps/s
 #define CLOCK_FREQ        (1e7)   // Hz
-#define CLOCK_PERIOD_PS   (uint32_t)(PS_PER_SEC/CLOCK_FREQ)  // ps
+//#define CLOCK_PERIOD_PS   (uint32_t)(PS_PER_SEC/CLOCK_FREQ)  // ps
+
+#define CLOCK_PERIOD_PS   100000  // ps
 #define CALIBRATION2_PERIODS 20   // Can only be 2, 10, 20, or 40.
 
 // Coarse count interrupt assignments
@@ -61,11 +63,11 @@ private:
 	const char ID;
 	const int ENABLE;
 	const int CSB;
-	int time1Result;
-  int time2Result;
-	int clock1Result;
-	int cal1Result;
-  int cal2Result;
+	unsigned long time1Result;
+  unsigned long time2Result;
+	unsigned long clock1Result;
+	unsigned long cal1Result;
+  unsigned long cal2Result;
   
 public:
 	const int STOP;
@@ -74,11 +76,13 @@ public:
   // NOTE: changed to long from long long to make debugging easier
 	unsigned long stopTime;
   unsigned long time_interval;
-  unsigned long time_stamp;
+	unsigned long time_stamp;
 
 	tdc7200Channel(char id, int enable, int intb, int csb, int stop);
 	void setup();
 	long read();
+  unsigned long readReg24(byte address);
+  byte readreg8(byte address);
 	void ready_next();
 	void reset();
 	void write(byte address, byte value);

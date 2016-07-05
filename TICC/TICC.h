@@ -82,7 +82,7 @@ public:
 	void setup();
 	long read();
   unsigned long readReg24(byte address);
-  byte readreg8(byte address);
+  byte readReg8(byte address);
 	void ready_next();
 	void reset();
 	void write(byte address, byte value);

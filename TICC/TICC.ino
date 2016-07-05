@@ -1,7 +1,7 @@
 // TICC.ino - master sketch file
 
 // TICC Time interval Counter based on TICC Shield using TDC7200
-// version 0.5 -- 3 July 2016
+// version 0.51 -- 5 July 2016
 
 // Copyright John Ackermann N8UR 2016
 // Portions Copyright George Byrkit K9TRV 2016
@@ -42,7 +42,7 @@ void setup() {
 
 //  attachInterrupt(digitalPinToInterrupt(interruptPin), coarseTimer, RISING);
 
-  delay(10);
+//  delay(1000);
 
   for(i = 0; i < ARRAY_SIZE(channels); ++i)
       channels[i].ready_next();
@@ -57,25 +57,31 @@ void loop() {
 
   delay(5000);
 
-  for(i = 0; i < 1 /*ARRAY_SIZE(channels)*/; ++i) {
+  for(i = 0; i < ARRAY_SIZE(channels); ++i) {
     if(channels[i].STOP)
       channels[i].stopTime = coarseCount;
 
-    if(channels[i].INTB) {
+// If the TDC7200 has completed a measurement, INTB will be false.
+// Read and print the registers and computations, then clear the interrupt.
+
+    if(digitalRead(channels[i].INTB)==0) {
 
       Serial.print(" Int Status = ");
-      Serial.println(channels[i].readreg8(INT_STATUS), HEX);
+      Serial.print(channels[i].readReg8(INT_STATUS), HEX);   
+ //     Serial.print("   Int_mask = ");
+ //     Serial.println(channels[i].readReg8(INT_MASK), HEX);
       
       channels[i].time_interval = channels[i].read();
-      channels[i].time_stamp = channels[i].stopTime - channels[i].time_interval;
-      channels[i].ready_next();
-      Serial.print("channel ");
-      Serial.print(i);
-      Serial.print(" time interval: ");
-      Serial.print(channels[i].time_interval);
-      Serial.print(" timestamp: ");
-      Serial.println(channels[i].time_stamp);
+      channels[i]. write(INT_STATUS, 0x1f);  //clear interrupt
 
+      channels[i].time_stamp = channels[i].stopTime - channels[i].time_interval;
+
+      Serial.print("channel "), Serial.print(i);
+      Serial.print("  stop time: "), Serial.print(channels[i].stopTime);      
+      Serial.print("  time interval: "), Serial.print(channels[i].time_interval);
+      Serial.print("  timestamp: "), Serial.println(channels[i].time_stamp);
+
+      channels[i].ready_next(); // Re-arm for next measurement   
     }
   
   }
@@ -107,6 +113,19 @@ void tdc7200Channel::setup() {
   delay(10);
   digitalWrite(ENABLE, HIGH);  // Needs a low-to-high transition to enable
   delay(10);
+  
+  write(INT_MASK, 0x01);  // disable clock overflow interrupts, allow only measurement interrupt
+  write(CONFIG2, 0x80);  // Cal2 is 20 clocks
+  
+  write(CLOCK_CNTR_STOP_MASK_H, 0x00);
+  write(CLOCK_CNTR_STOP_MASK_L, 0x01);  // hold off one clock before enabling STOP
+
+//  write(COARSE_CNTR_OVF_H, 0x00);   // gives longest time until overflow
+//  write(COARSE_CNTR_OVF_L, 0x00);
+
+//  write(CLOCK_CNTR_OVF_H, 0x00);   // gives longest time until overflow
+//  write(CLOCK_CNTR_OVF_L, 0x00);
+  
 }
 
 void tdc7200Channel::reset() {
@@ -124,23 +143,23 @@ unsigned long tdc7200Channel::readReg24(byte address) {
 
 	SPI.transfer(address & 0x1f);
 
-	//  These values are 24-bit and we're reading them into a 32-bit
-	//  variable.
-	//
-	//  This does some fancy pointer games to read it into the int starting
-	//  at the 2nd byte in rather than the 1st.  That should get the correct
-	//  2-4bit value read.
-
-  int msb = SPI.transfer(0x00);
-  int mid = SPI.transfer(0x00);
-  int lsb = SPI.transfer(0x00);
+  unsigned int msb = SPI.transfer(0x00);
+  unsigned int mid = SPI.transfer(0x00);
+  unsigned int lsb = SPI.transfer(0x00);
 
   value = (msb << 16) + (mid << 8) + lsb;
 
   digitalWrite(CSB, HIGH);
   SPI.endTransaction();
   
-//  This clobbers the stack at runtime:
+
+  //  These values are 24-bit and we're reading them into a 32-bit
+  //  variable.
+  //
+  //  This does some fancy pointer games to read it into the int starting
+  //  at the 2nd byte in rather than the 1st.  That should get the correct
+  //  2-4bit value read.
+  //  This clobbers the stack at runtime:
 //	SPI.transfer((uint8_t *) &value + 1, 3);
 
 	return value;
@@ -160,7 +179,7 @@ long int tdc7200Channel::read() {
   cal1Result = readReg24(CALIBRATION1);
   cal2Result = readReg24(CALIBRATION2);
 
-  Serial.print("::read time1Result="), Serial.print(time1Result);
+  Serial.print(" time1Result="), Serial.print(time1Result);
   Serial.print(" time2Result="), Serial.print(time2Result);
   Serial.print(" clock1Result="), Serial.println(clock1Result);
   Serial.print(" cal1Result="), Serial.print(cal1Result);
@@ -185,39 +204,18 @@ long int tdc7200Channel::read() {
 //  digitalWrite(CSB, HIGH);
 //  SPI.endTransaction();
 
-  return (long)tempu32;
+  return (unsigned long)tempu32;
 }
 
 // Enable next measurement cycle
 void tdc7200Channel::ready_next() {
     // needs to set the enable bit (START_MEAS in CONFIG1)
 
-      delay(1);
+    delay(10);  
+    write(CONFIG1, 0x83);  // Measurement mode 2 - force cal
 
-//      Serial.print("CFG1 CFG2:  = ");
-//      Serial.print(readreg8(CONFIG1), HEX);
-//      Serial.println(readreg8(CONFIG2), HEX);
-
-      
-      write(CONFIG2, 0x80);  // Cal2 is 20 clocks
-
-      // set the stop mask to 2 (need at least 2 ext clocks before
-      // stop gate opens
- 
-      write(CLOCK_CNTR_STOP_MASK_H, 0x00);
-      write(CLOCK_CNTR_STOP_MASK_L, 0x01);
-
-//      Serial.print("Stop mask POST value = ");
-//      Serial.print(readreg8(CLOCK_CNTR_STOP_MASK_H), HEX);
-//      Serial.print(" ");
-//      Serial.println(readreg8(CLOCK_CNTR_STOP_MASK_L), HEX);
-      
-      delay(1);
-
-      write(INT_STATUS, 0x1f);  //clear interrupts
-
-      write(CONFIG1, 0x83);  // Measurement mode 2
-      //write(CONFIG1, 0x81);  // Measurement mode 1
+//      write(CONFIG1, 0x03);  // Measurement mode 2 - don't force cal     
+//      write(CONFIG1, 0x81);  // Measurement mode 1
 }
 
 // Calculate and print time interval to serial
@@ -237,7 +235,7 @@ void tdc7200Channel::write(byte address, byte value) {
   SPI.endTransaction();
 }
 
-byte tdc7200Channel::readreg8(byte address) {
+byte tdc7200Channel::readReg8(byte address) {
   byte inByte = 0;
 
   SPI.beginTransaction(SPISettings(20000000, MSBFIRST, SPI_MODE0));

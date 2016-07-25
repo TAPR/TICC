@@ -1,7 +1,7 @@
 // TICC.ino - master sketch file
 
 // TICC Time interval Counter based on TICC Shield using TDC7200
-// version 0.52 -- 21 July 2016
+// version 0.53 -- 24 July 2016
 
 // Copyright John Ackermann N8UR 2016
 // Portions Copyright George Byrkit K9TRV 2016
@@ -9,18 +9,39 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
+
+
+/*******************************************************************************************
+ Set these constants to match your hardware configuration
+********************************************************************************************/
+#define CLOCK_FREQ            (uint32_t)1e7    // Hz
+#define CALIBRATION2_PERIODS  20               // Can only be 2, 10, 20, or 40.
+#define PICTICK_PS            (uint32_t)1e8    // 100 uS PICDIV strap is 1e8 picoseconds, 1ms is 1e9
+#define FUDGE0_PS             (uint32_t)0      // adjust for propagation delays, in picoseconds
+/*******************************************************************************************/
+
 #include <stdint.h>   // define unint16_t, uint32_t
 #include <SPI.h>      // SPI support
 #include "TICC.h"     // Register and structure definitions
 
 //#include <stdio.h>    // format strings for printing. Eliminate???
-
+// use BigNumber library from http://www.gammon.com.au/Arduino/BigNumber.zip
+#include <BigNumber.h>
 
 volatile unsigned long PICCount;
 long int ti_0;
 long int ti_1;
 
-long long int tssec, tssecx, tsfrac;
+unsigned long tmp;
+
+// BigNumbers seem to need initialized with "1", "0" causes undertermined value.  BigNums are in string form
+BigNumber PICstop = "1";
+BigNumber period = "1";
+BigNumber PICtick_ps = "100000000";  // we should get this from define, but not sure how to
+BigNumber tof = "1";
+BigNumber ts = "1";
+BigNumber tsprev = "1";
+char buf[20];
 
 // Enumerate the TDC7200 channel structures
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
@@ -52,50 +73,58 @@ void setup() {
   for(i = 0; i < ARRAY_SIZE(channels); ++i)
       channels[i].ready_next();
 
+  BigNumber::begin();
+ // BigNumber::setScale (0);
+  
   Serial.begin(115200);
   Serial.println("");
-  Serial.println("Starting...");
-}
+  Serial.println("TOF   PICstop   Timestamp   Period");
+  
+}  
 
 void loop() {
   int i;
-
-  delay(5000);
-
   for(i = 0; i < ARRAY_SIZE(channels); ++i) {
-//    if(channels[i].STOP)
-//      channels[i].stopEra = PICCount;
 
-// If the TDC7200 has completed a measurement, INTB will be false.
-// Read and print the registers and computations, then clear the interrupt.
-
+    // If the TDC7200 has completed a measurement, INTB will be false.
+    // Read and print the registers and computations, then clear the interrupt.
     if(digitalRead(channels[i].INTB)==0) {
+        // copy to tmp for speed
+        tmp = PICCount;
+        // convert long to string, then to bignumber
+        ltoa(tmp, buf, 10);
+        // calculate the "raw" timestamp as BigNumber
+        PICstop = BigNumber(buf) * PICtick_ps;
+        
+        // read tof into tmp   
+        tmp = channels[i].read();
+        //convert long to string
+        ltoa(tmp, buf, 10);
+        // copy into BigNumber
+        tof = BigNumber(buf);
 
-      channels[i].stopEra = PICCount;
-      
-//      Serial.print(" Int Status = ");
-//      Serial.print(channels[i].readReg8(INT_STATUS), HEX);   
-       
-      channels[i].time_interval = channels[i].read();
-
-      channels[i].time_stamp = channels[i].stopEra * ERA_PSEC - channels[i].time_interval;
-      channels[i].ready_next(); // Re-arm for next measurement, clear TDC INTB   
-
-      // break time_stamp into pieces...  
-      tssec = channels[i].time_stamp / 1e12;
-      tssecx = tssec * 1e12; 
-      tsfrac = channels[i].time_stamp - tssecx;
-           
-      Serial.print("channel "), Serial.print(channels[i].ID);
-      Serial.print("  stop era: "), Serial.print(channels[i].stopEra);      
-      Serial.print("  time interval: "), Serial.print(channels[i].time_interval);
-      Serial.print(" time stamp: "), Serial.print((unsigned long)tssec), Serial.print("."), Serial.print((unsigned long)tsfrac);
-    }
-  
-  }
-  Serial.println("");
-}
-
+        // get ready for next reading
+        channels[i].ready_next(); // Re-arm for next measurement, clear TDC INTB
+        
+        // do some math
+        tsprev = ts;
+        ts = PICstop - tof;
+        period = ts - tsprev;
+        
+        printBigNum(tof);
+        Serial.print("  ");
+        printBigNum(PICstop);
+        Serial.print("  ");
+        printBigNum(ts);
+        Serial.print("  ");
+        printBigNum(period);
+        Serial.println();      
+        
+        
+    } // if
+  } // for
+} // loop
+ 
 // ISR for timer. NOTE: uint_64 rollover would take
 // 62 million years at 100 usec interrupt rate.
 // NOTE: change to uint32 for now
@@ -137,8 +166,8 @@ void tdc7200Channel::setup() {
 }
 
 void tdc7200Channel::reset() {
-	time_interval = 0;
-	//stopEra = 0;
+	tof = 0;
+	//PICstop = 0;
 }
 
 unsigned long tdc7200Channel::readReg24(byte address) {
@@ -163,7 +192,7 @@ unsigned long tdc7200Channel::readReg24(byte address) {
 }
 
 // Read TDC for channel
-long int tdc7200Channel::read() {
+unsigned long tdc7200Channel::read() {
   //  Start a SPI transaction
   //  Max speed for the tdc7200 is 20MHz
   //  CPOL = 0; CPHA = 0
@@ -182,26 +211,35 @@ long int tdc7200Channel::read() {
   Serial.print(" cal2Result="), Serial.println(cal2Result);
 */
   
-  uint32_t calc_time;
-  uint16_t tempu16;
-  uint32_t tempu32;
+  long ringticks;  //  time1Result - time2Result, unitless
+  long ringps;  // ps per ring cycle, picosends, result of calibration formula, nominal 55ps 
+  long ringtime;  // ringticks * ringperiod, picoseconds
+  unsigned long clocktime;    // clock1Result * CLOCK_PERIOD, picoseconds
+  unsigned long tof; // clocktime - ringtime, picoseconds; "time of flight" per datasheet
 
-  // since time1Result will always be > time2Result, this is still 16 bit. No !
+  // get ringperiod.  Datasheet says: (cal2Result - cal1Result)/(cal2Periods - 1)
   
-  // BUGBUG this in fact can sometimes be negative, and needs to be signed.
-  // Fix it and subsequent math below.
+  // TODO: 
+  // 1. refactor so that we get 0.1ps effective ringps precision in the ringtime calculation
+  // 2. optimize!!!
+  ringps = CLOCK_PERIOD_PS / ((cal2Result - cal1Result)/(CALIBRATION2_PERIODS -1));
+  ringticks = time1Result - time2Result;
+  ringtime = ringticks * ringps;
   
-  tempu16 = (time1Result - time2Result); 
-  // After multiplying by the constants, you will now be a 32 bit number.
-  tempu32 = tempu16 * (CLOCK_PERIOD_PS * (CALIBRATION2_PERIODS-1));
-  // This division sort of sucks, but since I assume these must be 
-  // variables there's no way around it.
-  tempu32 = (tempu32 + ((cal2Result - cal1Result + 1) >> 1)) /
-    (cal2Result - cal1Result);
-  // Add in another 32bit variable.  Given the limitations on
-  // inputs, these two 32 bits still won't overflow.
-  tempu32 += clock1Result * CLOCK_PERIOD_PS;
-  return (unsigned long)tempu32;
+  clocktime = clock1Result * CLOCK_PERIOD_PS;
+  tof = clocktime - ringtime - FUDGE0_PS;  //FUDGE0 compensates for propagation delays
+    
+  /*  
+  Serial.print(" ringps: ");Serial.print(ringps);
+  Serial.print(" time1: ");Serial.print(time1Result);
+  Serial.print(" time2: ");Serial.print(time2Result);
+  Serial.print(" ringticks: ");Serial.print(ringticks); 
+  Serial.print(" ringtime: ");Serial.print(ringtime);
+  Serial.print(" clock1: ");Serial.print(clock1Result);
+  Serial.print(" tof: ");Serial.print(tof);
+  Serial.print("  ");
+  */
+  return tof;
   
 }
 
@@ -245,6 +283,26 @@ byte tdc7200Channel::readReg8(byte address) {
   SPI.endTransaction();
 
   return inByte;
+}
+
+void printps(unsigned long long x) {
+ char buffer[100];
+ sprintf(buffer, "%0lu", x/1000000L);
+ Serial.print(buffer);  
+ sprintf(buffer, "%0lu", x%1000000L);
+ Serial.print(buffer);  
+
+ // long long int sec, secx, frac;    
+ // sec = x / 1e12;
+ // secx = sec * 1e12;
+ // frac = x - secx;
+ // Serial.print((unsigned long)sec), Serial.print("."), Serial.print((unsigned long)frac);
+}      
+
+void printBigNum(BigNumber & n) {
+  char * s = n.toString();
+  Serial.print(s);
+  free(s);
 }
 
 

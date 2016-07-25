@@ -7,9 +7,6 @@
 // Portions Copyright George Byrkit K9TRV 2016
 // Licensed under BSD 2-clause license
 
-#define PS_PER_SEC        1e12  // ps/s
-#define CLOCK_PERIOD_PS   (PS_PER_SEC/CLOCK_FREQ)  // ps
-
 // hardware connections to TDC2700. Defines Arduino IDE pin number.
 // changed for Rev. C board
 const int ENABLE_A =		4;
@@ -48,37 +45,34 @@ const int TIME6	=		0x1A;           // default 0x00_0000
 const int CALIBRATION1 =	0x1B;           // default 0x00_0000
 const int CALIBRATION2 =	0x1C;           // default 0x00_0000
 
-
 // Coarse count interrupt assignments
 // changed for Rev. C board
-const int interruptPin =      18;		// Interrupt IDE Pin on Mega
+const byte interruptPin =      18;		// Interrupt IDE Pin on Mega
 
 // Channel structure type representing one TDC7200 Channel
 class tdc7200Channel {
 private:
 	//  Some of these really should be private and hidden...
+	const char ID;
 	const int ENABLE;
-	const int CSB; 
-	unsigned long time1Result;
-  unsigned long time2Result;
-	unsigned long clock1Result;
-	unsigned long cal1Result;
-  unsigned long cal2Result;
-  
+	const int CSB;
+	int timeResult;
+	int clockResult;
+	int calResult;
+
 public:
-  const char ID;   // channel letter
-  const int STOP;  // pin number on Arduino
-  const int INTB;  // pin number on Arduino
- 
-  long long int PICstop;
-  unsigned long tof;
-	long long int time_stamp;
+	const int STOP;
+	const int INTB;
+
+	long result;
+	unsigned long long stopTime;
 
 	tdc7200Channel(char id, int enable, int intb, int csb, int stop);
 	void setup();
-	unsigned long read();
-  unsigned long readReg24(byte address);
-  byte readReg8(byte address);
+	int calc();
+//	void read();
+	unsigned int readReg8(byte addr);
+  unsigned int readReg24(byte addr);
 	void ready_next();
 	void reset();
 	void write(byte address, byte value);

@@ -7,9 +7,6 @@
 // Portions Copyright George Byrkit K9TRV 2016
 // Licensed under BSD 2-clause license
 
-#define PS_PER_SEC        1e12  // ps/s
-#define CLOCK_PERIOD_PS   (PS_PER_SEC/CLOCK_FREQ)  // ps
-
 // hardware connections to TDC2700. Defines Arduino IDE pin number.
 // changed for Rev. C board
 const int ENABLE_A =		4;
@@ -48,6 +45,12 @@ const int TIME6	=		0x1A;           // default 0x00_0000
 const int CALIBRATION1 =	0x1B;           // default 0x00_0000
 const int CALIBRATION2 =	0x1C;           // default 0x00_0000
 
+#define PS_PER_SEC        (1e12)  // ps/s
+#define CLOCK_FREQ        (1e7)   // Hz
+//#define CLOCK_PERIOD_PS   (uint32_t)(PS_PER_SEC/CLOCK_FREQ)  // ps
+
+#define CLOCK_PERIOD_PS   100000  // ps
+#define CALIBRATION2_PERIODS 20   // Can only be 2, 10, 20, or 40.
 
 // Coarse count interrupt assignments
 // changed for Rev. C board
@@ -57,8 +60,9 @@ const int interruptPin =      18;		// Interrupt IDE Pin on Mega
 class tdc7200Channel {
 private:
 	//  Some of these really should be private and hidden...
+	const char ID;
 	const int ENABLE;
-	const int CSB; 
+	const int CSB;
 	unsigned long time1Result;
   unsigned long time2Result;
 	unsigned long clock1Result;
@@ -66,19 +70,18 @@ private:
   unsigned long cal2Result;
   
 public:
-  const char ID;   // channel letter
-  const int STOP;  // pin number on Arduino
-  const int INTB;  // pin number on Arduino
- 
-  long long int PICstop;
-  unsigned long tof;
-	long long int time_stamp;
+	const int STOP;
+	const int INTB;
+
+  // NOTE: changed to long from long long to make debugging easier
+	unsigned long stopTime;
+  unsigned long time_interval;
+	unsigned long time_stamp;
 
 	tdc7200Channel(char id, int enable, int intb, int csb, int stop);
 	void setup();
-	unsigned long read();
-  unsigned long readReg24(byte address);
-  byte readReg8(byte address);
+	long read();
+  byte readreg8(byte address);
 	void ready_next();
 	void reset();
 	void write(byte address, byte value);

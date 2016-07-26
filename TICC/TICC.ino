@@ -33,6 +33,8 @@ long int ti_0;
 long int ti_1;
 
 unsigned long tmp;
+long tof_rollovers = 0;
+long PICstop_long, tof_long, last_tof_long;
 
 // BigNumbers seem to need initialized with "1", "0" causes undertermined value.  BigNums are in string form
 BigNumber PICstop = "1";
@@ -89,28 +91,45 @@ void loop() {
     // If the TDC7200 has completed a measurement, INTB will be false.
     // Read and print the registers and computations, then clear the interrupt.
     if(digitalRead(channels[i].INTB)==0) {
-        // copy to tmp for speed
-        tmp = PICCount;
-        // convert long to string, then to bignumber
-        ltoa(tmp, buf, 10);
-        // calculate the "raw" timestamp as BigNumber
-        PICstop = BigNumber(buf) * PICtick_ps;
-        
+      
+        // grab this as soon as we can
+        PICstop_long = PICCount;
+
         // read tof into tmp   
-        tmp = channels[i].read();
-        //convert long to string
-        ltoa(tmp, buf, 10);
-        // copy into BigNumber
-        tof = BigNumber(buf);
+        last_tof_long = tof_long;
+        tof_long = channels[i].read();
 
         // get ready for next reading
         channels[i].ready_next(); // Re-arm for next measurement, clear TDC INTB
+        
+        // has the TOF rolled over or under?  This depends on PICtick_ps being 1e8  HELP ME!!!
+        if ((tof_long <  4e7L) && (last_tof_long > 6e7L)) {
+          tof_rollovers--;
+        }
+        if ((tof_long >  4e7L) && (last_tof_long < 6e7L)) {
+          tof_rollovers++;
+        }
+        
+        PICstop_long += tof_rollovers;
+        
+        // convert long to string, then to bignumber and multiply to get ps result
+        ltoa(PICstop_long, buf, 10);
+        // calculate the "raw" timestamp as BigNumber
+        PICstop = BigNumber(buf) * PICtick_ps;
+        
+        
+        //convert long to string
+        ltoa(tof_long, buf, 10);
+        // copy into BigNumber
+        tof = BigNumber(buf);
+
+        
         
         // do some math
         tsprev = ts;
         ts = PICstop - tof;
         period = ts - tsprev;
-        
+
         printBigNum(tof);
         Serial.print("  ");
         printBigNum(PICstop);

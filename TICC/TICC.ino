@@ -1,7 +1,7 @@
 // TICC.ino - master sketch file
 
 // TICC Time interval Counter based on TICC Shield using TDC7200
-// version 0.53 -- 24 July 2016
+// version 0.55 -- 27 July 2016
 
 // Copyright John Ackermann N8UR 2016
 // Portions Copyright George Byrkit K9TRV 2016
@@ -9,16 +9,14 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-
-
-/*******************************************************************************************
+/**********************************************************************************************************
  Set these constants to match your hardware configuration
-********************************************************************************************/
-#define CLOCK_FREQ            (uint32_t)1e7    // Hz
-#define CALIBRATION2_PERIODS  20               // Can only be 2, 10, 20, or 40.
-#define PICTICK_PS            (uint32_t)1e8    // 100 uS PICDIV strap is 1e8 picoseconds, 1ms is 1e9
-#define FUDGE0_PS             (uint32_t)0      // adjust for propagation delays, in picoseconds
-/*******************************************************************************************/
+***********************************************************************************************************/
+#define CLOCK_FREQ            (uint32_t)  1e7    // Reference Clock frequency in Hz
+#define CALIBRATION2_PERIODS              20     // Can only be 2, 10, 20, or 40.
+#define PICTICK_PS            (uint32_t)  1e8    // 100 uS PICDIV strap is 1e8 picoseconds, 1ms is 1e9
+#define FUDGE0_PS             (uint32_t)  0      // adjust for propagation delays, in picoseconds
+/**********************************************************************************************************/
 
 #include <stdint.h>   // define unint16_t, uint32_t
 #include <SPI.h>      // SPI support
@@ -28,22 +26,21 @@
 // use BigNumber library from http://www.gammon.com.au/Arduino/BigNumber.zip
 #include <BigNumber.h>
 
-volatile unsigned long PICCount;
+volatile unsigned long PICCount;  //volatile because in ISR
 long int ti_0;
 long int ti_1;
+bool tof_roll_up = 0;
+bool tof_roll_down = 0;
+long PICstop_long, prev_PICstop_long,tof_long, prev_tof_long;
 
-unsigned long tmp;
-long tof_rollovers = 0;
-long PICstop_long, tof_long, last_tof_long;
-
-// BigNumbers seem to need initialized with "1", "0" causes undertermined value.  BigNums are in string form
+// BigNumbers seem to need initialized with "1", "0" causes undertermined value.  BigNums are in string form so need quotes
 BigNumber PICstop = "1";
 BigNumber period = "1";
 BigNumber PICtick_ps = "100000000";  // we should get this from define, but not sure how to
 BigNumber tof = "1";
 BigNumber ts = "1";
 BigNumber tsprev = "1";
-char buf[20];
+char buf[100];
 
 // Enumerate the TDC7200 channel structures
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
@@ -52,12 +49,7 @@ static tdc7200Channel channels[] = {
 	tdc7200Channel('B', ENABLE_B, INTB_B, CSB_B, STOP_B),
 };
 
-// properties of the TDC7200 chip:
-// Most Significant Bit is clocked first (MSBFIRST)
-// clock is low when idle
-// data is clocked on the rising edge of the clock (seems to be SPI_MODE0)
-// max clock speed: 20 mHz
-// Using TDC7200 timing mode 2...
+
 void setup() {
   int i;
 
@@ -70,22 +62,25 @@ void setup() {
   for(i = 0; i < ARRAY_SIZE(channels); ++i)
     channels[i].setup();
 
-  attachInterrupt(digitalPinToInterrupt(interruptPin), coarseTimer, RISING);
+  // Don't know why, but need to catch on falling to be in sync
+  attachInterrupt(digitalPinToInterrupt(interruptPin), coarseTimer, FALLING);
 
   for(i = 0; i < ARRAY_SIZE(channels); ++i)
       channels[i].ready_next();
 
   BigNumber::begin();
- // BigNumber::setScale (0);
+ // BigNumber::setScale (0); // number of decimal places to show
   
   Serial.begin(115200);
   Serial.println("");
-  Serial.println("TOF   PICstop   Timestamp   Period");
-  
+  Serial.println("ticks tof timestamp period");
+
+  delay(10);
 }  
 
 void loop() {
   int i;
+  
   for(i = 0; i < ARRAY_SIZE(channels); ++i) {
 
     // If the TDC7200 has completed a measurement, INTB will be false.
@@ -95,62 +90,70 @@ void loop() {
         // grab this as soon as we can
         PICstop_long = PICCount;
 
-        // read tof into tmp   
-        last_tof_long = tof_long;
+        // remember last tof, then get new one   
+        prev_tof_long = tof_long;
         tof_long = channels[i].read();
 
-        // get ready for next reading
+        // done with chip, so get ready for next reading
         channels[i].ready_next(); // Re-arm for next measurement, clear TDC INTB
+
+Serial.print("  ");Serial.print(PICstop_long);
+Serial.print("  "); Serial.print(tof_long);
+
+        // There is jitter when PICstop is about to insert/remove a 100us tick, which should beg
+        // synchronous with TOF rollover.  Fllowing is an attempt to mask that jitter and only
+        // insert/delete when the TOF rolls.
         
         // has the TOF rolled over or under?  This depends on PICtick_ps being 1e8  HELP ME!!!
-        if ((tof_long <  4e7L) && (last_tof_long > 6e7L)) {
-          tof_rollovers--;
+        if ((tof_long <  1e7L) && (prev_tof_long > 9e7L)) {
+          tof_roll_up = 1;
         }
-        if ((tof_long >  4e7L) && (last_tof_long < 6e7L)) {
-          tof_rollovers++;
-        }
-        
-        PICstop_long += tof_rollovers;
-        
-        // convert long to string, then to bignumber and multiply to get ps result
+        if ((tof_long >  9e7L) && (prev_tof_long < 1e7L)) {
+          tof_roll_down = 1;
+        }            
+             
+        // convert PICstop long to string, then to bignumber and multiply to get ps result
         ltoa(PICstop_long, buf, 10);
-        // calculate the "raw" timestamp as BigNumber
         PICstop = BigNumber(buf) * PICtick_ps;
         
         
-        //convert long to string
+        //convert tof long to string, then to bignumber
         ltoa(tof_long, buf, 10);
         // copy into BigNumber
-        tof = BigNumber(buf);
-
+        tof = BigNumber(buf);   
         
-        
-        // do some math
+        // do some math; all these are BigNumbers
         tsprev = ts;
         ts = PICstop - tof;
         period = ts - tsprev;
 
-        printBigNum(tof);
-        Serial.print("  ");
-        printBigNum(PICstop);
+
+        // print results
+//        printBigNum(tof);
+//        Serial.print("  ");
+//        printBigNum(PICstop);
+              
         Serial.print("  ");
         printBigNum(ts);
         Serial.print("  ");
-        printBigNum(period);
-        Serial.println();      
-        
+        printBigNum(period);   
+
+Serial.println("");        
         
     } // if
   } // for
 } // loop
+
+/**************************************************************************************/
  
-// ISR for timer. NOTE: uint_64 rollover would take
+// ISR for timer. NOTE: uint_64 rollover would take                          
 // 62 million years at 100 usec interrupt rate.
 // NOTE: change to uint32 for now
 
 void coarseTimer() {
   PICCount++;
 }
+
 
 // Constructor
 tdc7200Channel::tdc7200Channel(char id, int enable, int intb, int csb, int stop):
@@ -163,7 +166,12 @@ tdc7200Channel::tdc7200Channel(char id, int enable, int intb, int csb, int stop)
 };
 
 // Initial config for TDC7200
-
+// Chip properties:
+// Most Significant Bit is clocked first (MSBFIRST)
+// clock is low when idle
+// data is clocked on the rising edge of the clock (seems to be SPI_MODE0)
+// max clock speed: 20 mHz
+// Using TDC7200 timing mode 2...
 void tdc7200Channel::setup() {
   digitalWrite(ENABLE, LOW);
   delay(1);
@@ -230,11 +238,11 @@ unsigned long tdc7200Channel::read() {
   Serial.print(" cal2Result="), Serial.println(cal2Result);
 */
   
-  long ringticks;  //  time1Result - time2Result, unitless
-  long ringps;  // ps per ring cycle, picosends, result of calibration formula, nominal 55ps 
-  long ringtime;  // ringticks * ringperiod, picoseconds
-  unsigned long clocktime;    // clock1Result * CLOCK_PERIOD, picoseconds
-  unsigned long tof; // clocktime - ringtime, picoseconds; "time of flight" per datasheet
+  long ringticks;            //  time1Result - time2Result, unitless
+  long ringps;               // ps per ring cycle, picosends, result of calibration formula, nominal 55ps 
+  long ringtime;             // ringticks * ringperiod, picoseconds
+  unsigned long clocktime;   // clock1Result * CLOCK_PERIOD, picoseconds
+  unsigned long tof;         // clocktime - ringtime, picoseconds; "time of flight" per datasheet
 
   // get ringperiod.  Datasheet says: (cal2Result - cal1Result)/(cal2Periods - 1)
   
@@ -258,8 +266,8 @@ unsigned long tdc7200Channel::read() {
   Serial.print(" tof: ");Serial.print(tof);
   Serial.print("  ");
   */
-  return tof;
   
+  return tof;
 }
 
 // Enable next measurement cycle
@@ -268,11 +276,6 @@ void tdc7200Channel::ready_next() {
     // clears interrupt bits
     delay(10);  
     write(CONFIG1, 0x83);  // Measurement mode 2 - force cal
-
-}
-
-// Calculate and print time interval to serial
-void output_ti() {
 }
 
 void tdc7200Channel::write(byte address, byte value) {

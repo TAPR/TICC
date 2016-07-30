@@ -1,7 +1,7 @@
 // TICC.ino - master sketch file
 
 // TICC Time interval Counter based on TICC Shield using TDC7200
-// version 0.60 -- 29 July 2016
+// version 0.60 -- 30 July 2016
 
 // Copyright John Ackermann N8UR 2016
 // Portions Copyright George Byrkit K9TRV 2016
@@ -23,8 +23,9 @@
 #include "TICC.h"     // Register and structure definitions
 
 //#include <stdio.h>    // format strings for printing. Eliminate???
+
 // use BigNumber library from http://www.gammon.com.au/Arduino/BigNumber.zip
-#include <BigNumber.h>
+// #include <BigNumber.h>
 
 volatile unsigned long long PICcount;  //volatile because in ISR
 
@@ -139,7 +140,7 @@ void tdc7200Channel::setup() {
   delay(5);  // 1.5ms minimum recommended to allow chip LDO to stabilize
   
   
-  write(CONFIG2, 0x81);  // was 0x83 Cal2 is 20 clocks, 1 meas cycle, 1 stop
+  write(CONFIG2, 0x81);  // SHOULD BE 0x80 for Cal2 (20 clocks, 1 meas cycle, 1 stop) but that doesn't work
  // write(INT_MASK, 0x01);  // was 0x01 disable clock overflow interrupts, allow only measurement interrupt
   
   
@@ -149,8 +150,8 @@ void tdc7200Channel::setup() {
  // write(COARSE_CNTR_OVF_H, 0xFF);  //was 0xF0 
  // write(COARSE_CNTR_OVF_L, 0xFF);
 
- // write(CLOCK_CNTR_OVF_H, 0xF0);  // was 0xF0   
- // write(CLOCK_CNTR_OVF_L, 0x00);  // was 0x00
+ write(CLOCK_CNTR_OVF_H, 0xF0);   // was 0xF0
+ write(CLOCK_CNTR_OVF_L, 0x00);  // was 0x00
   
 }
 
@@ -158,8 +159,8 @@ void tdc7200Channel::setup() {
 void tdc7200Channel::ready_next() {
     // needs to set the enable bit (START_MEAS in CONFIG1)
     // clears interrupt bits
-    delayMicroseconds(1000);  // was 10ms  
-    write(CONFIG1, 0x83);  // was 0x83 Measurement mode 2 - force cal
+    delayMicroseconds(1);  // was 10ms  
+    write(CONFIG1, 0x83);     // was 0x83 Measurement mode 2 - force cal
 }
 
 

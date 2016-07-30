@@ -1,7 +1,7 @@
 // TICC.ino - master sketch file
 
 // TICC Time interval Counter based on TICC Shield using TDC7200
-// version 0.55 -- 27 July 2016
+// version 0.60 -- 29 July 2016
 
 // Copyright John Ackermann N8UR 2016
 // Portions Copyright George Byrkit K9TRV 2016
@@ -26,21 +26,14 @@
 // use BigNumber library from http://www.gammon.com.au/Arduino/BigNumber.zip
 #include <BigNumber.h>
 
-volatile unsigned long PICCount;  //volatile because in ISR
-long int ti_0;
-long int ti_1;
-bool tof_roll_up = 0;
-bool tof_roll_down = 0;
-long PICstop_long, prev_PICstop_long,tof_long, prev_tof_long;
+volatile unsigned long long PICcount;  //volatile because in ISR
 
-// BigNumbers seem to need initialized with "1", "0" causes undertermined value.  BigNums are in string form so need quotes
-BigNumber PICstop = "1";
-BigNumber period = "1";
-BigNumber PICtick_ps = "100000000";  // we should get this from define, but not sure how to
-BigNumber tof = "1";
-BigNumber ts = "1";
-BigNumber tsprev = "1";
-char buf[100];
+unsigned long long PICstop;
+unsigned long long ts;
+unsigned long long tof;
+unsigned long totalize = 0;
+unsigned long start_micros;
+unsigned long end_micros;
 
 // Enumerate the TDC7200 channel structures
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
@@ -53,10 +46,10 @@ static tdc7200Channel channels[] = {
 void setup() {
   int i;
 
-  PICCount = 0;
+  PICcount = 0;
   // start the SPI library:
   SPI.begin();
-
+  
   pinMode(interruptPin, INPUT);
 
   for(i = 0; i < ARRAY_SIZE(channels); ++i)
@@ -64,82 +57,55 @@ void setup() {
 
   // Don't know why, but need to catch on falling to be in sync
   attachInterrupt(digitalPinToInterrupt(interruptPin), coarseTimer, FALLING);
-
-  for(i = 0; i < ARRAY_SIZE(channels); ++i)
-      channels[i].ready_next();
-
-  BigNumber::begin();
- // BigNumber::setScale (0); // number of decimal places to show
   
   Serial.begin(115200);
   Serial.println("");
-  Serial.println("ticks tof timestamp period");
+  Serial.println("# timestamp (seconds)");
 
-  delay(10);
+
+  for(i = 0; i < ARRAY_SIZE(channels); ++i)
+      channels[i].ready_next();
+  delay(100);
 }  
 
 void loop() {
   int i;
-  
   for(i = 0; i < ARRAY_SIZE(channels); ++i) {
 
-    // If the TDC7200 has completed a measurement, INTB will be false.
-    // Read and print the registers and computations, then clear the interrupt.
-    if(digitalRead(channels[i].INTB)==0) {
-      
-        // grab this as soon as we can
-        PICstop_long = PICCount;
+    start_micros = micros();
+    // STOP means an event has occurred
+    if(digitalRead(channels[i].STOP) == 1) {    
+        
+        // grab this just as soon as we can
+        PICstop = PICcount;
+        
+        // wait until INTB goes low to indicate TDC measurement complete
+        while (digitalRead(channels[i].INTB)==1) {
+          delayMicroseconds(5);
+          }
 
-        // remember last tof, then get new one   
-        prev_tof_long = tof_long;
-        tof_long = channels[i].read();
-
+        // read registers and calculate tof
+        tof = channels[i].read();
+        
         // done with chip, so get ready for next reading
         channels[i].ready_next(); // Re-arm for next measurement, clear TDC INTB
-
-Serial.print("  ");Serial.print(PICstop_long);
-Serial.print("  "); Serial.print(tof_long);
-
-        // There is jitter when PICstop is about to insert/remove a 100us tick, which should beg
-        // synchronous with TOF rollover.  Fllowing is an attempt to mask that jitter and only
-        // insert/delete when the TOF rolls.
-        
-        // has the TOF rolled over or under?  This depends on PICtick_ps being 1e8  HELP ME!!!
-        if ((tof_long <  1e7L) && (prev_tof_long > 9e7L)) {
-          tof_roll_up = 1;
-        }
-        if ((tof_long >  9e7L) && (prev_tof_long < 1e7L)) {
-          tof_roll_down = 1;
-        }            
-             
-        // convert PICstop long to string, then to bignumber and multiply to get ps result
-        ltoa(PICstop_long, buf, 10);
-        PICstop = BigNumber(buf) * PICtick_ps;
-        
-        
-        //convert tof long to string, then to bignumber
-        ltoa(tof_long, buf, 10);
-        // copy into BigNumber
-        tof = BigNumber(buf);   
-        
-        // do some math; all these are BigNumbers
-        tsprev = ts;
-        ts = PICstop - tof;
-        period = ts - tsprev;
-
-
-        // print results
-//        printBigNum(tof);
-//        Serial.print("  ");
-//        printBigNum(PICstop);
               
-        Serial.print("  ");
-        printBigNum(ts);
-        Serial.print("  ");
-        printBigNum(period);   
-
-Serial.println("");        
+       
+       
+        ts = ((PICstop * PICTICK_PS) - tof);
+ 
+       
+        if (totalize > 0) {  // first reading is likely to be bogus
+          print_picos_as_seconds(ts);
+        }
         
+        totalize++; // number of measurements
+        
+      
+        end_micros = micros();  
+        Serial.print(" execution time (us): ");
+        Serial.print(end_micros - start_micros);
+        Serial.println();
     } // if
   } // for
 } // loop
@@ -151,7 +117,7 @@ Serial.println("");
 // NOTE: change to uint32 for now
 
 void coarseTimer() {
-  PICCount++;
+  PICcount++;
 }
 
 
@@ -166,57 +132,36 @@ tdc7200Channel::tdc7200Channel(char id, int enable, int intb, int csb, int stop)
 };
 
 // Initial config for TDC7200
-// Chip properties:
-// Most Significant Bit is clocked first (MSBFIRST)
-// clock is low when idle
-// data is clocked on the rising edge of the clock (seems to be SPI_MODE0)
-// max clock speed: 20 mHz
-// Using TDC7200 timing mode 2...
 void tdc7200Channel::setup() {
   digitalWrite(ENABLE, LOW);
-  delay(1);
+  delay(5);  
   digitalWrite(ENABLE, HIGH);  // Needs a low-to-high transition to enable
-  delay(1);
+  delay(5);  // 1.5ms minimum recommended to allow chip LDO to stabilize
   
-  write(INT_MASK, 0x01);  // disable clock overflow interrupts, allow only measurement interrupt
-  write(CONFIG2, 0x83);  // Cal2 is 20 clocks, 1 meas cycle, 1 stop
   
-  write(CLOCK_CNTR_STOP_MASK_H, 0x00);
-  write(CLOCK_CNTR_STOP_MASK_L, 0x00);  // hold off no clocks before enabling STOP
+  write(CONFIG2, 0x81);  // was 0x83 Cal2 is 20 clocks, 1 meas cycle, 1 stop
+ // write(INT_MASK, 0x01);  // was 0x01 disable clock overflow interrupts, allow only measurement interrupt
+  
+  
+ // write(CLOCK_CNTR_STOP_MASK_H, 0x00); // was 0x00
+ // write(CLOCK_CNTR_STOP_MASK_L, 0x01); // was 0x00 // hold off no clocks before enabling STOP
 
-  write(COARSE_CNTR_OVF_H, 0xF0);   
-  write(COARSE_CNTR_OVF_L, 0x00);
+ // write(COARSE_CNTR_OVF_H, 0xFF);  //was 0xF0 
+ // write(COARSE_CNTR_OVF_L, 0xFF);
 
-  write(CLOCK_CNTR_OVF_H, 0xF0);   
-  write(CLOCK_CNTR_OVF_L, 0x00);
+ // write(CLOCK_CNTR_OVF_H, 0xF0);  // was 0xF0   
+ // write(CLOCK_CNTR_OVF_L, 0x00);  // was 0x00
   
 }
 
-void tdc7200Channel::reset() {
-	tof = 0;
-	//PICstop = 0;
+// Enable next measurement cycle
+void tdc7200Channel::ready_next() {
+    // needs to set the enable bit (START_MEAS in CONFIG1)
+    // clears interrupt bits
+    delayMicroseconds(1000);  // was 10ms  
+    write(CONFIG1, 0x83);  // was 0x83 Measurement mode 2 - force cal
 }
 
-unsigned long tdc7200Channel::readReg24(byte address) {
-	unsigned long value = 0;
-
-  // CSB needs to be toggled between 24-bit register reads
-
-  SPI.beginTransaction(SPISettings(20000000, MSBFIRST, SPI_MODE0));
-  digitalWrite(CSB, LOW);
-
-	SPI.transfer(address & 0x1f);
-
-  unsigned int msb = SPI.transfer(0x00);
-  unsigned int mid = SPI.transfer(0x00);
-  unsigned int lsb = SPI.transfer(0x00);
-
-  value = (msb << 16) + (mid << 8) + lsb;
-
-  digitalWrite(CSB, HIGH);
-  SPI.endTransaction();
-  return value;
-}
 
 // Read TDC for channel
 unsigned long tdc7200Channel::read() {
@@ -270,26 +215,11 @@ unsigned long tdc7200Channel::read() {
   return tof;
 }
 
-// Enable next measurement cycle
-void tdc7200Channel::ready_next() {
-    // needs to set the enable bit (START_MEAS in CONFIG1)
-    // clears interrupt bits
-    delay(10);  
-    write(CONFIG1, 0x83);  // Measurement mode 2 - force cal
-}
-
-void tdc7200Channel::write(byte address, byte value) {
-
-  // take the chip select low to select the device:
-  SPI.beginTransaction(SPISettings(20000000, MSBFIRST, SPI_MODE0));
-  digitalWrite(CSB, LOW);
-
-  // Force Address bit 6 to one for a write
-  SPI.transfer16((address | 0x40) << 8 | value);
-
-  digitalWrite(CSB, HIGH);
-  SPI.endTransaction();
-}
+// Chip properties:
+// Most Significant Bit is clocked first (MSBFIRST)
+// clock is low when idle
+// data is clocked on the rising edge of the clock (seems to be SPI_MODE0)
+// max clock speed: 20 mHz
 
 byte tdc7200Channel::readReg8(byte address) {
   byte inByte = 0;
@@ -307,24 +237,49 @@ byte tdc7200Channel::readReg8(byte address) {
   return inByte;
 }
 
-void printps(unsigned long long x) {
- char buffer[100];
- sprintf(buffer, "%0lu", x/1000000L);
- Serial.print(buffer);  
- sprintf(buffer, "%0lu", x%1000000L);
- Serial.print(buffer);  
+unsigned long tdc7200Channel::readReg24(byte address) {
+  unsigned long value = 0;
 
- // long long int sec, secx, frac;    
- // sec = x / 1e12;
- // secx = sec * 1e12;
- // frac = x - secx;
- // Serial.print((unsigned long)sec), Serial.print("."), Serial.print((unsigned long)frac);
-}      
+  // CSB needs to be toggled between 24-bit register reads
 
-void printBigNum(BigNumber & n) {
-  char * s = n.toString();
-  Serial.print(s);
-  free(s);
+  SPI.beginTransaction(SPISettings(20000000, MSBFIRST, SPI_MODE0));
+  digitalWrite(CSB, LOW);
+
+  SPI.transfer(address & 0x1f);
+
+  unsigned int msb = SPI.transfer(0x00);
+  unsigned int mid = SPI.transfer(0x00);
+  unsigned int lsb = SPI.transfer(0x00);
+
+  value = (msb << 16) + (mid << 8) + lsb;
+
+  digitalWrite(CSB, HIGH);
+  SPI.endTransaction();
+  return value;
 }
+
+void tdc7200Channel::write(byte address, byte value) {
+
+  // take the chip select low to select the device:
+  SPI.beginTransaction(SPISettings(20000000, MSBFIRST, SPI_MODE0));
+  digitalWrite(CSB, LOW);
+
+  // Force Address bit 6 to one for a write
+  SPI.transfer16((address | 0x40) << 8 | value);
+
+  digitalWrite(CSB, HIGH);
+  SPI.endTransaction();
+}
+
+
+
+void print_picos_as_seconds (unsigned long long x) {
+  long long int sec, secx, frac;    
+  sec = x / 1e12;
+  secx = sec * 1e12;
+  frac = x - secx;
+  Serial.print((unsigned long)sec), Serial.print("."), Serial.print((unsigned long)frac);
+} 
+
 
 

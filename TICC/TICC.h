@@ -2,7 +2,7 @@
 #define TICC_H
 
 // TICC Time interval Counter based on TICC Shield using TDC7200
-// version -0.5 6 March 2016
+// version 0.60 29 July 2016
 // Copyright John Ackermann N8UR 2016
 // Portions Copyright George Byrkit K9TRV 2016
 // Licensed under BSD 2-clause license
@@ -31,8 +31,8 @@ const int COARSE_CNTR_OVF_H =	0x04;       	// default 0xff
 const int COARSE_CNTR_OVF_L =	0x05;       	// default 0xff
 const int CLOCK_CNTR_OVF_H =	0x06;        	// default 0xff
 const int CLOCK_CNTR_OVF_L =	0x07;        	// default 0xff
-const int CLOCK_CNTR_STOP_MASK_H = 0x08;	// default 0xff
-const int CLOCK_CNTR_STOP_MASK_L = 0x09;	// default 0xff
+const int CLOCK_CNTR_STOP_MASK_H = 0x08;	// default 0x00
+const int CLOCK_CNTR_STOP_MASK_L = 0x09;	// default 0x00
 // gap from 0x0A thru 0x0F...
 const int TIME1 =		0x10;           // default 0x00_0000
 const int CLOCK_COUNT1 =	0x11;           // default 0x00_0000

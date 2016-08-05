@@ -1,6 +1,10 @@
 #ifndef TICC_H
 #define TICC_H
 
+
+//#define DETAIL_TIMING   // if enabled, prints execution time
+
+
 // TICC Time interval Counter based on TICC Shield using TDC7200
 // version 0.60 29 July 2016
 // Copyright John Ackermann N8UR 2016
@@ -73,6 +77,7 @@ public:
   long long int PICstop;
   unsigned long tof;
 	long long int time_stamp;
+  boolean idle;     // true = the channel is idle or stuck
 
 	tdc7200Channel(char id, int enable, int intb, int csb, int stop);
 	void setup();

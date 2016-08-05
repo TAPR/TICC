@@ -22,8 +22,6 @@
 #include <SPI.h>      // SPI support
 #include "TICC.h"     // Register and structure definitions
 
-//#include <stdio.h>    // format strings for printing. Eliminate???
-
 // use BigNumber library from http://www.gammon.com.au/Arduino/BigNumber.zip
 // #include <BigNumber.h>
 
@@ -35,6 +33,7 @@ unsigned long long tof;
 unsigned long totalize = 0;
 unsigned long start_micros;
 unsigned long end_micros;
+char str[128];
 
 // Enumerate the TDC7200 channel structures
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
@@ -73,7 +72,11 @@ void loop() {
   int i;
   for(i = 0; i < ARRAY_SIZE(channels); ++i) {
 
+    if (channels[i].idle == true)  // ignore an idle or stuck channel
+      continue;
+      
     start_micros = micros();
+
     // STOP means an event has occurred
     if(digitalRead(channels[i].STOP) == 1) {    
         
@@ -81,9 +84,15 @@ void loop() {
         PICstop = PICcount;
         
         // wait until INTB goes low to indicate TDC measurement complete
+        unsigned int deadlock = 100000;
         while (digitalRead(channels[i].INTB)==1) {
           delayMicroseconds(5);
+          if (--deadlock == 0) {
+            channels[i].idle = true;
+            Serial.print(" Channel "),Serial.print(channels[i].ID),Serial.println(" is stuck or idle. Now disabled.");
+            break;
           }
+        }
 
         // read registers and calculate tof
         tof = channels[i].read();
@@ -96,17 +105,21 @@ void loop() {
         ts = ((PICstop * PICTICK_PS) - tof);
  
        
-        if (totalize > 0) {  // first reading is likely to be bogus
+        if (totalize > 0) {  // first few readings likely to be bogus
           print_picos_as_seconds(ts);
         }
         
         totalize++; // number of measurements
         
-      
-        end_micros = micros();  
+#ifdef DETAIL_TIMING      
+        end_micros = micros();         
         Serial.print(" execution time (us): ");
         Serial.print(end_micros - start_micros);
+#endif
+        delay(10);  // it locks up sometimes without this..............
         Serial.println();
+
+
     } // if
   } // for
 } // loop
@@ -130,6 +143,8 @@ tdc7200Channel::tdc7200Channel(char id, int enable, int intb, int csb, int stop)
 	pinMode(INTB,INPUT);
 	pinMode(CSB,OUTPUT);
 	pinMode(STOP,INPUT);
+
+  idle = false;   // assume the channel has signal hooked up triggering
 };
 
 // Initial config for TDC7200
@@ -274,12 +289,22 @@ void tdc7200Channel::write(byte address, byte value) {
 
 
 
-void print_picos_as_seconds (unsigned long long x) {
-  long long int sec, secx, frac;    
-  sec = x / 1e12;
-  secx = sec * 1e12;
+void print_picos_as_seconds (uint64_t x) {
+  uint64_t sec, secx, frac, frach, fracx, fracl;    
+  sec = x / 1000000000000;
+  secx = sec * 1000000000000;
   frac = x - secx;
-  Serial.print((unsigned long)sec), Serial.print("."), Serial.print((unsigned long)frac);
+
+  // break fractional part of seconds into two 6 digit numbers
+
+  frach = frac / 1000000;
+  fracx = frach * 1000000;
+  fracl = frac - fracx;
+
+  sprintf(str,"%lu",sec), Serial.print(str), Serial.print(".");
+  sprintf(str, "%06lu", frach), Serial.print(str);
+  sprintf(str, "%06lu", fracl), Serial.print(str);
+  
 } 
 
 

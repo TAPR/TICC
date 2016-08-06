@@ -1,7 +1,7 @@
 // TICC.ino - master sketch file
 
 // TICC Time interval Counter based on TICC Shield using TDC7200
-// version 0.60 -- 30 July 2016
+// version 0.62 -- 6 August 2016
 
 // Copyright John Ackermann N8UR 2016
 // Portions Copyright George Byrkit K9TRV 2016
@@ -126,10 +126,7 @@ void loop() {
 
 /**************************************************************************************/
  
-// ISR for timer. NOTE: uint_64 rollover would take                          
-// 62 million years at 100 usec interrupt rate.
-// NOTE: change to uint32 for now
-
+// ISR for timer. 
 void coarseTimer() {
   PICcount++;
 }
@@ -199,23 +196,38 @@ unsigned long tdc7200Channel::read() {
   Serial.print(" cal2Result="), Serial.println(cal2Result);
 */
   
-  long ringticks;            //  time1Result - time2Result, unitless
-  long ringps;               // ps per ring cycle, picosends, result of calibration formula, nominal 55ps 
+  long ringticks;            // time1Result - time2Result, unitless
+  long ringps;               // ps per ring cycle, nominal 55ps 
   long ringtime;             // ringticks * ringperiod, picoseconds
+  unsigned long cal_tmp;
   unsigned long clocktime;   // clock1Result * CLOCK_PERIOD, picoseconds
   unsigned long tof;         // clocktime - ringtime, picoseconds; "time of flight" per datasheet
 
-  // get ringperiod.  Datasheet says: (cal2Result - cal1Result)/(cal2Periods - 1)
+ // Datasheet saysring period =  (cal2Result - cal1Result)/(cal2Periods - 1)
   
-  // TODO: 
-  // 1. refactor so that we get 0.1ps effective ringps precision in the ringtime calculation
-  // 2. optimize!!!
-  ringps = CLOCK_PERIOD_PS / ((cal2Result - cal1Result)/(CALIBRATION2_PERIODS -1));
+ //ringps = CLOCK_PERIOD_PS / ((cal2Result - cal1Result)/(CALIBRATION2_PERIODS -1));
+ // ringticks = time1Result - time2Result;
+ // ringtime = ringticks * ringps;
+ 
+ // But the steps above truncate ringps at 1ps. But ringps is multiplied
+ // by up to a few thousand ringticks, so the truncation error is 
+ // multiplied as well.  So we use mult/div by 1e2 to improve resolution 
+
   ringticks = time1Result - time2Result;
-  ringtime = ringticks * ringps;
+
+  // separated steps because I'm a math moron
+  cal_tmp = ((cal2Result - cal1Result) * 100L) /(CALIBRATION2_PERIODS - 1 );
+  ringps = ((CLOCK_PERIOD_PS) * 10000L) / cal_tmp; // ring period * 100
+  ringtime = (ringticks * ringps) / 100L; 
+
+  /*
+  Serial.print("ringticks: "); Serial.print(ringticks);Serial.print(" ");
+  Serial.print("ringps: "); Serial.print(ringps);Serial.print(" ");
+  Serial.print("ringtime: "); Serial.print(ringtime);Serial.print(" ");
+  */
   
   clocktime = clock1Result * CLOCK_PERIOD_PS;
-  tof = clocktime - ringtime - FUDGE0_PS;  //FUDGE0 compensates for propagation delays
+  tof = clocktime - ringtime - FUDGE0_PS; // compensates for silicon delays
     
   /*  
   Serial.print(" ringps: ");Serial.print(ringps);

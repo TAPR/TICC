@@ -9,14 +9,14 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-/**********************************************************************************************************
+/*******************************************************************************
  Set these constants to match your hardware configuration
-***********************************************************************************************************/
-#define CLOCK_FREQ            (uint32_t)  1e7    // Reference Clock frequency in Hz
-#define CALIBRATION2_PERIODS              20     // Can only be 2, 10, 20, or 40.
-#define PICTICK_PS            (uint32_t)  1e8    // 100 uS PICDIV strap is 1e8 picoseconds, 1ms is 1e9
-#define FUDGE0_PS             (uint32_t)  0      // adjust for propagation delays, in picoseconds
-/**********************************************************************************************************/
+*******************************************************************************/
+#define CLOCK_FREQ (uint32_t) 1e7  // Reference Clock frequency in Hz
+#define CALIBRATION2_PERIODS  20   // Can only be 2, 10, 20, or 40.
+#define PICTICK_PS (uint32_t) 1e8  // 100 uS PICDIV strap is 1e8
+#define FUDGE0_PS  (uint32_t) 0    // fudge for system delays, in picoseconds
+/*****************************************************************************/
 
 #include <stdint.h>   // define unint16_t, uint32_t
 #include <SPI.h>      // SPI support

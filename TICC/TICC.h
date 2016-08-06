@@ -6,9 +6,12 @@
 
 
 // TICC Time interval Counter based on TICC Shield using TDC7200
-// version 0.60 29 July 2016
+// version 0.62 6 August 2016
+
 // Copyright John Ackermann N8UR 2016
 // Portions Copyright George Byrkit K9TRV 2016
+// Portions Copyright Tom McDermott N5EG 2016
+// Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
 #define PS_PER_SEC        1e12  // ps/s

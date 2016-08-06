@@ -18,6 +18,8 @@
 #define FUDGE0_PS  (uint32_t) 0    // fudge for system delays, in picoseconds
 /*****************************************************************************/
 
+//#define DETAIL_TIMING   // if enabled, prints execution time
+
 #include <stdint.h>   // define unint16_t, uint32_t
 #include <SPI.h>      // SPI support
 #include "TICC.h"     // Register and structure definitions

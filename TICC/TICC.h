@@ -2,7 +2,7 @@
 #define TICC_H
 
 // TICC Time interval Counter based on TICC Shield using TDC7200
-// version 0.65 6 August 2016
+// version 0.70 14 August 2016
 
 // Copyright John Ackermann N8UR 2016
 // Portions Copyright George Byrkit K9TRV 2016
@@ -11,7 +11,7 @@
 // Licensed under BSD 2-clause license
 
 #define PS_PER_SEC        1e12  // ps/s
-#define CLOCK_PERIOD_PS   (PS_PER_SEC/CLOCK_FREQ)  // ps
+#define CLOCK_PERIOD      (PS_PER_SEC/CLOCK_FREQ)  // ps -- for 10MHZ, 1e5 ps
 
 // hardware connections to TDC2700. Defines Arduino IDE pin number.
 // changed for Rev. C board
@@ -64,6 +64,7 @@ private:
 	const int CSB; 
 	unsigned long time1Result;
   unsigned long time2Result;
+	unsigned long time3Result;
 	unsigned long clock1Result;
 	unsigned long cal1Result;
   unsigned long cal2Result;
@@ -74,13 +75,13 @@ public:
   const int INTB;  // pin number on Arduino
  
   long long int PICstop;
-  unsigned long tof;
+  unsigned long long tof;
 	long long int time_stamp;
   boolean idle;     // true = the channel is idle or stuck
 
 	tdc7200Channel(char id, int enable, int intb, int csb, int stop);
 	void setup();
-	unsigned long read();
+	unsigned long long read();
   unsigned long readReg24(byte address);
   byte readReg8(byte address);
 	void ready_next();

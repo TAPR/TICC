@@ -59,34 +59,34 @@ const int interruptPin =      18;		// Interrupt IDE Pin on Mega
 // Channel structure type representing one TDC7200 Channel
 class tdc7200Channel {
 private:
-	//  Some of these really should be private and hidden...
-	const int ENABLE;
-	const int CSB; 
-	unsigned long time1Result;
+	
+  const int ENABLE;
+  const int CSB; 
+  unsigned long time1Result;
   unsigned long time2Result;
-	unsigned long time3Result;
-	unsigned long clock1Result;
-	unsigned long cal1Result;
+  unsigned long time3Result;
+  unsigned long clock1Result;
+  unsigned long cal1Result;
   unsigned long cal2Result;
   
 public:
   const char ID;   // channel letter
   const int STOP;  // pin number on Arduino
   const int INTB;  // pin number on Arduino
- 
+  boolean previousSTOP;  // value of STOP on previous interrupt
+
   long long int PICstop;
   unsigned long long tof;
-	long long int time_stamp;
-  boolean idle;     // true = the channel is idle or stuck
+  long long int time_stamp;
 
-	tdc7200Channel(char id, int enable, int intb, int csb, int stop);
-	void setup();
-	unsigned long long read();
+  tdc7200Channel(char id, int enable, int intb, int csb, int stop);
+  void setup();
+  unsigned long long read();
   unsigned long readReg24(byte address);
   byte readReg8(byte address);
-	void ready_next();
-	void reset();
-	void write(byte address, byte value);
+  void ready_next();
+  void reset();
+  void write(byte address, byte value);
 };
 #endif	/* TICC_H */
 

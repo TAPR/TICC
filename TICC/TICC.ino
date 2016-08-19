@@ -21,7 +21,7 @@
                                              // with this value.
 /*****************************************************************************/
 
-//#define DETAIL_TIMING   // if enabled, prints execution time
+//#define DETAIL_TIMING     // if enabled, prints execution time
 #define PRINT_REG_RESULTS // if enabled, prints time1, time2, clock1, cal1, cal2 before timestamp
 
 #include <stdint.h>   // define unint16_t, uint32_t
@@ -64,8 +64,9 @@ void setup() {
   }
  
   Serial.println("");
+  Serial.println("");
   #ifdef PRINT_REG_RESULTS
-    Serial.println("# time1    time2    clock1    cal1    cal2    timestamp");
+    Serial.println("# time1 time2 clock1 cal1 cal2 timestamp");
   #else
     Serial.println("# timestamp (seconds)");
   #endif
@@ -224,11 +225,13 @@ void tdc7200Channel::ready_next() {
   cal2Result = readReg24(CALIBRATION2);
 
   #ifdef PRINT_REG_RESULTS
+    if (totalize > 1) {  // first few readings likely to be bogus
     Serial.print(time1Result);Serial.print(" ");
     Serial.print(time2Result);Serial.print(" ");
     Serial.print(clock1Result);Serial.print(" ");
     Serial.print(cal1Result);Serial.print(" ");
     Serial.print(cal1Result);Serial.print(" ");
+    }
   #endif
 
      

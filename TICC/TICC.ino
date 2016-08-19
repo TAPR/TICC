@@ -105,6 +105,10 @@ void loop() {
     // Only need to do anything if INTB is low, otherwise no work to do.
      if(digitalRead(channels[i].INTB)==0) {
 
+#ifdef DETAIL_TIMING      
+        start_micros = micros();         
+#endif
+
         // read registers and calculate tof
         tof = channels[i].read();
         

@@ -1,7 +1,7 @@
 // TICC.ino - master sketch file
 
 // TICC Time interval Counter based on TICC Shield using TDC7200
-// version 0.70 -- 14 August 2016
+// version 0.75 -- 18 August 2016
 
 // Copyright John Ackermann N8UR 2016
 // Portions Copyright George Byrkit K9TRV 2016
@@ -16,12 +16,13 @@
 #define CAL_PERIODS      (uint16_t) 20       // Can only be 2, 10, 20, or 40.
 #define PICTICK_PS       (uint32_t) 1e8      // 100 uS PICDIV strap is 1e8
 #define FUDGE0           (uint64_t) 0        // fudge for system delays, in picoseconds
-#define TIME_DILATION    (int64_t)  2000     // multiplier for normLSB;
-#define FIXED_TIME2      (int64_t)  1125     // If 0, use measured time2Result.  Otherwise replace
-                                             // with this value.  Nominal on boardc1/chA is 1125.
+#define TIME_DILATION    (int64_t)  2500     // multiplier for normLSB;
+#define FIXED_TIME2      (int64_t)  0        // If 0, use measured time2Result.  Otherwise replace
+                                             // with this value.
 /*****************************************************************************/
 
 //#define DETAIL_TIMING   // if enabled, prints execution time
+#define PRINT_REG_RESULTS // if enabled, prints time1, time2, clock1, cal1, cal2 before timestamp
 
 #include <stdint.h>   // define unint16_t, uint32_t
 #include <SPI.h>      // SPI support
@@ -29,7 +30,6 @@
 
 volatile unsigned long long PICcount;  //volatile because in ISR
 
-//unsigned long long PICstop;  // duplicates one inside the TDC class. Confusing.
 unsigned long long ts;
 unsigned long long tof;
 unsigned long totalize = 0;
@@ -64,7 +64,11 @@ void setup() {
   }
  
   Serial.println("");
-  Serial.println("# timestamp (seconds)");
+  #ifdef PRINT_REG_RESULTS
+    Serial.println("# time1    time2    clock1    cal1    cal2    timestamp");
+  #else
+    Serial.println("# timestamp (seconds)");
+  #endif
 }  
 
 // Note: need more sophisticated checking of STOP and INTB signals.
@@ -109,7 +113,7 @@ void loop() {
         ts = (uint64_t)(channels[i].PICstop * PICTICK_PS) - tof;
         
         if (totalize++ > 1) {  // first few readings likely to be bogus
-          print_picos_as_seconds(ts);
+          print_unsigned_picos_as_seconds(ts);
           Serial.print( "  CH: ");Serial.println(channels[i].ID);
         }
         
@@ -218,15 +222,24 @@ void tdc7200Channel::ready_next() {
   clock1Result = readReg24(CLOCK_COUNT1);
   cal1Result = readReg24(CALIBRATION1);
   cal2Result = readReg24(CALIBRATION2);
-  
+
+  #ifdef PRINT_REG_RESULTS
+    Serial.print(time1Result);Serial.print(" ");
+    Serial.print(time2Result);Serial.print(" ");
+    Serial.print(clock1Result);Serial.print(" ");
+    Serial.print(cal1Result);Serial.print(" ");
+    Serial.print(cal1Result);Serial.print(" ");
+  #endif
+
+     
   // Datasheet says:
   // normLSB = CLOCKPERIOD / calCount   (for 10 MHz clock, CLOCK_PERIOD = 1e5 ps)
   // calCount =  (cal2Result - cal1Result) / (cal2Periods - 1)
   // tof = normLSB(time1Result - time2Result) + (clock1Result)(CLOCK_PERIOD)
   //
-  // But these steps truncate ringps at 1ps. But normLSB is multiplied
-  // by up to a few thousand ringticks, so the truncation error is 
-  // multiplied as well.  So we use mult/div to improve resolution 
+  // But these steps truncate ringps at 1ps. Since normLSB is multiplied
+  // by up to a few thousand ringticks, the truncation error is 
+  // multiplied as well.  So use mult/div by 1e6 to improve resolution 
 
   tof = (uint64_t)(clock1Result * CLOCK_PERIOD);
   //  tof -= (uint64_t)FUDGE0; // subtract delay due to silicon
@@ -234,36 +247,27 @@ void tdc7200Channel::ready_next() {
   // calCount *= 10e6
   calCount = ((int64_t)(cal2Result - cal1Result) * (int64_t)(1000000 - TIME_DILATION)) / (int64_t)(CAL_PERIODS - 1); 
 
-  // maybe time2Result doesn't add value, so we substitute a fixed value
+  // if FIXED_TIME2 is set, override time2Result with that value
   if (FIXED_TIME2) {
     time2Result = FIXED_TIME2;
   }
   
-  // normLSB *= 10e6 -- remember that we've already multiplied the divisor so we use twice that here
+  // normLSB *= 10e6 -- remember that we've already multiplied the divisor so we need to add six 0s here
   normLSB = ((int64_t)CLOCK_PERIOD *(int64_t)1000000000000) / calCount;
   ring_ticks = (int64_t)time1Result - (int64_t)time2Result;
  
-   // ring_ps *= 10e-6 to get rid of earlier scaling
+  // ring_ps *= 10e-6 to get rid of earlier scaling
   ring_ps = (normLSB * ring_ticks) / (int64_t)1000000;
   
   tof += (uint64_t)ring_ps;
 
   
-//  Serial.print("cal1Result: ");Serial.print(cal1Result);Serial.print(" ");
-//  Serial.print("cal2Result: ");Serial.print(cal2Result);Serial.print(" ");
-//  Serial.print("calCount: ");print_picos_as_seconds(calCount);Serial.print(" ");
-//  Serial.print("normLSB: ");print_picos_as_seconds(normLSB);Serial.print(" ");
+//  Serial.print("normLSB: ");print_unsigned_picos_as_seconds(normLSB);Serial.print(" ");
 //  Serial.print("ring_ticks: ");print_signed_picos_as_seconds(ring_ticks);Serial.print(" ");
 //  print_signed_picos_as_seconds(ring_ps);Serial.print(" ");
 //  Serial.print("ring_ps: ");print_signed_picos_as_seconds(ring_ps);Serial.print(" ");
 //  Serial.print("clock1Result: ");Serial.print(clock1Result);Serial.print(" ");  
-//  Serial.print("time1Result: ");Serial.print(time1Result);Serial.print(" ");  
-//  Serial.print("time2Result: ");Serial.print(time2Result);Serial.print(" ");
-//  Serial.print(time2Result);
-//  Serial.print("time3Result: ");Serial.print(time3Result);Serial.print(" ");
-
-//  Serial.print("tof: ");print_picos_as_seconds(tof);Serial.print(" ");
-  
+//  Serial.print("tof: ");print_unsigned_picos_as_seconds(tof);Serial.print(" ");
   
   return (uint64_t)tof;
 }
@@ -294,7 +298,6 @@ unsigned long tdc7200Channel::readReg24(byte address) {
   unsigned long value = 0;
 
   // CSB needs to be toggled between 24-bit register reads
-
   SPI.beginTransaction(SPISettings(20000000, MSBFIRST, SPI_MODE0));
   digitalWrite(CSB, LOW);
 
@@ -325,9 +328,7 @@ void tdc7200Channel::write(byte address, byte value) {
   SPI.endTransaction();
 }
 
-
-
-void print_picos_as_seconds (uint64_t x) {
+void print_unsigned_picos_as_seconds (uint64_t x) {
   uint64_t sec, secx, frac, frach, fracx, fracl;    
   sec = x / 1000000000000;
   secx = sec * 1000000000000;
@@ -341,8 +342,7 @@ void print_picos_as_seconds (uint64_t x) {
 
   sprintf(str,"%lu.",sec), Serial.print(str);
   sprintf(str, "%06lu", frach), Serial.print(str);
-  sprintf(str, "%06lu", fracl), Serial.print(str);
-  
+  sprintf(str, "%06lu", fracl), Serial.print(str);  
 } 
 
 void print_signed_picos_as_seconds (int64_t x) {
@@ -359,8 +359,7 @@ void print_signed_picos_as_seconds (int64_t x) {
 
   sprintf(str,"%ld.",sec), Serial.print(str);
   sprintf(str, "%06ld", frach), Serial.print(str);
-  sprintf(str, "%06ld", fracl), Serial.print(str);
-  
+  sprintf(str, "%06ld", fracl), Serial.print(str);  
 } 
 
 

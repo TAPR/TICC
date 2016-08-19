@@ -29,7 +29,7 @@
 
 volatile unsigned long long PICcount;  //volatile because in ISR
 
-unsigned long long PICstop;
+//unsigned long long PICstop;  // duplicates one inside the TDC class. Confusing.
 unsigned long long ts;
 unsigned long long tof;
 unsigned long totalize = 0;
@@ -67,31 +67,38 @@ void setup() {
   Serial.println("# timestamp (seconds)");
 }  
 
+// Note: need more sophisticated checking of STOP and INTB signals.
+// STOP is active when ==1   INTB is active when ==0
+//
+// STOP  INTB  State  Status
+//   0    0      0    TDC has measured, and stop has already been cleared. [Or lockup condition #2].
+//   0    1      1    Normal idle condition.
+//   1    0      2    Very low probability - only exists for ~23 nanoseconds. Can we ignore this state?
+//   1    1      3    Channel just measured, TDC hasn't finished cycle yet. Lasts 6.4 milliseconds.
+//                       If persistent, indicates lockup condition #1.
+//
+// We expect to go through the states:
+//      1 -> 3 (about 6.4 milliseconds) -> 2 (about 23 nanoseconds) -> 0 (about 500 miscoseconds) -> 1
+//      We need to catch the transition into state 3 to validly capture PICCount for the measurement.
+//      We complete the measurement while in state 0.
+//      Re-arming the TDC puts us into state 1 unless we are in lockup #1 in which case we stay in state 3.
+//      Lockup condition #2 exists only because of the current code which does nothing if we are state 0 or 1.
+//
+// There is a dead time of 500 microseconds when the Arduino is 100% busy. If the other channel has
+// an event during that period of time, it will not be able to read PICCount until done. This will cause
+// an error on that other channel.
+//
+// Better is to put in a state machine inside the PICCount interrupt loooking for a 0->1 transition on
+// STOP to capture the PICCout time to the relevant channel.
+//
+
+
 void loop() {
   int i;
   for(i = 0; i < ARRAY_SIZE(channels); ++i) {
 
-    if (channels[i].idle == true)  // ignore an idle or stuck channel
-      continue;
-      
-    start_micros = micros();
-
-    // STOP means an event has occurred
-    if(digitalRead(channels[i].STOP) == 1) {    
-        
-        // grab this just as soon as we can
-        PICstop = PICcount;
-        
-        // wait until INTB goes low to indicate TDC measurement complete
-        unsigned int deadlock = 100000;
-        while (digitalRead(channels[i].INTB)==1) {
-          delayMicroseconds(5);
-          if (--deadlock == 0) {
-            channels[i].idle = true;
-            Serial.print(" Channel "),Serial.print(channels[i].ID),Serial.println(" is stuck or idle. Now disabled.");
-            break;
-         }
-        }
+    // Only need to do anything if INTB is low, otherwise no work to do.
+     if(digitalRead(channels[i].INTB)==0) {
 
         // read registers and calculate tof
         tof = channels[i].read();
@@ -99,14 +106,12 @@ void loop() {
         // done with chip, so get ready for next reading
         channels[i].ready_next(); // Re-arm for next measurement, clear TDC INTB
                  
-        ts = (uint64_t)(PICstop * PICTICK_PS) - tof;
+        ts = (uint64_t)(channels[i].PICstop * PICTICK_PS) - tof;
         
-        if (totalize > 1) {  // first few readings likely to be bogus
+        if (totalize++ > 1) {  // first few readings likely to be bogus
           print_picos_as_seconds(ts);
           Serial.print( "  CH: ");Serial.println(channels[i].ID);
         }
-        
-        totalize++; // number of measurements
         
 #ifdef DETAIL_TIMING      
         end_micros = micros();         
@@ -116,13 +121,24 @@ void loop() {
 
     } // if
   } // for
-} // loop
+} // loop()
 
 /**************************************************************************************/
  
-// ISR for timer. 
+// ISR for timer. Capture PICcount on each channel's STOP 0->1 transition.
 void coarseTimer() {
+
   PICcount++;
+
+  for(byte i = 0; i < ARRAY_SIZE(channels); ++i) {
+    if (digitalRead(channels[i].STOP)==false) 
+      channels[i].previousSTOP = false;
+    else 
+      if (channels[i].previousSTOP==false) {
+        channels[i].PICstop = PICcount;      // update PICstop on 0->1 transition of STOP
+        channels[i].previousSTOP = true;
+      } 
+   }
 }
 
 
@@ -135,7 +151,6 @@ tdc7200Channel::tdc7200Channel(char id, int enable, int intb, int csb, int stop)
 	pinMode(CSB,OUTPUT);
 	pinMode(STOP,INPUT);
 
-  idle = false;   // assume the channel has signal hooked up triggering
 };
 
 // Initial config for TDC7200
@@ -324,7 +339,7 @@ void print_picos_as_seconds (uint64_t x) {
   fracx = frach * 1000000;
   fracl = frac - fracx;
 
-  sprintf(str,"%lu",sec), Serial.print(str), Serial.print(".");
+  sprintf(str,"%lu.",sec), Serial.print(str);
   sprintf(str, "%06lu", frach), Serial.print(str);
   sprintf(str, "%06lu", fracl), Serial.print(str);
   
@@ -342,7 +357,7 @@ void print_signed_picos_as_seconds (int64_t x) {
   fracx = frach * 1000000;
   fracl = frac - fracx;
 
-  sprintf(str,"%ld",sec), Serial.print(str), Serial.print(".");
+  sprintf(str,"%ld.",sec), Serial.print(str);
   sprintf(str, "%06ld", frach), Serial.print(str);
   sprintf(str, "%06ld", fracl), Serial.print(str);
   

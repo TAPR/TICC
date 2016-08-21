@@ -59,12 +59,14 @@ void setup() {
    
   PICcount = 0;
   pinMode(COARSEint, INPUT);
+  pinMode(STOP_A, INPUT);
+  pinMode(STOP_B, INPUT);
   pinMode(STOPAint, INPUT);
   pinMode(STOPBint, INPUT);
   
   enableInterrupt(COARSEint, coarseTimer, RISING);
-  enableInterrupt(STOPAint, catch_stopA, RISING);
-  enableInterrupt(STOPBint, catch_stopB, RISING);
+  enableInterrupt(STOP_A, catch_stopA, RISING);
+  enableInterrupt(STOP_B, catch_stopB, RISING);
   
 //  attachInterrupt(digitalPinToInterrupt(COARSEint), coarseTimer, FALLING); // falling edge avoids timing issue
 //  attachInterrupt(digitalPinToInterrupt(STOPAint), catch_stopA, RISING); 
@@ -129,7 +131,7 @@ void loop() {
         // done with chip, so get ready for next reading
         channels[i].ready_next(); // Re-arm for next measurement, clear TDC INTB
       
-        channels[i].ts = (channels[i].PICstop * (uint64_t)PICTICK_PS) - channels[i].tof;
+        channels[i].ts = (channels[i].PICstop * PICTICK_PS) - channels[i].tof;
         
         if (channels[i].totalize++ > 1) {  // first few readings likely to be bogus
 //          print_unsigned_picos_as_seconds(PICcount);Serial.print(" ");
@@ -201,7 +203,7 @@ void tdc7200Channel::setup() {
   }
   
   AVG_CYCLES = 0x00;  // 0x00 for 1 measurement cycle
-  NUM_STOP = 0x00;    // SHOULD BE 0x00 for 1 stop but that doesn't work
+  NUM_STOP = 0x01;    // SHOULD BE 0x00 for 1 stop but that doesn't work
 
   reg_byte = CALIBRATION2_PERIODS | AVG_CYCLES | NUM_STOP;
   write(CONFIG2, reg_byte);  
@@ -211,8 +213,8 @@ void tdc7200Channel::setup() {
  //write(CLOCK_CNTR_STOP_MASK_L, 0x01); // was 0x00 // hold off no clocks before enabling STOP
  //write(COARSE_CNTR_OVF_H, 0x0F);  //was 0xF0  -- only doing this because STOP doesn't raise INTB 
  //write(COARSE_CNTR_OVF_L, 0x00);
- //write(CLOCK_CNTR_OVF_H, 0xF0);   // was 0xF0
- //write(CLOCK_CNTR_OVF_L, 0x00);  // was 0x00
+ write(CLOCK_CNTR_OVF_H, 0x03);   // was 0xF0
+ write(CLOCK_CNTR_OVF_L, 0x00);  // was 0x00
   
 }
 
@@ -220,7 +222,7 @@ void tdc7200Channel::setup() {
 void tdc7200Channel::ready_next() {
 // needs to set the enable bit (START_MEAS in CONFIG1)
 // clears interrupt bits
- byte FORCE_CAL = 0x00;      // 0x80 forces cal even if timeout; 0x00 means no cal if measurement interrupted 
+ byte FORCE_CAL = 0x80;      // 0x80 forces cal even if timeout; 0x00 means no cal if measurement interrupted 
  byte PARITY_EN = 0x00;      // parity on would be 0x40
  byte TRIGG_EDGE = 0x00;     // TRIGG rising edge; falling edge would be 0x20
  byte STOP_EDGE = 0x00;      // STOP rising edge; falling edge would be 0x10

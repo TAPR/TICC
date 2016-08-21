@@ -75,7 +75,7 @@ public:
   const char ID;   // channel letter
   const int STOP;  // pin number on Arduino
   const int INTB;  // pin number on Arduino
-  boolean previousSTOP;  // value of STOP on previous interrupt
+  volatile boolean gotSTOP;  // value of STOP on previous interrupt
   volatile uint64_t PICstop;
   uint64_t tof;
   uint32_t totalize;

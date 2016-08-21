@@ -1,3 +1,4 @@
+
 // TICC.ino - master sketch file
 
 // TICC Time interval Counter based on TICC Shield using TDC7200
@@ -28,10 +29,17 @@
 #include <SPI.h>      // SPI support
 #include "TICC.h"     // Register and structure definitions
 
+// Setup EnableInterrupts library
+#define NEED_FOR_SPEED
+#define INTERRUPT_FLAG_PIN18 PICcount
+#include <EnableInterrupt.h>
+
 volatile uint64_t PICcount;
-int32_t start_micros;
-int32_t end_micros;
-char str[128];
+
+#ifdef DETAIL_TIMING
+  int32_t start_micros;
+  int32_t end_micros;
+#endif
 
 // Enumerate the TDC7200 channel structures
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
@@ -54,9 +62,13 @@ void setup() {
   pinMode(STOPAint, INPUT);
   pinMode(STOPBint, INPUT);
   
-  attachInterrupt(digitalPinToInterrupt(COARSEint), coarseTimer, RISING);
-  attachInterrupt(digitalPinToInterrupt(STOPAint), catch_stopA, RISING); 
-  attachInterrupt(digitalPinToInterrupt(STOPBint), catch_stopB, RISING); 
+  enableInterrupt(COARSEint, coarseTimer, RISING);
+  enableInterrupt(STOPAint, catch_stopA, RISING);
+  enableInterrupt(STOPBint, catch_stopB, RISING);
+  
+//  attachInterrupt(digitalPinToInterrupt(COARSEint), coarseTimer, FALLING); // falling edge avoids timing issue
+//  attachInterrupt(digitalPinToInterrupt(STOPAint), catch_stopA, RISING); 
+//  attachInterrupt(digitalPinToInterrupt(STOPBint), catch_stopB, RISING); 
   
   for(i = 0; i < ARRAY_SIZE(channels); ++i) {
     channels[i].setup();
@@ -120,6 +132,8 @@ void loop() {
         channels[i].ts = (channels[i].PICstop * (uint64_t)PICTICK_PS) - channels[i].tof;
         
         if (channels[i].totalize++ > 1) {  // first few readings likely to be bogus
+//          print_unsigned_picos_as_seconds(PICcount);Serial.print(" ");
+//          print_unsigned_picos_as_seconds(channels[i].PICstop);Serial.print(" ");
           print_unsigned_picos_as_seconds(channels[i].ts);
           Serial.print( "  CH: ");Serial.println(channels[i].ID);
         }
@@ -140,8 +154,8 @@ void loop() {
 // ISR for timer. Capture PICcount on each channel's STOP 0->1 transition.
 void coarseTimer() {
   PICcount++;
-//  for(byte i = 0; i < ARRAY_SIZE(channels); ++i) {
-//    if (digitalRead(channels[i].STOP)==false) 
+}  
+//    if (digitalRead(channels[i].gotSTOP)==false) 
 //     channels[i].previousSTOP = false;
 //    else 
 //      if (channels[i].previousSTOP==false) {
@@ -149,7 +163,7 @@ void coarseTimer() {
 //        channels[i].previousSTOP = true;
 //     } 
 //   }
-}
+//}
 
 void catch_stopA() {
   channels[0].PICstop = PICcount;
@@ -344,6 +358,8 @@ void tdc7200Channel::write(byte address, byte value) {
 
 void print_unsigned_picos_as_seconds (uint64_t x) {
   uint64_t sec, secx, frac, frach, fracx, fracl;    
+  char str[128];
+  
   sec = x / 1000000000000;
   secx = sec * 1000000000000;
   frac = x - secx;
@@ -361,6 +377,8 @@ void print_unsigned_picos_as_seconds (uint64_t x) {
 
 void print_signed_picos_as_seconds (int64_t x) {
   int64_t sec, secx, frac, frach, fracx, fracl;    
+  char str[128];
+  
   sec = x / 1000000000000;
   secx = sec * 1000000000000;
   frac = x - secx;

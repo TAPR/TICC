@@ -10,8 +10,8 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-#define PS_PER_SEC        1e12  // ps/s
-#define CLOCK_PERIOD      (PS_PER_SEC/CLOCK_FREQ)  // ps -- for 10MHZ, 1e5 ps
+#define PS_PER_SEC        (uint64_t)1000000000000  // ps/s
+#define CLOCK_PERIOD      (uint64_t)(PS_PER_SEC/CLOCK_FREQ)  // ps -- for 10MHZ, 1e5 ps
 
 // hardware connections to TDC2700. Defines Arduino IDE pin number.
 // changed for Rev. C board
@@ -24,6 +24,11 @@ const int ENABLE_B =		5;
 const int INTB_B =		11;
 const int CSB_B	=	  	7;
 const int STOP_B =		13;
+
+// interrupt assignments
+const int COARSEint = 18;   // Interrupt for COARSE clock
+const int STOPAint =  19;   // Interrupt for STOPA
+const int STOPBint =  20;   // Interrupt for STOP
 
 // TDC7200 register addresses
 const int CONFIG1 =		0x00;           // default 0x00
@@ -52,38 +57,36 @@ const int CALIBRATION1 =	0x1B;           // default 0x00_0000
 const int CALIBRATION2 =	0x1C;           // default 0x00_0000
 
 
-// Coarse count interrupt assignments
-// changed for Rev. C board
-const int interruptPin =      18;		// Interrupt IDE Pin on Mega
 
 // Channel structure type representing one TDC7200 Channel
 class tdc7200Channel {
+
 private:
-	
   const int ENABLE;
   const int CSB; 
-  unsigned long time1Result;
-  unsigned long time2Result;
-  unsigned long time3Result;
-  unsigned long clock1Result;
-  unsigned long cal1Result;
-  unsigned long cal2Result;
+  uint32_t time1Result;
+  uint32_t time2Result;
+  uint32_t time3Result;
+  uint32_t clock1Result;
+  uint32_t cal1Result;
+  uint32_t cal2Result;
   
 public:
   const char ID;   // channel letter
   const int STOP;  // pin number on Arduino
   const int INTB;  // pin number on Arduino
   boolean previousSTOP;  // value of STOP on previous interrupt
-
-  long long int PICstop;
-  unsigned long long tof;
-  long long int time_stamp;
+  volatile uint64_t PICstop;
+  uint64_t tof;
+  uint64_t totalize;
+  uint64_t ts;
 
   tdc7200Channel(char id, int enable, int intb, int csb, int stop);
+  
+  uint64_t read();
+  uint32_t readReg24(byte address);
+  uint8_t readReg8(byte address);
   void setup();
-  unsigned long long read();
-  unsigned long readReg24(byte address);
-  byte readReg8(byte address);
   void ready_next();
   void reset();
   void write(byte address, byte value);

@@ -78,7 +78,7 @@ public:
   boolean previousSTOP;  // value of STOP on previous interrupt
   volatile uint64_t PICstop;
   uint64_t tof;
-  uint64_t totalize;
+  uint32_t totalize;
   uint64_t ts;
 
   tdc7200Channel(char id, int enable, int intb, int csb, int stop);

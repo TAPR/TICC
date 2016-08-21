@@ -28,7 +28,7 @@
 #include <SPI.h>      // SPI support
 #include "TICC.h"     // Register and structure definitions
 
-uint64_t PICcount;
+volatile uint64_t PICcount;
 int32_t start_micros;
 int32_t end_micros;
 char str[128];
@@ -103,7 +103,11 @@ void loop() {
   int i;
  
   for(i = 0; i < ARRAY_SIZE(channels); ++i) {
-
+    
+    #ifdef DETAIL_TIMING
+      start_micros = micros();
+    #endif
+    
     // Only need to do anything if INTB is low, otherwise no work to do.
      if(digitalRead(channels[i].INTB)==0) {
 
@@ -124,6 +128,7 @@ void loop() {
         end_micros = micros();         
         Serial.print(" execution time (us): ");
         Serial.print(end_micros - start_micros);
+        Serial.print(" ");
 #endif
 
     } // if

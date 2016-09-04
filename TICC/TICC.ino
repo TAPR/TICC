@@ -2,7 +2,7 @@
 // TICC.ino - master sketch file
 
 // TICC Time interval Counter based on TICC Shield using TDC7200
-// version 0.77E -- 4 September 2016
+// version 0.80 -- 4 September 2016
 
 // Copyright John Ackermann N8UR 2016
 // Portions Copyright George Byrkit K9TRV 2016
@@ -37,9 +37,10 @@ int64_t tint;
 
 //#define PRINT_REG_RESULTS // if enabled, prints time1, time2, clock1, cal1, cal2 before timestamp
 
-#include <stdint.h>   // define unint16_t, uint32_t
-#include <SPI.h>      // SPI support
-#include "TICC.h"     // Register and structure definitions
+#include <stdint.h>       // define unint16_t, uint32_t
+#include <SPI.h>          // SPI support
+#include "TICC.h"         // Register and structure definitions
+#include "UserConfig.h"   // User configuration of TICC 
 
 // NOTE: changed from uint to int while working on TINT calc
 volatile int64_t PICcount;             // need to define var before defining INTERRUPT_FLAG
@@ -63,6 +64,8 @@ void setup() {
   Serial.begin(115200);
   // start the SPI library:
   SPI.begin();
+
+  MeasureMode m = UserConfig();
    
   PICcount = 0;
   pinMode(COARSEint, INPUT);

@@ -10,45 +10,38 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-/*******************************************************************************
- Set these constants to match your hardware configuration
-*******************************************************************************/
-#define CLOCK_FREQ       (uint64_t) 10000000      // Reference Clock frequency in Hz
-#define CAL_PERIODS      (uint16_t) 20            // Can only be 2, 10, 20, or 40.
-#define PICTICK_PS       (uint64_t) 100000000     // 100 uS PICDIV strap is 1e8
-#define FUDGE0           (int64_t)  0        // fudge for system delays, in picoseconds
-#define TIME_DILATION    (int64_t)  2000     // multiplier for normLSB;
-#define FIXED_TIME2      (int64_t)  0        // If 0, use measured time2Result,else use this.
-#define SPI_SPEED        (int32_t)  20000000 // 20MHz maximum
-/*****************************************************************************/
-
-
-bool TIMESTAMP = false;
-bool TIMEPOD = true;
-bool TINT = false;
-
-int64_t tint;
-
-//#define DETAIL_TIMING     // if enabled, prints execution time
-  #ifdef DETAIL_TIMING
-    int32_t start_micros;
-    int32_t end_micros;
-  #endif
-
 //#define PRINT_REG_RESULTS // if enabled, prints time1, time2, clock1, cal1, cal2 before timestamp
+//#define DETAIL_TIMING     // if enabled, prints execution time
 
-#include <stdint.h>       // define unint16_t, uint32_t
-#include <SPI.h>          // SPI support
-#include "TICC.h"         // Register and structure definitions
-#include "UserConfig.h"   // User configuration of TICC 
+#ifdef DETAIL_TIMING
+  int32_t start_micros;
+  int32_t end_micros;
+#endif
+
+#include <stdint.h>           // define unint16_t, uint32_t
+#include <SPI.h>              // SPI support
+#include <EnableInterrupt.h>  // use faster interrupt library
+#include <EEPROM.h>           // read/write EEPROM
+#include "TICC.h"             // register and structure definitions
+#include "UserConfig.h"       // user configuration of TICC
 
 // NOTE: changed from uint to int while working on TINT calc
-volatile int64_t PICcount;             // need to define var before defining INTERRUPT_FLAG
+volatile int64_t PICcount;
+int64_t tint;
+enum MeasureMode m;
 
-// Setup EnableInterrupts library 
-//#define NEED_FOR_SPEED                // needs to be before the include
-//#define INTERRUPT_FLAG_PIN18 PICcount // needs to be before the include
-#include <EnableInterrupt.h>
+// default configuration; may be overwritten from eeprom during setup
+const config_t config = {
+  '0123456789\0',       // serial number
+  10000000,             // CLOCK_HZ (10MHz)
+  100000000,            // PICTICK_PS  (100us)
+  20,                   // CAL_PERIODS (2, 10, 20, 40)
+  2000,                 // TIME_DILATE_0
+  2000,                 // TIME_DILATE_1
+  0,                    // FUDGE0_0
+  0,                    // FUDGE0_1
+  0,                    // MODE -- 0 is timestamp  
+};
 
 // Enumerate the TDC7200 channel structures
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
@@ -65,8 +58,10 @@ void setup() {
   // start the SPI library:
   SPI.begin();
 
-  MeasureMode m = UserConfig();
-   
+  // T - timestamp; P - period; L - timelab; I - interval
+  m = UserConfig();
+  Serial.println(m);
+
   PICcount = 0;
   pinMode(COARSEint, INPUT);
   pinMode(STOP_A, INPUT);
@@ -81,6 +76,9 @@ void setup() {
     channels[i].ts = 0;
     channels[i].tdc_setup();
     channels[i].ready_next();
+    channels[i].time_dilate = config.TIME_DILATE[i];
+    channels[i].fixed_time2 = config.FIXED_TIME2[i];
+    channels[i].fudge0 = config.FUDGE0[i];
   }
 
   enableInterrupt(COARSEint, coarseTimer, FALLING);  // if using NEEDFORSPEED, don't declare this
@@ -92,7 +90,7 @@ void setup() {
   #ifdef PRINT_REG_RESULTS
     Serial.println("# time1 time2 clock1 cal1 cal2 timestamp");
   #else
-    if (TINT) {
+    if (m == interval) {
       Serial.println("# time interval A->B (seconds)");
     } else {
       Serial.println("# timestamp (seconds)");
@@ -119,7 +117,7 @@ void loop() {
        channels[i].ready_next(); // Re-arm for next measurement, clear TDC INTB
       
        channels[i].last_ts = channels[i].ts;
-       channels[i].ts = (channels[i].PICstop * PICTICK_PS) - channels[i].tof;
+       channels[i].ts = (channels[i].PICstop * config.PICTICK_PS) - channels[i].tof;
        channels[i].totalize++;
 
 #ifdef DETAIL_TIMING      
@@ -129,17 +127,17 @@ void loop() {
        Serial.println();
 #endif
       
-       if ( TIMESTAMP && (channels[i].totalize > 2) ) {
+       if ( (m == timestamp) && (channels[i].totalize > 2) ) {
          print_signed_picos_as_seconds(channels[i].ts);
          Serial.print( " ch");Serial.println(channels[i].ID);    
        }
-       if ( TIMEPOD && (channels[0].ts) && (channels[1].ts) && (channels[0].totalize > 2) ) {
+       if ( (m == timelab) && (channels[0].ts) && (channels[1].ts) && (channels[0].totalize > 2) ) {
          print_signed_picos_as_seconds(channels[0].ts);Serial.println(" chA");
          print_signed_picos_as_seconds(channels[1].ts);Serial.println(" chB");
          channels[0].ts = 0;
          channels[1].ts = 0;
        } 
-       if ( TINT && (channels[0].ts > 0) && (channels[1].ts > 0) && (channels[0].totalize > 2) ) {
+       if ( (m == interval) && (channels[0].ts > 0) && (channels[1].ts > 0) && (channels[0].totalize > 2) ) {
          print_signed_picos_as_seconds(channels[1].ts - channels[0].ts);
          Serial.println(" TI(A->B)");
          channels[0].ts = 0;
@@ -201,7 +199,7 @@ void tdc7200Channel::tdc_setup() {
   digitalWrite(ENABLE, HIGH);  // Needs a low-to-high transition to enable
   delay(5);  // 1.5ms minimum recommended to allow chip LDO to stabilize
 
-  switch (CAL_PERIODS) {
+  switch (config.CAL_PERIODS) {
     case  2: CALIBRATION2_PERIODS = 0x00; break;
     case 10: CALIBRATION2_PERIODS = 0x40; break;
     case 20: CALIBRATION2_PERIODS = 0x80; break;
@@ -288,11 +286,12 @@ int64_t tdc7200Channel::read() {
   //  tof -= (int64_t)FUDGE0; // subtract delay due to silicon
   
   // calCount *= 10e6
-  calCount = ((int64_t)(cal2Result - cal1Result) * (int64_t)(1000000 - TIME_DILATION)) / (int64_t)(CAL_PERIODS - 1); 
+  calCount = ((int64_t)(cal2Result - cal1Result) * (int64_t)(1000000 - time_dilate)) / \
+      (int64_t)(config.CAL_PERIODS - 1); 
 
   // if FIXED_TIME2 is set, override time2Result with that value
-  if (FIXED_TIME2) {
-    time2Result = FIXED_TIME2;
+  if (fixed_time2) {
+    time2Result = fixed_time2;
   }
   
   // normLSB *= 10e6 -- remember that we've already multiplied the divisor so we need to add six 0s here
@@ -411,5 +410,20 @@ void print_signed_picos_as_seconds (int64_t x) {
   sprintf(str, "%06ld", frach), Serial.print(str);
   sprintf(str, "%06ld", fracl), Serial.print(str);  
 }
+
+// read and write config struct in eeprom
+uint16_t eeprom_write_uint16(uint16_t offset, uint16_t x) {
+  uint16_t num_bytes;
+  num_bytes = EEPROM_writeAnything(offset, x);
+  return num_bytes;
+}
+
+uint16_t eeprom_read_uint16(uint16_t offset) {
+  uint16_t num_bytes;
+  uint16_t x;
+  num_bytes = EEPROM_readAnything(offset, x);
+  return num_bytes;
+}
+
 
 

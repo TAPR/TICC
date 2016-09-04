@@ -7,7 +7,7 @@
 // based on TICC Shield using TDC7200
 // version 0.01 26 August 2016
 
-enum MeasureMode : unsigned char {timestamp, period, interval};
+enum MeasureMode : unsigned char {timestamp, period, interval, timelab};
 
 MeasureMode UserConfig();
 

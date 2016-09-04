@@ -8,6 +8,7 @@ MeasureMode UserConfig() {
 // T    - Timestamp mode
 // P    - Period mode
 // I    - time Interval (A-B) mode
+// L    - Dual Channel TI mode for TimeLab
 //
 // BUGBUG - This is buggy right now
 
@@ -39,9 +40,10 @@ MeasureMode UserConfig() {
   }
 
   Serial.println("Setup mode.  Valid single-letter commands are:"), Serial.println();
-  Serial.println("   T     Timestamp mode");
-  Serial.println("   P     Period    mode");
-  Serial.println("   I     Interval (time) A->B mode");
+  Serial.println("   T     (T)imestamp mode");
+  Serial.println("   P     (P)eriod mode");
+  Serial.println("   I     time (I)nterval A->B mode");
+  Serial.println("   L     Time(L)ab interval mode");
   Serial.println(),Serial.print("Enter mode: ");
 
   while (!Serial.available())
@@ -68,6 +70,11 @@ MeasureMode UserConfig() {
       Serial.println("time Interval A->B mode");
       m = interval;
       return(m);  // time Interval mode
+      break;
+    case 'L':
+      Serial.println("TimeLab time interval mode");
+      m = timelab;
+      return(m); // TimeLab mode
       break;
     default:
       Serial.println("Invalid command. Defaulting to Timestamp mode");

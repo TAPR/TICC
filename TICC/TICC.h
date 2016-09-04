@@ -10,8 +10,12 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
+#include <EEPROM.h>
+#include <Arduino.h>  // for type definitions
+
 #define PS_PER_SEC        (int64_t)1000000000000  // ps/s
-#define CLOCK_PERIOD      (int64_t)(PS_PER_SEC/CLOCK_FREQ)  // ps -- for 10MHZ, 1e5 ps
+#define CLOCK_PERIOD      (int64_t)(PS_PER_SEC/config.CLOCK_HZ)  // ps -- for 10MHZ, 1e5 ps
+#define SPI_SPEED         (int32_t)  20000000 // 20MHz maximum
 
 // hardware connections to TDC2700. Defines Arduino IDE pin number.
 // changed for Rev. C board
@@ -56,7 +60,17 @@ const int TIME6	=		0x1A;           // default 0x00_0000
 const int CALIBRATION1 =	0x1B;           // default 0x00_0000
 const int CALIBRATION2 =	0x1C;           // default 0x00_0000
 
-
+// configuration structure type
+struct config_t {
+  char     SER_NUM[11];     // board serial number -- 10 digits plus null
+  uint32_t CLOCK_HZ;        // clock in Hz -- default 10 000 000
+  uint32_t PICTICK_PS;       // coarse tick in ps -- default 100 000 000 (100us)
+  uint8_t  CAL_PERIODS;     // calibration periods -- 2, 10, 20, 40
+  uint32_t TIME_DILATE[2];   // time dilation factor for each channel
+  uint32_t FIXED_TIME2[2];   // if >0 use to replace time2 for each channel
+  uint32_t FUDGE0[2];        // fudge factor (ps) for each channel
+  uint8_t  MODE;            // operating mode
+};
 
 // Channel structure type representing one TDC7200 Channel
 class tdc7200Channel {
@@ -82,6 +96,9 @@ public:
   int64_t ts;
   int64_t last_ts; 
   int32_t totalize;
+  int32_t time_dilate;
+  int32_t fixed_time2;
+  int32_t fudge0;
   
   tdc7200Channel(char id, int enable, int intb, int csb, int stop);
   int64_t read();
@@ -91,5 +108,25 @@ public:
   void ready_next();
   void write(byte address, byte value);
 };
+
+// These allow us to read/write struct in eeprom
+template <class T> int EEPROM_writeAnything(int ee, const T& value)
+{
+    const byte* p = (const byte*)(const void*)&value;
+    unsigned int i;
+    for (i = 0; i < sizeof(value); i++)
+    EEPROM.write(ee++, *p++);
+    return i;
+}
+
+template <class T> int EEPROM_readAnything(int ee, T& value)
+{
+    byte* p = (byte*)(void*)&value;
+    unsigned int i;
+    for (i = 0; i < sizeof(value); i++)
+    *p++ = EEPROM.read(ee++);
+    return i;
+}
+
 #endif	/* TICC_H */
 

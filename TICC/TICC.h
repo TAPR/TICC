@@ -10,8 +10,8 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-#define PS_PER_SEC        (uint64_t)1000000000000  // ps/s
-#define CLOCK_PERIOD      (uint64_t)(PS_PER_SEC/CLOCK_FREQ)  // ps -- for 10MHZ, 1e5 ps
+#define PS_PER_SEC        (int64_t)1000000000000  // ps/s
+#define CLOCK_PERIOD      (int64_t)(PS_PER_SEC/CLOCK_FREQ)  // ps -- for 10MHZ, 1e5 ps
 
 // hardware connections to TDC2700. Defines Arduino IDE pin number.
 // changed for Rev. C board
@@ -75,20 +75,20 @@ public:
   const char ID;   // channel letter
   const int STOP;  // pin number on Arduino
   const int INTB;  // pin number on Arduino
-  volatile boolean gotSTOP;  // value of STOP on previous interrupt
-  volatile uint64_t PICstop;
-  uint64_t tof;
-  uint32_t totalize;
-  uint64_t ts;
-
-  tdc7200Channel(char id, int enable, int intb, int csb, int stop);
+  // NOTE: changed all from signed to unsigned while working on TINT
+  volatile int64_t PICstop;
+  int64_t tof;
+  int64_t last_tof;
+  int64_t ts;
+  int64_t last_ts; 
+  int32_t totalize;
   
-  uint64_t read();
+  tdc7200Channel(char id, int enable, int intb, int csb, int stop);
+  int64_t read();
   uint32_t readReg24(byte address);
   uint8_t readReg8(byte address);
-  void setup();
+  void tdc_setup();
   void ready_next();
-  void reset();
   void write(byte address, byte value);
 };
 #endif	/* TICC_H */

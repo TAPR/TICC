@@ -2,7 +2,7 @@
 // TICC.ino - master sketch file
 
 // TICC Time interval Counter based on TICC Shield using TDC7200
-// version 0.77 -- 21 August 2016
+// version 0.77E -- 4 September 2016
 
 // Copyright John Ackermann N8UR 2016
 // Portions Copyright George Byrkit K9TRV 2016
@@ -17,29 +17,37 @@
 #define CAL_PERIODS      (uint16_t) 20            // Can only be 2, 10, 20, or 40.
 #define PICTICK_PS       (uint64_t) 100000000     // 100 uS PICDIV strap is 1e8
 #define FUDGE0           (int64_t)  0        // fudge for system delays, in picoseconds
-#define TIME_DILATION    (int64_t)  0     // multiplier for normLSB;
-#define FIXED_TIME2      (int64_t)  0        // If 0, use measured time2Result.  Otherwise replace
-                                             // with this value.
+#define TIME_DILATION    (int64_t)  2000     // multiplier for normLSB;
+#define FIXED_TIME2      (int64_t)  0        // If 0, use measured time2Result,else use this.
+#define SPI_SPEED        (int32_t)  20000000 // 20MHz maximum
 /*****************************************************************************/
 
+
+bool TIMESTAMP = false;
+bool TIMEPOD = true;
+bool TINT = false;
+
+int64_t tint;
+
 //#define DETAIL_TIMING     // if enabled, prints execution time
+  #ifdef DETAIL_TIMING
+    int32_t start_micros;
+    int32_t end_micros;
+  #endif
+
 //#define PRINT_REG_RESULTS // if enabled, prints time1, time2, clock1, cal1, cal2 before timestamp
 
 #include <stdint.h>   // define unint16_t, uint32_t
 #include <SPI.h>      // SPI support
 #include "TICC.h"     // Register and structure definitions
 
-// Setup EnableInterrupts library
-#define NEED_FOR_SPEED
-#define INTERRUPT_FLAG_PIN18 PICcount
+// NOTE: changed from uint to int while working on TINT calc
+volatile int64_t PICcount;             // need to define var before defining INTERRUPT_FLAG
+
+// Setup EnableInterrupts library 
+//#define NEED_FOR_SPEED                // needs to be before the include
+//#define INTERRUPT_FLAG_PIN18 PICcount // needs to be before the include
 #include <EnableInterrupt.h>
-
-volatile uint64_t PICcount;
-
-#ifdef DETAIL_TIMING
-  int32_t start_micros;
-  int32_t end_micros;
-#endif
 
 // Enumerate the TDC7200 channel structures
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
@@ -47,7 +55,6 @@ static tdc7200Channel channels[] = {
 	tdc7200Channel('A', ENABLE_A, INTB_A, CSB_A, STOP_A),
 	tdc7200Channel('B', ENABLE_B, INTB_B, CSB_B, STOP_B),
 };
-
 
 void setup() {
   int i;
@@ -63,88 +70,84 @@ void setup() {
   pinMode(STOP_B, INPUT);
   pinMode(STOPAint, INPUT);
   pinMode(STOPBint, INPUT);
-  
-  enableInterrupt(COARSEint, coarseTimer, RISING);
+   
+  for(i = 0; i < ARRAY_SIZE(channels); ++i) {
+    channels[i].totalize = 0;
+    channels[i].PICstop = 0;
+    channels[i].tof = 0;
+    channels[i].ts = 0;
+    channels[i].tdc_setup();
+    channels[i].ready_next();
+  }
+
+  enableInterrupt(COARSEint, coarseTimer, FALLING);  // if using NEEDFORSPEED, don't declare this
   enableInterrupt(STOP_A, catch_stopA, RISING);
   enableInterrupt(STOP_B, catch_stopB, RISING);
   
-//  attachInterrupt(digitalPinToInterrupt(COARSEint), coarseTimer, FALLING); // falling edge avoids timing issue
-//  attachInterrupt(digitalPinToInterrupt(STOPAint), catch_stopA, RISING); 
-//  attachInterrupt(digitalPinToInterrupt(STOPBint), catch_stopB, RISING); 
-  
-  for(i = 0; i < ARRAY_SIZE(channels); ++i) {
-    channels[i].setup();
-    channels[i].ready_next();
-    channels[i].totalize = 0;
-  }
- 
   Serial.println("");
   Serial.println("");
   #ifdef PRINT_REG_RESULTS
     Serial.println("# time1 time2 clock1 cal1 cal2 timestamp");
   #else
-    Serial.println("# timestamp (seconds)");
+    if (TINT) {
+      Serial.println("# time interval A->B (seconds)");
+    } else {
+      Serial.println("# timestamp (seconds)");
+    }
   #endif
 }  
-
-// Note: need more sophisticated checking of STOP and INTB signals.
-// STOP is active when ==1   INTB is active when ==0
-//
-// STOP  INTB  State  Status
-//   0    0      0    TDC has measured, and stop has already been cleared. [Or lockup condition #2].
-//   0    1      1    Normal idle condition.
-//   1    0      2    Very low probability - only exists for ~23 nanoseconds. Can we ignore this state?
-//   1    1      3    Channel just measured, TDC hasn't finished cycle yet. Lasts 6.4 milliseconds.
-//                       If persistent, indicates lockup condition #1.
-//
-// We expect to go through the states:
-//      1 -> 3 (about 6.4 milliseconds) -> 2 (about 23 nanoseconds) -> 0 (about 500 miscoseconds) -> 1
-//      We need to catch the transition into state 3 to validly capture PICCount for the measurement.
-//      We complete the measurement while in state 0.
-//      Re-arming the TDC puts us into state 1 unless we are in lockup #1 in which case we stay in state 3.
-//      Lockup condition #2 exists only because of the current code which does nothing if we are state 0 or 1.
-//
-// There is a dead time of 500 microseconds when the Arduino is 100% busy. If the other channel has
-// an event during that period of time, it will not be able to read PICCount until done. This will cause
-// an error on that other channel.
-//
-// Better is to put in a state machine inside the PICCount interrupt looking for a 0->1 transition on
-// STOP to capture the PICCout time to the relevant channel.
-//
-
 
 void loop() {
   int i;
  
   for(i = 0; i < ARRAY_SIZE(channels); ++i) {
-    
-    #ifdef DETAIL_TIMING
-      start_micros = micros();
-    #endif
-    
+     
     // Only need to do anything if INTB is low, otherwise no work to do.
      if(digitalRead(channels[i].INTB)==0) {
-
-        // read registers and calculate tof
-        channels[i].tof = channels[i].read();
+       #ifdef DETAIL_TIMING
+         start_micros = micros();
+       #endif
+       
+       // read registers and calculate tof
+       channels[i].last_tof = channels[i].tof;
+       channels[i].tof = channels[i].read();
         
-        // done with chip, so get ready for next reading
-        channels[i].ready_next(); // Re-arm for next measurement, clear TDC INTB
+       // done with chip, so get ready for next reading
+       channels[i].ready_next(); // Re-arm for next measurement, clear TDC INTB
       
-        channels[i].ts = (channels[i].PICstop * PICTICK_PS) - channels[i].tof;
-        
-        if (channels[i].totalize++ > 1) {  // first few readings likely to be bogus
-//          print_unsigned_picos_as_seconds(PICcount);Serial.print(" ");
-//          print_unsigned_picos_as_seconds(channels[i].PICstop);Serial.print(" ");
-          print_unsigned_picos_as_seconds(channels[i].ts);
-          Serial.print( "  CH: ");Serial.println(channels[i].ID);
-        }
-        
+       channels[i].last_ts = channels[i].ts;
+       channels[i].ts = (channels[i].PICstop * PICTICK_PS) - channels[i].tof;
+       channels[i].totalize++;
+
+#ifdef DETAIL_TIMING      
+       end_micros = micros();         
+       Serial.print(" execution time before output (us): ");
+       Serial.print(end_micros - start_micros);
+       Serial.println();
+#endif
+      
+       if ( TIMESTAMP && (channels[i].totalize > 2) ) {
+         print_signed_picos_as_seconds(channels[i].ts);
+         Serial.print( " ch");Serial.println(channels[i].ID);    
+       }
+       if ( TIMEPOD && (channels[0].ts) && (channels[1].ts) && (channels[0].totalize > 2) ) {
+         print_signed_picos_as_seconds(channels[0].ts);Serial.println(" chA");
+         print_signed_picos_as_seconds(channels[1].ts);Serial.println(" chB");
+         channels[0].ts = 0;
+         channels[1].ts = 0;
+       } 
+       if ( TINT && (channels[0].ts > 0) && (channels[1].ts > 0) && (channels[0].totalize > 2) ) {
+         print_signed_picos_as_seconds(channels[1].ts - channels[0].ts);
+         Serial.println(" TI(A->B)");
+         channels[0].ts = 0;
+         channels[1].ts = 0;
+       }                
+             
 #ifdef DETAIL_TIMING      
         end_micros = micros();         
-        Serial.print(" execution time (us): ");
+        Serial.print(" execution time (us) after output: ");
         Serial.print(end_micros - start_micros);
-        Serial.print(" ");
+        Serial.println();
 #endif
 
     } // if
@@ -187,9 +190,9 @@ tdc7200Channel::tdc7200Channel(char id, int enable, int intb, int csb, int stop)
 };
 
 // Initial config for TDC7200
-void tdc7200Channel::setup() {
+void tdc7200Channel::tdc_setup() {
   byte CALIBRATION2_PERIODS, AVG_CYCLES, NUM_STOP, reg_byte;
-  
+   
   digitalWrite(ENABLE, LOW);
   delay(5);  
   digitalWrite(ENABLE, HIGH);  // Needs a low-to-high transition to enable
@@ -202,19 +205,26 @@ void tdc7200Channel::setup() {
     case 40: CALIBRATION2_PERIODS = 0xC0; break;
   }
   
-  AVG_CYCLES = 0x00;  // 0x00 for 1 measurement cycle
-  NUM_STOP = 0x01;    // SHOULD BE 0x00 for 1 stop but that doesn't work
+  AVG_CYCLES = 0x00;  // default 0x00 for 1 measurement cycle
+  NUM_STOP = 0x01;    // default 0x00 for 1 stop; 0x01 for 2 stops
 
   reg_byte = CALIBRATION2_PERIODS | AVG_CYCLES | NUM_STOP;
-  write(CONFIG2, reg_byte);  
- 
- //write(INT_MASK, 0x01);  // was 0x01 disable clock overflow interrupts, allow only measurement interrupt 
- //write(CLOCK_CNTR_STOP_MASK_H, 0x00); // was 0x00
- //write(CLOCK_CNTR_STOP_MASK_L, 0x01); // was 0x00 // hold off no clocks before enabling STOP
- //write(COARSE_CNTR_OVF_H, 0x0F);  //was 0xF0  -- only doing this because STOP doesn't raise INTB 
- //write(COARSE_CNTR_OVF_L, 0x00);
- write(CLOCK_CNTR_OVF_H, 0x03);   // was 0xF0
- write(CLOCK_CNTR_OVF_L, 0x00);  // was 0x00
+
+  boolean state = true;
+  boolean last_state = true;
+  while (state || last_state) { // wait until COARSE falling edge so we start in same phase, maybe
+    last_state = state;
+    state = digitalRead(COARSEint);
+    }
+  write(CONFIG2, reg_byte);
+  // enable interrupts -- 0x01 new measurement, 0x02 COARSE_OVF, 0x04 CLOCK_OVF 
+  write(INT_MASK, 0x04);           // default 0x07 
+  // coarse counter overflow occurs when timeN/63 > mask
+  //write(COARSE_CNTR_OVF_H, 0x04);  // default is 0xFF 
+  //write(COARSE_CNTR_OVF_L, 0x00);  // default is 0xFF
+  //clock counter overflow occurs when clock_countN > mask
+  write(CLOCK_CNTR_OVF_H, 0x05);     // default is 0xFF
+  write(CLOCK_CNTR_OVF_L, 0x00);     // default is 0xFF
   
 }
 
@@ -238,12 +248,12 @@ void tdc7200Channel::ready_next() {
 
 
 // Read TDC for channel
-uint64_t tdc7200Channel::read() {
+int64_t tdc7200Channel::read() {
   int64_t normLSB;
   int64_t calCount;
   int64_t ring_ticks;
   int64_t ring_ps;
-  uint64_t tof; 
+  int64_t tof; 
   
   time1Result = readReg24(TIME1);
   time2Result  = readReg24(TIME2);
@@ -271,8 +281,8 @@ uint64_t tdc7200Channel::read() {
   // by up to a few thousand ringticks, the truncation error is 
   // multiplied as well.  So use mult/div by 1e6 to improve resolution 
 
-  tof = (uint64_t)(clock1Result * CLOCK_PERIOD);
-  //  tof -= (uint64_t)FUDGE0; // subtract delay due to silicon
+  tof = (int64_t)(clock1Result * CLOCK_PERIOD);
+  //  tof -= (int64_t)FUDGE0; // subtract delay due to silicon
   
   // calCount *= 10e6
   calCount = ((int64_t)(cal2Result - cal1Result) * (int64_t)(1000000 - TIME_DILATION)) / (int64_t)(CAL_PERIODS - 1); 
@@ -289,7 +299,7 @@ uint64_t tdc7200Channel::read() {
   // ring_ps *= 10e-6 to get rid of earlier scaling
   ring_ps = (normLSB * ring_ticks) / (int64_t)1000000;
   
-  tof += (uint64_t)ring_ps;
+  tof += (int64_t)ring_ps;
 //  print_unsigned_picos_as_seconds(tof);Serial.print(" ");
   
 //  Serial.print("normLSB: ");print_unsigned_picos_as_seconds(normLSB);Serial.print(" ");
@@ -299,7 +309,7 @@ uint64_t tdc7200Channel::read() {
 //  Serial.print("clock1Result: ");Serial.print(clock1Result);Serial.print(" ");  
 //  Serial.print("tof: ");print_unsigned_picos_as_seconds(tof);Serial.print(" ");
   
-  return (uint64_t)tof;
+  return (int64_t)tof;
 }
 
 // Chip properties:
@@ -311,7 +321,7 @@ uint64_t tdc7200Channel::read() {
 byte tdc7200Channel::readReg8(byte address) {
   byte inByte = 0;
 
-  SPI.beginTransaction(SPISettings(20000000, MSBFIRST, SPI_MODE0));
+  SPI.beginTransaction(SPISettings(SPI_SPEED, MSBFIRST, SPI_MODE0));
   // take the chip select low to select the device:
   digitalWrite(CSB, LOW);
 
@@ -328,7 +338,7 @@ uint32_t tdc7200Channel::readReg24(byte address) {
   uint32_t long value = 0;
 
   // CSB needs to be toggled between 24-bit register reads
-  SPI.beginTransaction(SPISettings(20000000, MSBFIRST, SPI_MODE0));
+  SPI.beginTransaction(SPISettings(SPI_SPEED, MSBFIRST, SPI_MODE0));
   digitalWrite(CSB, LOW);
 
   SPI.transfer(address & 0x1f);
@@ -348,7 +358,7 @@ uint32_t tdc7200Channel::readReg24(byte address) {
 void tdc7200Channel::write(byte address, byte value) {
 
   // take the chip select low to select the device:
-  SPI.beginTransaction(SPISettings(20000000, MSBFIRST, SPI_MODE0));
+  SPI.beginTransaction(SPISettings(SPI_SPEED, MSBFIRST, SPI_MODE0));
   digitalWrite(CSB, LOW);
 
   // Force Address bit 6 to one for a write
@@ -383,16 +393,20 @@ void print_signed_picos_as_seconds (int64_t x) {
   
   sec = x / 1000000000000;
   secx = sec * 1000000000000;
-  frac = x - secx;
-
+  frac = abs(x - secx);
+  
   // break fractional part of seconds into two 6 digit numbers
 
   frach = frac / 1000000;
   fracx = frach * 1000000;
   fracl = frac - fracx;
 
+  if (x < 0) {
+    Serial.print("-");
+  }
   sprintf(str,"%ld.",sec), Serial.print(str);
   sprintf(str, "%06ld", frach), Serial.print(str);
   sprintf(str, "%06ld", fracl), Serial.print(str);  
-} 
+}
+
 

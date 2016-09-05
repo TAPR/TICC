@@ -62,7 +62,7 @@ const int CALIBRATION2 =	0x1C;           // default 0x00_0000
 
 // configuration structure type
 struct config_t {
-  char     SER_NUM[11];     // board serial number -- 10 digits plus null
+  char     SER_NUM[15];     // board serial number
   uint32_t CLOCK_HZ;        // clock in Hz -- default 10 000 000
   uint32_t PICTICK_PS;       // coarse tick in ps -- default 100 000 000 (100us)
   uint8_t  CAL_PERIODS;     // calibration periods -- 2, 10, 20, 40

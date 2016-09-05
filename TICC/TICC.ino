@@ -13,6 +13,7 @@
 //#define PRINT_REG_RESULTS // if enabled, prints time1, time2, clock1, cal1, cal2 before timestamp
 //#define DETAIL_TIMING     // if enabled, prints execution time
 
+const char serial_number[16] = "0123456789";
 #ifdef DETAIL_TIMING
   int32_t start_micros;
   int32_t end_micros;
@@ -29,19 +30,7 @@
 volatile int64_t PICcount;
 int64_t tint;
 enum MeasureMode m;
-
-// default configuration; may be overwritten from eeprom during setup
-const config_t config = {
-  '0123456789\0',       // serial number
-  10000000,             // CLOCK_HZ (10MHz)
-  100000000,            // PICTICK_PS  (100us)
-  20,                   // CAL_PERIODS (2, 10, 20, 40)
-  2000,                 // TIME_DILATE_0
-  2000,                 // TIME_DILATE_1
-  0,                    // FUDGE0_0
-  0,                    // FUDGE0_1
-  0,                    // MODE -- 0 is timestamp  
-};
+config_t config;
 
 // Enumerate the TDC7200 channel structures
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
@@ -58,9 +47,21 @@ void setup() {
   // start the SPI library:
   SPI.begin();
 
+  // default configuration; may be overwritten from eeprom during setup
+  strncpy(config.SER_NUM,serial_number,sizeof(serial_number));
+  config.CLOCK_HZ = 10000000; // 10 MHz
+  config.PICTICK_PS = 100000000; // 100us
+  config.CAL_PERIODS = 20; // CAL_PERIODS (2, 10, 20, 40)
+  config.TIME_DILATE[0] = 2000;
+  config.TIME_DILATE[1] = 2000;
+  config.FUDGE0[0] = 0;
+  config.FUDGE0[1] = 0;
+  config.MODE = 3; // MODE -- 0 is timestamp -- DEFAULT TO TIMELAB FOR NOW  
+  
   // T - timestamp; P - period; L - timelab; I - interval
-  m = UserConfig();
-  Serial.println(m);
+  m = 3;
+//  m = UserConfig();
+//  Serial.println(m);
 
   PICcount = 0;
   pinMode(COARSEint, INPUT);
@@ -80,7 +81,7 @@ void setup() {
     channels[i].fixed_time2 = config.FIXED_TIME2[i];
     channels[i].fudge0 = config.FUDGE0[i];
   }
-
+  
   enableInterrupt(COARSEint, coarseTimer, FALLING);  // if using NEEDFORSPEED, don't declare this
   enableInterrupt(STOP_A, catch_stopA, RISING);
   enableInterrupt(STOP_B, catch_stopB, RISING);
@@ -134,6 +135,7 @@ void loop() {
        if ( (m == timelab) && (channels[0].ts) && (channels[1].ts) && (channels[0].totalize > 2) ) {
          print_signed_picos_as_seconds(channels[0].ts);Serial.println(" chA");
          print_signed_picos_as_seconds(channels[1].ts);Serial.println(" chB");
+         print_signed_picos_as_seconds(channels[1].ts - channels[0].ts);Serial.println(" chC (B-A)");
          channels[0].ts = 0;
          channels[1].ts = 0;
        } 

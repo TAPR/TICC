@@ -15,7 +15,7 @@
 
 #define PS_PER_SEC        (int64_t)  1000000000000  // ps/s
 #define SPI_SPEED         (int32_t)  20000000 // 20MHz maximum
-
+#define CONFIG_START      (byte)     0 // first byte of config in eeprom
 // hardware connections to TDC2700. Defines Arduino IDE pin number.
 // changed for Rev. C board
 const int ENABLE_A =		4;

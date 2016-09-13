@@ -58,23 +58,19 @@ void setup() {
   // start the SPI library:
   SPI.begin();
 
-  // default configuration; may be overwritten from eeprom during setup
-  strncpy(config.SW_VERSION,SW_VERSION,sizeof(SW_VERSION));
-  strncpy(config.BOARD_SER_NUM,BOARD_SER_NUM,sizeof(BOARD_SER_NUM));
-  config.MODE = 0; // MODE -- 0 is timestamp, 3 is TimeLab 
-  config.CLOCK_HZ = 10000000; // 10 MHz
-  config.PICTICK_PS = 100000000; // 100us
-  config.CAL_PERIODS = 20; // CAL_PERIODS (2, 10, 20, 40)
-  config.TIME_DILATION[0] = 2500;  // 2500 seems right for chA on C1
-  config.TIME_DILATION[1] = 2500;
-  config.FIXED_TIME2[0] = 0;
-  config.FIXED_TIME2[1] = 0;
-  config.FUDGE0[0] = 0;
-  config.FUDGE0[1] = 0;
-   
-  // set vars to config value
+  
+  /*******************************************
+   * Configuration read/change/store
+  *******************************************/
+  // if no config stored, or wrong version, restore from default
+  if ( EEPROM.read(CONFIG_START) != config.EEPROM_VERSION) {
+    eeprom_write_default(CONFIG_START);  
+  }
+  
+  // read config and set global vars
+  eeprom_read_config(CONFIG_START, config);
   CLOCK_HZ = config.CLOCK_HZ;
-  CLOCK_PERIOD = (int32_t)(PS_PER_SEC/CLOCK_HZ);
+  CLOCK_PERIOD = (PS_PER_SEC/CLOCK_HZ);
   PICTICK_PS = config.PICTICK_PS;
   CAL_PERIODS = config.CAL_PERIODS;
 
@@ -465,18 +461,31 @@ void print_signed_picos_as_seconds (int64_t x) {
 }
 
 // read and write config struct in eeprom
-uint16_t eeprom_write_uint16(uint16_t offset, uint16_t x) {
+uint16_t eeprom_write_config(uint16_t offset, config_t x) {
   uint16_t num_bytes;
   num_bytes = EEPROM_writeAnything(offset, x);
   return num_bytes;
 }
 
-uint16_t eeprom_read_uint16(uint16_t offset) {
+uint16_t eeprom_read_config(uint16_t offset, config_t x) {
   uint16_t num_bytes;
-  uint16_t x;
   num_bytes = EEPROM_readAnything(offset, x);
   return num_bytes;
 }
 
-
-
+uint16_t eeprom_write_default (uint16_t offset) {
+  config_t x;
+  strncpy(x.SW_VERSION,SW_VERSION,sizeof(SW_VERSION));
+  strncpy(x.BOARD_SER_NUM,BOARD_SER_NUM,sizeof(BOARD_SER_NUM));
+  x.MODE = 0; // MODE -- 0 is timestamp, 3 is TimeLab 
+  x.CLOCK_HZ = 10000000; // 10 MHz
+  x.PICTICK_PS = 100000000; // 100us
+  x.CAL_PERIODS = 20; // CAL_PERIODS (2, 10, 20, 40)
+  x.TIME_DILATION[0] = 2500;  // 2500 seems right for chA on C1
+  x.TIME_DILATION[1] = 2500;
+  x.FIXED_TIME2[0] = 0;
+  x.FIXED_TIME2[1] = 0;
+  x.FUDGE0[0] = 0;
+  x.FUDGE0[1] = 0;
+  eeprom_write_config(offset,x);
+}

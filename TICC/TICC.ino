@@ -1,19 +1,25 @@
-
 // TICC.ino - master sketch file
-
 // TICC Time interval Counter based on TICC Shield using TDC7200
-// version 0.80 -- 4 September 2016
-
+//
 // Copyright John Ackermann N8UR 2016
 // Portions Copyright George Byrkit K9TRV 2016
 // Portions Copyright Tom McDermott N5EG 2016
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
+const char SW_VERSION[17] = "0.78";  // 12 September 2016
+const char BOARD_SER_NUM[17] = "0123456789";  // how to set this for each board?
+
+#if (defined(__GNUC__) || defined(__GNUG__))
+  #pragma message("GCC compiler detected")
+#endif
+#pragma message("Compiler version: ")
+#pragma message(__VERSION__)
+
+
 //#define PRINT_REG_RESULTS // if enabled, prints time1, time2, clock1, cal1, cal2 before timestamp
 //#define DETAIL_TIMING     // if enabled, prints execution time
 
-const char serial_number[16] = "0123456789";
 #ifdef DETAIL_TIMING
   int32_t start_micros;
   int32_t end_micros;
@@ -29,6 +35,11 @@ const char serial_number[16] = "0123456789";
 // NOTE: changed from uint to int while working on TINT calc
 volatile int64_t PICcount;
 int64_t tint;
+int64_t CLOCK_HZ;
+int64_t PICTICK_PS; 
+int64_t CLOCK_PERIOD;
+int16_t CAL_PERIODS;
+
 enum MeasureMode m;
 config_t config;
 
@@ -48,20 +59,28 @@ void setup() {
   SPI.begin();
 
   // default configuration; may be overwritten from eeprom during setup
-  strncpy(config.SER_NUM,serial_number,sizeof(serial_number));
+  strncpy(config.SW_VERSION,SW_VERSION,sizeof(SW_VERSION));
+  strncpy(config.BOARD_SER_NUM,BOARD_SER_NUM,sizeof(BOARD_SER_NUM));
+  config.MODE = 0; // MODE -- 0 is timestamp, 3 is TimeLab 
   config.CLOCK_HZ = 10000000; // 10 MHz
   config.PICTICK_PS = 100000000; // 100us
   config.CAL_PERIODS = 20; // CAL_PERIODS (2, 10, 20, 40)
-  config.TIME_DILATE[0] = 2000;
-  config.TIME_DILATE[1] = 2000;
+  config.TIME_DILATION[0] = 2500;  // 2500 seems right for chA on C1
+  config.TIME_DILATION[1] = 2500;
+  config.FIXED_TIME2[0] = 0;
+  config.FIXED_TIME2[1] = 0;
   config.FUDGE0[0] = 0;
   config.FUDGE0[1] = 0;
-  config.MODE = 3; // MODE -- 0 is timestamp -- DEFAULT TO TIMELAB FOR NOW  
-  
+   
+  // set vars to config value
+  CLOCK_HZ = config.CLOCK_HZ;
+  CLOCK_PERIOD = (int32_t)(PS_PER_SEC/CLOCK_HZ);
+  PICTICK_PS = config.PICTICK_PS;
+  CAL_PERIODS = config.CAL_PERIODS;
+
+  // NOTE NOTE NOTE -- need to figure out how to make enums work with config struct
   // T - timestamp; P - period; L - timelab; I - interval
-  m = 3;
-//  m = UserConfig();
-//  Serial.println(m);
+  //  m = UserConfig();  
 
   PICcount = 0;
   pinMode(COARSEint, INPUT);
@@ -75,11 +94,12 @@ void setup() {
     channels[i].PICstop = 0;
     channels[i].tof = 0;
     channels[i].ts = 0;
-    channels[i].tdc_setup();
-    channels[i].ready_next();
-    channels[i].time_dilate = config.TIME_DILATE[i];
+    channels[i].time_dilation = config.TIME_DILATION[i];
     channels[i].fixed_time2 = config.FIXED_TIME2[i];
     channels[i].fudge0 = config.FUDGE0[i];
+    
+    channels[i].tdc_setup();
+    channels[i].ready_next();
   }
   
   enableInterrupt(COARSEint, coarseTimer, FALLING);  // if using NEEDFORSPEED, don't declare this
@@ -91,7 +111,7 @@ void setup() {
   #ifdef PRINT_REG_RESULTS
     Serial.println("# time1 time2 clock1 cal1 cal2 timestamp");
   #else
-    if (m == interval) {
+    if (config.MODE == 1) {
       Serial.println("# time interval A->B (seconds)");
     } else {
       Serial.println("# timestamp (seconds)");
@@ -117,8 +137,8 @@ void loop() {
        // done with chip, so get ready for next reading
        channels[i].ready_next(); // Re-arm for next measurement, clear TDC INTB
       
-       channels[i].last_ts = channels[i].ts;
-       channels[i].ts = (channels[i].PICstop * config.PICTICK_PS) - channels[i].tof;
+       channels[i].ts = (channels[i].PICstop * (int64_t)PICTICK_PS) - channels[i].tof;
+       channels[i].period = channels[i].ts - channels[i].last_ts;
        channels[i].totalize++;
 
 #ifdef DETAIL_TIMING      
@@ -127,25 +147,55 @@ void loop() {
        Serial.print(end_micros - start_micros);
        Serial.println();
 #endif
-      
-       if ( (m == timestamp) && (channels[i].totalize > 2) ) {
+
+       // NOTE NOTE NOTE -- need to change to use enum
+       // simple timestamp mode
+       if ( (config.MODE == 0) && 
+            (channels[i].totalize > 2) )
+         {
          print_signed_picos_as_seconds(channels[i].ts);
          Serial.print( " ch");Serial.println(channels[i].ID);    
-       }
-       if ( (m == timelab) && (channels[0].ts) && (channels[1].ts) && (channels[0].totalize > 2) ) {
-         print_signed_picos_as_seconds(channels[0].ts);Serial.println(" chA");
-         print_signed_picos_as_seconds(channels[1].ts);Serial.println(" chB");
-         print_signed_picos_as_seconds(channels[1].ts - channels[0].ts);Serial.println(" chC (B-A)");
-         channels[0].ts = 0;
-         channels[1].ts = 0;
-       } 
-       if ( (m == interval) && (channels[0].ts > 0) && (channels[1].ts > 0) && (channels[0].totalize > 2) ) {
+         }
+       
+       // time interval mode (A->B)
+       if ( (config.MODE == 1) && 
+            (channels[0].ts > 0) && 
+            (channels[1].ts > 0) && 
+            (channels[0].totalize > 2) ) 
+         {
          print_signed_picos_as_seconds(channels[1].ts - channels[0].ts);
          Serial.println(" TI(A->B)");
+         channels[0].last_ts = channels[0].ts;
          channels[0].ts = 0;
+         channels[1].last_ts = channels[1].ts;
          channels[1].ts = 0;
-       }                
-             
+         }          
+       
+       // period mode -- subtract last timestamp from current
+       if ( (config.MODE == 2) && 
+            (channels[i].totalize > 2) ) 
+         {
+         print_signed_picos_as_seconds(channels[i].ts - channels[i].last_ts);
+         Serial.print( " ch");Serial.println(channels[i].ID);    
+         }  
+       
+       // timelab mode -- output period data plus TI data
+       if ( (config.MODE == 3) &&
+            (channels[0].ts > 0) &&
+            (channels[1].ts > 0) &&
+            (channels[0].totalize > 2) )
+         {
+         print_signed_picos_as_seconds(channels[0].ts);Serial.println(" chA");
+         print_signed_picos_as_seconds(channels[1].ts);Serial.println(" chB");
+         print_signed_picos_as_seconds( (channels[1].ts - channels[0].ts) +
+           ( (channels[1].totalize * (int64_t)PS_PER_SEC) - 1) );
+         Serial.println(" chC (B-A)");  
+         channels[0].last_ts = channels[0].ts;
+         channels[0].ts = 0;
+         channels[1].last_ts = channels[1].ts;
+         channels[1].ts = 0;
+         }
+         
 #ifdef DETAIL_TIMING      
         end_micros = micros();         
         Serial.print(" execution time (us) after output: ");
@@ -201,7 +251,7 @@ void tdc7200Channel::tdc_setup() {
   digitalWrite(ENABLE, HIGH);  // Needs a low-to-high transition to enable
   delay(5);  // 1.5ms minimum recommended to allow chip LDO to stabilize
 
-  switch (config.CAL_PERIODS) {
+  switch (CAL_PERIODS) {
     case  2: CALIBRATION2_PERIODS = 0x00; break;
     case 10: CALIBRATION2_PERIODS = 0x40; break;
     case 20: CALIBRATION2_PERIODS = 0x80; break;
@@ -282,30 +332,31 @@ int64_t tdc7200Channel::read() {
   //
   // But these steps truncate ringps at 1ps. Since normLSB is multiplied
   // by up to a few thousand ringticks, the truncation error is 
-  // multiplied as well.  So use mult/div by 1e6 to improve resolution 
+  // multiplied as well.  So use mult/div to improve resolution 
 
+ 
   tof = (int64_t)(clock1Result * CLOCK_PERIOD);
   //  tof -= (int64_t)FUDGE0; // subtract delay due to silicon
   
   // calCount *= 10e6
-  calCount = ((int64_t)(cal2Result - cal1Result) * (int64_t)(1000000 - time_dilate)) / \
-      (int64_t)(config.CAL_PERIODS - 1); 
+  // time_dilation adjusts for non-linearity at 100ns overflow
+  calCount = ((int64_t)(cal2Result - cal1Result) * (int64_t)(1000000 - time_dilation) ) / (int64_t)(CAL_PERIODS - 1); 
 
   // if FIXED_TIME2 is set, override time2Result with that value
   if (fixed_time2) {
-    time2Result = fixed_time2;
+    time2Result = (int64_t)fixed_time2;
   }
   
-  // normLSB *= 10e6 -- remember that we've already multiplied the divisor so we need to add six 0s here
-  normLSB = ((int64_t)CLOCK_PERIOD *(int64_t)1000000000000) / calCount;
+  // normLSB *= 10e6, but we've already multiplied the divisor so we need to double the 0s here
+  normLSB = ( (int64_t)CLOCK_PERIOD * (int64_t)1000000000000 ) / (int64_t)calCount;
   ring_ticks = (int64_t)time1Result - (int64_t)time2Result;
  
   // ring_ps *= 10e-6 to get rid of earlier scaling
-  ring_ps = (normLSB * ring_ticks) / (int64_t)1000000;
+  ring_ps = ((int64_t)normLSB * (int64_t)ring_ticks) / (int64_t)1000000;
   
   tof += (int64_t)ring_ps;
-//  print_unsigned_picos_as_seconds(tof);Serial.print(" ");
   
+//  print_unsigned_picos_as_seconds(tof);Serial.print(" ");  
 //  Serial.print("normLSB: ");print_unsigned_picos_as_seconds(normLSB);Serial.print(" ");
 //  Serial.print("ring_ticks: ");print_signed_picos_as_seconds(ring_ticks);Serial.print(" ");
 //  print_signed_picos_as_seconds(ring_ps);Serial.print(" ");

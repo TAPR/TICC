@@ -13,8 +13,7 @@
 #include <EEPROM.h>
 #include <Arduino.h>  // for type definitions
 
-#define PS_PER_SEC        (int64_t)1000000000000  // ps/s
-#define CLOCK_PERIOD      (int64_t)(PS_PER_SEC/config.CLOCK_HZ)  // ps -- for 10MHZ, 1e5 ps
+#define PS_PER_SEC        (int64_t)  1000000000000  // ps/s
 #define SPI_SPEED         (int32_t)  20000000 // 20MHz maximum
 
 // hardware connections to TDC2700. Defines Arduino IDE pin number.
@@ -62,14 +61,17 @@ const int CALIBRATION2 =	0x1C;           // default 0x00_0000
 
 // configuration structure type
 struct config_t {
-  char     SER_NUM[15];     // board serial number
-  uint32_t CLOCK_HZ;        // clock in Hz -- default 10 000 000
-  uint32_t PICTICK_PS;       // coarse tick in ps -- default 100 000 000 (100us)
-  uint8_t  CAL_PERIODS;     // calibration periods -- 2, 10, 20, 40
-  uint32_t TIME_DILATE[2];   // time dilation factor for each channel
-  uint32_t FIXED_TIME2[2];   // if >0 use to replace time2 for each channel
-  uint32_t FUDGE0[2];        // fudge factor (ps) for each channel
-  uint8_t  MODE;            // operating mode
+  const byte EEPROM_VERSION = 0x01; // one byte   
+  char       SW_VERSION[17];        // up to 16 bytes plus term
+  char       BOARD_SER_NUM[15];     // up to 16 bytes plus term
+  int16_t    MODE;                  // should be enum from UI class
+  int64_t    CLOCK_HZ;              // clock in Hz -- default 10 000 000
+  int64_t    PICTICK_PS;            // coarse tick in ps -- default 100 000 000 (100us)
+  int16_t    CAL_PERIODS;           // calibration periods -- 2, 10, 20, 40
+  int64_t    TIME_DILATION[2];      // time dilation factor for each channel
+  int64_t    FIXED_TIME2[2];        // if >0 use to replace time2 for each channel
+  int64_t    FUDGE0[2];             // fudge factor (ps) for each channel
+  
 };
 
 // Channel structure type representing one TDC7200 Channel
@@ -95,10 +97,11 @@ public:
   int64_t last_tof;
   int64_t ts;
   int64_t last_ts; 
-  int32_t totalize;
-  int32_t time_dilate;
-  int32_t fixed_time2;
-  int32_t fudge0;
+  int64_t period;
+  int64_t totalize;
+  int64_t time_dilation;
+  int64_t fixed_time2;
+  int64_t fudge0;
   
   tdc7200Channel(char id, int enable, int intb, int csb, int stop);
   int64_t read();

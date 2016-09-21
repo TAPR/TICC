@@ -3,11 +3,10 @@
 //
 // Copyright John Ackermann N8UR 2016
 // Portions Copyright George Byrkit K9TRV 2016
-// Portions Copyright Tom McDermott N5EG 2016
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-const char SW_VERSION[17] = "0.78";  // 12 September 2016
+const char SW_VERSION[17] = "0.79";  // 20 September 2016
 const char BOARD_SER_NUM[17] = "0123456789";  // how to set this for each board?
 
 #if (defined(__GNUC__) || defined(__GNUG__))
@@ -179,8 +178,7 @@ void loop() {
        if ( (config.MODE == 3) &&
             (channels[0].ts > 0) &&
             (channels[1].ts > 0) &&
-            (channels[0].totalize > 2) )
-         {
+            (channels[0].totalize > 2) ) {
          print_signed_picos_as_seconds(channels[0].ts);Serial.println(" chA");
          print_signed_picos_as_seconds(channels[1].ts);Serial.println(" chB");
          print_signed_picos_as_seconds( (channels[1].ts - channels[0].ts) +

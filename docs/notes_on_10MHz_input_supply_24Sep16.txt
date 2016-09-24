@@ -1,0 +1,47 @@
+The TICC uses a sine-to-square-wave converter based on a design by Wenzel
+with improvements by time-nuts to condition the 10 MHz reference clock input.
+
+The Wenzel circuit requires a DC supply voltage in excess of the output
+square wave level.  The output level in the TICC design (measured at the
+input to buffer IC11) is about 7.6V when fed with 10V, and about 3.35V
+when fed with 5V.
+
+In the Rev. A and Rev. B versions of the TICC, all the logic except the
+TDC7200 chips ran at 5V.  In order to get sufficient output amplitude
+for solid switching, we required that the Arduino be connected to a 12V
+source which was fed via the "V_IN" signal to a 78L10 regulator.
+
+In the Rev. C board all the logic was changed to operate at 3.3V.  A jumper
+allowed driving the Wenzel ciruit from either the 10V regulator, or from
+the Arduino 5V supply.
+
+As we move to Rev. D, the question is whether to retain that choice, or
+simply to use the 5V supply, with the advantage of reducing part count
+and simplifying user choices.
+
+I did an experiment using an HP53132A counter.  The counter's 10MHz REF OUT
+Signal drove the TICCi through a step attenuator.  That way any jitter is 
+created by the device under test rather than interaction between sources.
+
+Using the statistics function of the counter, I measured the minimum, maximum,
+and standard deviation of sets of 100K measurements. 
+
+The bottom line is that using the 5V supply did not cause any increased
+jitter over the 10V supply.  In fact, when the 5V supply was used the
+counter was able to get low-jitter measurements at several dB less input
+signal than when using 10V.
+
+For example, when using 5V the counter started gating (but noisily) at
+-30dB.  Solid readings were obtained at -28dB.
+
+When using the 10V supply the counter required -24dB but the results were
+noisy until about -18dB.  I'm not sure what explains this, but repeated
+measurements show the same result.
+
+So I think it's safe to conclude that the 12V input/10V regulator circuit
+is not required for the TICC when using 3.3V logic.  Using the Arduino 5V
+supply gives equal results.
+
+John N8UR
+jra@febo.com
+

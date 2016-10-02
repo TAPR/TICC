@@ -6,7 +6,7 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-const char SW_VERSION[17] = "0.79";  // 20 September 2016
+const char SW_VERSION[17] = "0.79a";  // 3 October 2016
 const char BOARD_SER_NUM[17] = "0123456789";  // how to set this for each board?
 
 #if (defined(__GNUC__) || defined(__GNUG__))

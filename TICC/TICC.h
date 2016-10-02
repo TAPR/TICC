@@ -2,7 +2,7 @@
 #define TICC_H
 
 // TICC Time interval Counter based on TICC Shield using TDC7200
-// version 0.77 21 August 2016
+// version 0.79 2 Octobert 2016
 
 // Copyright John Ackermann N8UR 2016
 // Portions Copyright George Byrkit K9TRV 2016
@@ -62,15 +62,19 @@ const int CALIBRATION2 =	0x1C;           // default 0x00_0000
 struct config_t {
   const byte EEPROM_VERSION = 0x01; // one byte   
   char       SW_VERSION[17];        // up to 16 bytes plus term
-  char       BOARD_SER_NUM[15];     // up to 16 bytes plus term
-  int16_t    MODE;                  // should be enum from UI class
-  int64_t    CLOCK_HZ;              // clock in Hz -- default 10 000 000
-  int64_t    PICTICK_PS;            // coarse tick in ps -- default 100 000 000 (100us)
-  int16_t    CAL_PERIODS;           // calibration periods -- 2, 10, 20, 40
-  int64_t    TIME_DILATION[2];      // time dilation factor for each channel
-  int64_t    FIXED_TIME2[2];        // if >0 use to replace time2 for each channel
-  int64_t    FUDGE0[2];             // fudge factor (ps) for each channel
+  char       BOARD_SER_NUM[17];     // up to 16 bytes plus term
   
+  // global settings:
+  char       MODE;                  // time(S)tamp, time (I)nterval
+                                    // Time(L)ab, (P)eriod (default 'S')
+  int64_t    CLOCK_HZ;              // clock in Hz (default 10 000 000)
+  int64_t    PICTICK_PS;            // coarse tick in ps (default 100 000 000) (100us)
+  int16_t    CAL_PERIODS;           // calibration periods 2, 10, 20, 40 (default 20)
+  // per-channel settings, so arrays of 2 values for channels A and B:
+  char       START_EDGE[2];         // start on (R)ising (default) or (F)alling edge
+  int64_t    TIME_DILATION[2];      // time dilation factor (default TBD)
+  int64_t    FIXED_TIME2[2];        // if >0 use to replace time2 (default 0)
+  int64_t    FUDGE0[2];             // fudge factor (ps) (default 0)
 };
 
 // Channel structure type representing one TDC7200 Channel

@@ -1,4 +1,13 @@
 #include "UserConfig.h"
+#include <stdint.h>           // define unint16_t, uint32_t
+#include <SPI.h>              // SPI and serial support
+
+#include "ticc.h"             // general config
+#include "misc.h"             // random functions
+#include "board.h"            // Arduino pin definitions
+#include "config.h"           // config and eeprom
+#include "tdc7200.h"          // TDC registers and structures
+#include "UserConfig.h"       // user configuration of TICC
 
 MeasureMode UserConfig() {
 ////////////////////////////////////////////////////////////////////////////

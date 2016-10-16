@@ -6,16 +6,8 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-extern const char SW_VERSION[17] = "0.80";  // 15 October 2016
+extern const char SW_VERSION[17] = "0.80";  // 16 October 2016
 extern const char BOARD_SER_NUM[17] = "0123456789";  // how to set this for each board?
-
-//#define PRINT_REG_RESULTS // if enabled, prints time1, time2, clock1, cal1, cal2 before timestamp
-//#define DETAIL_TIMING     // if enabled, prints execution time
-
-#ifdef DETAIL_TIMING
-  int32_t start_micros;
-  int32_t end_micros;
-#endif
 
 #include <stdint.h>           // define unint16_t, uint32_t
 #include <SPI.h>              // SPI support
@@ -27,6 +19,12 @@ extern const char BOARD_SER_NUM[17] = "0123456789";  // how to set this for each
 #include "config.h"           // config and eeprom
 #include "tdc7200.h"          // TDC registers and structures
 #include "UserConfig.h"       // user configuration of TICC
+
+//#define DETAIL_TIMING     // if enabled, prints execution time
+#ifdef DETAIL_TIMING
+  int32_t start_micros;
+  int32_t end_micros;
+#endif
 
 // NOTE: changed from uint to int while working on TINT calc
 volatile int64_t PICcount;
@@ -47,7 +45,8 @@ void setup() {
   int i;
   
   // start the serial library
-  Serial.begin(115200);
+  // NOTE NOTE NOTE -- was 115200 but slowed down to see if it helps robustness
+  Serial.begin(57600);
   // start the SPI library:
   SPI.begin();
 
@@ -101,7 +100,7 @@ void setup() {
   Serial.println("");
   Serial.println("");
   #ifdef PRINT_REG_RESULTS
-    Serial.println("# time1 time2 clock1 cal1 cal2 timestamp");
+    Serial.println("# time1 time2 clock1 cal1 cal2 PICstop tof timestamp");
   #else
     if (config.MODE == 1) {
       Serial.println("# time interval A->B (seconds)");
@@ -128,11 +127,17 @@ void loop() {
         
        // done with chip, so get ready for next reading
        channels[i].ready_next(); // Re-arm for next measurement, clear TDC INTB
-      
+       channels[i].totalize++;
+       
+       #ifdef PRINT_REG_RESULTS
+         if (channels[i].totalize > 2) {
+           Serial.print((int32_t)channels[i].PICstop);Serial.print("\t");
+         }
+       #endif
+       
        channels[i].ts = (channels[i].PICstop * (int64_t)PICTICK_PS) - channels[i].tof;
        channels[i].period = channels[i].ts - channels[i].last_ts;
-       channels[i].totalize++;
-
+       
 #ifdef DETAIL_TIMING      
        end_micros = micros();         
        Serial.print(" execution time before output (us): ");

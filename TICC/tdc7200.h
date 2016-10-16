@@ -11,6 +11,7 @@
 
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
+#define SPI_SPEED         (int32_t)  20000000 // 20MHz maximum
 
 // TDC7200 register addresses
 const int CONFIG1 =		0x00;           // default 0x00
@@ -71,7 +72,9 @@ public:
   int64_t read();
   void tdc_setup();
   void ready_next();
+  byte readReg8(byte address);
+  uint32_t readReg24(byte address);
+  void write(byte address, byte value);
 };
-
 
 #endif	/* TDC7200_H */

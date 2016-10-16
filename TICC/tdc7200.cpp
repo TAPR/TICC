@@ -1,4 +1,4 @@
-// tdc7200.cpp -- chip functions
+// tdc7200 - read/write/setup TDC7200 chip
 // TICC Time interval Counter based on TICC Shield using TDC7200
 //
 // Copyright John Ackermann N8UR 2016
@@ -7,33 +7,33 @@
 // Licensed under BSD 2-clause license
 
 #include <stdint.h>           // define unint16_t, uint32_t
+#include <SPI.h>              // SPI support
+
 #include "ticc.h"             // general config
 #include "misc.h"             // random functions
 #include "board.h"            // Arduino pin definitions
 #include "config.h"           // config and eeprom
 #include "tdc7200.h"          // TDC registers and structures
-#include "ticc_SPI.h"         // SPI read/write
-#include "UserConfig.h"       // user configuration of TICC
 
-
-extern const int16_t CAL_PERIODS;
-extern const int64_t CLOCK_PERIOD;
+extern int64_t CLOCK_HZ;
+extern int64_t PICTICK_PS; 
+extern int64_t CLOCK_PERIOD;
+extern int16_t CAL_PERIODS;
+extern 
 
 // Constructor
 tdc7200Channel::tdc7200Channel(char id, int enable, int intb, int csb, int stop):
-        ID(id), ENABLE(enable), INTB(intb), CSB(csb), STOP(stop) {
-
-        pinMode(ENABLE,OUTPUT);
-        pinMode(INTB,INPUT);
-        pinMode(CSB,OUTPUT);
-        pinMode(STOP,INPUT);
+	ID(id), ENABLE(enable), INTB(intb), CSB(csb), STOP(stop) {
+	pinMode(ENABLE,OUTPUT);
+	pinMode(INTB,INPUT);
+	pinMode(CSB,OUTPUT);
+	pinMode(STOP,INPUT);
 };
 
-
-// Initial config for TDC7200
+// TDC7200 configure
 void tdc7200Channel::tdc_setup() {
   byte CALIBRATION2_PERIODS, AVG_CYCLES, NUM_STOP, reg_byte;
-  
+   
   digitalWrite(ENABLE, LOW);
   delay(5);  
   digitalWrite(ENABLE, HIGH);  // Needs a low-to-high transition to enable
@@ -53,42 +53,46 @@ void tdc7200Channel::tdc_setup() {
 
   boolean state = true;
   boolean last_state = true;
-  while (state || last_state) { // wait until COARSE falling edge so we start in same phase, maybe
+  while (state || last_state) { // catch COARSE falling edge tO align phase
     last_state = state;
     state = digitalRead(COARSEint);
     }
-  SPI_write(CONFIG2, reg_byte, CSB);
-  // enable interrupts -- 0x01 new measurement, 0x02 COARSE_OVF, 0x04 CLOCK_OVF 
-  SPI_write(INT_MASK, 0x04, CSB);           // default 0x07 
+  write(CONFIG2, reg_byte);
+
+  // enable interrupts:
+  // 0x01 new measurement, 0x02 COARSE_OVF, 0x04 CLOCK_OVF 
+  write(INT_MASK, 0x04);           // default 0x07 
+
   // coarse counter overflow occurs when timeN/63 > mask
   //write(COARSE_CNTR_OVF_H, 0x04);  // default is 0xFF 
   //write(COARSE_CNTR_OVF_L, 0x00);  // default is 0xFF
+
   //clock counter overflow occurs when clock_countN > mask
-  SPI_write(CLOCK_CNTR_OVF_H, 0x05, CSB);     // default is 0xFF
-  SPI_write(CLOCK_CNTR_OVF_L, 0x00, CSB);     // default is 0xFF
+  write(CLOCK_CNTR_OVF_H, 0x05);     // default is 0xFF
+  write(CLOCK_CNTR_OVF_L, 0x00);     // default is 0xFF
   
 }
 
 // Enable next measurement cycle
 void tdc7200Channel::ready_next() {
-// needs to set the enable bit (START_MEAS in CONFIG1)
+// sets enable bit (START_MEAS in CONFIG1)
 // clears interrupt bits
- byte FORCE_CAL = 0x80;      // 0x80 forces cal even if timeout; 0x00 means no cal if measurement interrupted 
+ byte FORCE_CAL = 0x80;      // 0x80 forces cal; 0x00 means no cal interrupted 
  byte PARITY_EN = 0x00;      // parity on would be 0x40
  byte TRIGG_EDGE = 0x00;     // TRIGG rising edge; falling edge would be 0x20
  byte STOP_EDGE = 0x00;      // STOP rising edge; falling edge would be 0x10
  byte START_EDGE = 0x00;     // START rising dege; falling edge would be 0x08
- byte RESERVED;              // high bit for MEASUREMENT MODE; reserved, would add 0x04
- byte MEASURE_MODE = 0x02;   // Measurement mode; 0x00 for mode 1, 0x02 for mode 2
- byte START_MEAS = 0x01;     // Start measurement; 0x01 to start, 0x00 for no effect
+ byte RESERVED;              // high bit for MEASUREMENT MODE; reserved
+ byte MEASURE_MODE = 0x02;   // 0x00 for mode 1, 0x02 for mode 2
+ byte START_MEAS = 0x01;     // 0x01 to start measurement, 0x00 for no effect
  byte reg_byte;
  
- reg_byte = FORCE_CAL | PARITY_EN | TRIGG_EDGE | STOP_EDGE | START_EDGE | MEASURE_MODE | START_MEAS;   
- SPI_write(CONFIG1, reg_byte, CSB);     
+ reg_byte = FORCE_CAL | PARITY_EN | TRIGG_EDGE | STOP_EDGE | \
+            START_EDGE | MEASURE_MODE | START_MEAS;   
+ write(CONFIG1, reg_byte);     
 }
 
-
-// Read TDC for channel
+// Read TDC
 int64_t tdc7200Channel::read() {
   int64_t normLSB;
   int64_t calCount;
@@ -96,62 +100,131 @@ int64_t tdc7200Channel::read() {
   int64_t ring_ps;
   int64_t tof; 
   
-  time1Result = SPI_readReg24(TIME1, CSB);
-  time2Result  = SPI_readReg24(TIME2, CSB);
-  clock1Result = SPI_readReg24(CLOCK_COUNT1, CSB);
-  cal1Result = SPI_readReg24(CALIBRATION1, CSB);
-  cal2Result = SPI_readReg24(CALIBRATION2, CSB);
-
-  #ifdef PRINT_REG_RESULTS
-    if (totalize > 1) {  // first few readings likely to be bogus
-    Serial.print(time1Result);Serial.print(" ");
-    Serial.print(time2Result);Serial.print(" ");
-    Serial.print(clock1Result);Serial.print(" ");
-    Serial.print(cal1Result);Serial.print(" ");
-    Serial.print(cal2Result);Serial.print(" ");
+  // these variables are all int32_t members of the tdc7200Channel class
+  time1Result = readReg24(TIME1);         // START to next 100ns tick
+  time2Result  = readReg24(TIME2);        // 100ns tick to STOP
+  clock1Result = readReg24(CLOCK_COUNT1); // number of 100ns ticks
+  cal1Result = readReg24(CALIBRATION1);   // value of 1 cal cycle
+  cal2Result = readReg24(CALIBRATION2);   // value of CAL_PERIODS cycles
+  #ifdef PRINT_REG_RESULTS 
+    if (totalize > 1) {
+      char tmpbuf[8];
+      sprintf(tmpbuf,"%04x ",time1Result);Serial.print(tmpbuf);
+      sprintf(tmpbuf,"%04x ",time2Result);Serial.print(tmpbuf);
+      sprintf(tmpbuf,"%04x ",clock1Result);Serial.print(tmpbuf);
+      sprintf(tmpbuf,"%04x ",cal1Result);Serial.print(tmpbuf);
+      sprintf(tmpbuf,"%04x ",cal2Result);Serial.print(tmpbuf);
     }
   #endif
-
-     
+  
   // Datasheet says:
-  // normLSB = CLOCKPERIOD / calCount   (for 10 MHz clock, CLOCK_PERIOD = 1e5 ps)
+  // normLSB = config.CLOCKPERIOD / calCount  // config.CLOCK_PERIOD = 1e5 ps
   // calCount =  (cal2Result - cal1Result) / (cal2Periods - 1)
-  // tof = normLSB(time1Result - time2Result) + (clock1Result)(CLOCK_PERIOD)
+  // tof = normLSB(time1Result - time2Result) + (clock1Result)(config.CLOCK_PERIOD)
   //
-  // But these steps truncate ringps at 1ps. Since normLSB is multiplied
-  // by up to a few thousand ringticks, the truncation error is 
-  // multiplied as well.  So use mult/div to improve resolution 
+  // tof is the final result, a value from 0 to 99us 999ns 999ps.
+  // It can never be larger because the STOP signal comes from the
+  // 100us timer and the next edge will terminate the measurement.
+  //
+  // These steps truncate ringps at 1ps resolution. Since normLSB is 
+  // multiplied by up to a few thousand ringticks, the truncation 
+  // error is multiplied as well.  So use mult/div to improve resolution.
 
+  // Constants used below:
+  // CLOCK_PERIOD is 1e5 picosecond
+  // FUDGE0 is 0
+  // CAL_PERIODS is 20
+  // time_dilation is 2500 (adjusts for non-linearity)
  
   tof = (int64_t)(clock1Result * CLOCK_PERIOD);
-  //  tof -= (int64_t)FUDGE0; // subtract delay due to silicon
+  tof -= (int64_t)fudge0; // subtract delay due to silicon
   
-  // calCount *= 10e6
+  // calCount *= 10e6; divide back later
   // time_dilation adjusts for non-linearity at 100ns overflow
   calCount = ((int64_t)(cal2Result - cal1Result) * (int64_t)(1000000 - time_dilation) ) / (int64_t)(CAL_PERIODS - 1); 
 
+  // IGNORE THIS
   // if FIXED_TIME2 is set, override time2Result with that value
-  if (fixed_time2) {
-    time2Result = (int64_t)fixed_time2;
-  }
+  //if (fixed_time2) {
+  //  time2Result = (int64_t)fixed_time2;
+  //}
   
-  // normLSB *= 10e6, but we've already multiplied the divisor so we need to double the 0s here
+  // normLSB *= 10e6, but we've already multiplied the divisor
+  // above so we need to do 10e12 here
   normLSB = ( (int64_t)CLOCK_PERIOD * (int64_t)1000000000000 ) / (int64_t)calCount;
+
   ring_ticks = (int64_t)time1Result - (int64_t)time2Result;
  
   // ring_ps *= 10e-6 to get rid of earlier scaling
   ring_ps = ((int64_t)normLSB * (int64_t)ring_ticks) / (int64_t)1000000;
   
   tof += (int64_t)ring_ps;
-  
-//  print_unsigned_picos_as_seconds(tof);Serial.print(" ");  
-//  Serial.print("normLSB: ");print_unsigned_picos_as_seconds(normLSB);Serial.print(" ");
-//  Serial.print("ring_ticks: ");print_signed_picos_as_seconds(ring_ticks);Serial.print(" ");
-//  print_signed_picos_as_seconds(ring_ps);Serial.print(" ");
-//  Serial.print("ring_ps: ");print_signed_picos_as_seconds(ring_ps);Serial.print(" ");
-//  Serial.print("clock1Result: ");Serial.print(clock1Result);Serial.print(" ");  
-//  Serial.print("tof: ");print_unsigned_picos_as_seconds(tof);Serial.print(" ");
+
+#ifdef PRINT_REG_RESULTS
+  if (totalize > 1) {
+    print_signed_picos_as_seconds(tof);Serial.print(" ");
+  }
+#endif
   
   return (int64_t)tof;
 }
 
+
+/*************************************************************************
+SPI read/write
+*************************************************************************/
+// Chip properties:
+// Most Significant Bit is clocked first (MSBFIRST)
+// clock is low when idle
+// data is clocked on the rising edge of the clock (seems to be SPI_MODE0)
+// max clock speed: 20 mHz
+
+byte tdc7200Channel::readReg8(byte address) {
+  byte inByte = 0;
+
+  SPI.beginTransaction(SPISettings(SPI_SPEED, MSBFIRST, SPI_MODE0));
+  // take the chip select low to select the device:
+  digitalWrite(CSB, LOW);
+
+  SPI.transfer(address & 0x1f);
+  inByte = SPI.transfer(0x00);
+
+  digitalWrite(CSB, HIGH);
+  SPI.endTransaction();
+
+  return inByte;
+}
+
+uint32_t tdc7200Channel::readReg24(byte address) {
+  uint32_t long value = 0;
+
+  // CSB needs to be toggled between 24-bit register reads
+  SPI.beginTransaction(SPISettings(SPI_SPEED, MSBFIRST, SPI_MODE0));
+  digitalWrite(CSB, LOW);
+
+  SPI.transfer(address & 0x1f);
+
+  uint16_t msb = SPI.transfer(0x00);
+  uint16_t mid = SPI.transfer(0x00);
+  uint16_t lsb = SPI.transfer(0x00);
+
+  value = (msb << 16) + (mid << 8) + lsb;
+
+  digitalWrite(CSB, HIGH);
+  SPI.endTransaction();
+  delayMicroseconds(5);
+  return value;
+}
+
+void tdc7200Channel::write(byte address, byte value) {
+
+  // take the chip select low to select the device:
+  SPI.beginTransaction(SPISettings(SPI_SPEED, MSBFIRST, SPI_MODE0));
+  digitalWrite(CSB, LOW);
+
+  // Force Address bit 6 to one for a write
+  SPI.transfer16((address | 0x40) << 8 | value);
+
+  digitalWrite(CSB, HIGH);
+  SPI.endTransaction();
+}

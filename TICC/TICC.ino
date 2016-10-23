@@ -6,6 +6,9 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
+//#define PRINT_REG_RESULTS // if enabled, print register values
+//#define DETAIL_TIMING     // if enabled, prints execution time
+
 extern const char SW_VERSION[17] = "0.80";  // 16 October 2016
 extern const char BOARD_SER_NUM[17] = "0123456789";  // how to set this for each board?
 
@@ -18,15 +21,13 @@ extern const char BOARD_SER_NUM[17] = "0123456789";  // how to set this for each
 #include "board.h"            // Arduino pin definitions
 #include "config.h"           // config and eeprom
 #include "tdc7200.h"          // TDC registers and structures
-#include "UserConfig.h"       // user configuration of TICC
 
-//#define DETAIL_TIMING     // if enabled, prints execution time
+
 #ifdef DETAIL_TIMING
   int32_t start_micros;
   int32_t end_micros;
 #endif
 
-// NOTE: changed from uint to int while working on TINT calc
 volatile int64_t PICcount;
 int64_t tint;
 int64_t CLOCK_HZ;
@@ -35,6 +36,7 @@ int64_t CLOCK_PERIOD;
 int16_t CAL_PERIODS;
 
 config_t config;
+MeasureMode MODE, lastMODE;
 
 static tdc7200Channel channels[] = {
         tdc7200Channel('A', ENABLE_A, INTB_A, CSB_A, STOP_A),
@@ -45,34 +47,51 @@ void setup() {
   int i;
   
   // start the serial library
-  // NOTE NOTE NOTE -- was 115200 but slowed down to see if it helps robustness
-  Serial.begin(57600);
+  Serial.begin(115200);
   // start the SPI library:
   SPI.begin();
 
   
+  
   /*******************************************
    * Configuration read/change/store
   *******************************************/
-  // if no config stored, or wrong version, restore from default
-  if ( EEPROM.read(CONFIG_START) != config.EEPROM_VERSION) {
-    eeprom_write_default(CONFIG_START);  
-  }
+  // if no config stored, or wrong version, restore from default 
   
-  // read config and set global vars
-  eeprom_read_config(CONFIG_START, config);
+  if ( EEPROM.read(CONFIG_START) != EEPROM_VERSION) { 
+    Serial.println("No config found.  Writing default...");
+    eeprom_write_config_default(CONFIG_START);  
+    }
 
-  // eeprom read/write not working yet, so this sets config to default
-  struct config_t config = copy_config_default();
-  
+  // read config and set global vars
+  EEPROM_readAnything(CONFIG_START, config);
+ 
   CLOCK_HZ = config.CLOCK_HZ;
   CLOCK_PERIOD = (PS_PER_SEC/CLOCK_HZ);
   PICTICK_PS = config.PICTICK_PS;
   CAL_PERIODS = config.CAL_PERIODS;
+  lastMODE = config.MODE;
   
-  // NOTE NOTE NOTE -- override default mode setting for now
-  config.MODE = 0;
+  Serial.println();
+  Serial.println("TAPR TICC Timestamping Counter");
+  Serial.print("EEPROM Version: ");Serial.println(EEPROM.read(CONFIG_START));
+  Serial.print("Software Version: ");Serial.println(SW_VERSION);
+  Serial.println("Copyright 2016 N8UR, K9TRG, NH6Z");
+  Serial.println();
+  Serial.print("CLOCK_HZ = ");Serial.println((int32_t)CLOCK_HZ);
+  Serial.print("CAL_PERIODS = ");Serial.println(CAL_PERIODS);
+  Serial.println();
 
+  // get and save config change
+  MODE = UserConfig();
+  if (MODE == NoChange) {
+    MODE = lastMODE;
+  } else { 
+    config.MODE = MODE;
+    EEPROM_writeAnything(CONFIG_START, config);
+  }
+  Serial.print("Mode = ");print_MeasureMode(MODE);Serial.println();
+  
   PICcount = 0;
   pinMode(COARSEint, INPUT);
   pinMode(STOP_A, INPUT);
@@ -147,7 +166,7 @@ void loop() {
 
        // NOTE NOTE NOTE -- need to change to use enum
        // simple timestamp mode
-       if ( (config.MODE == 0) && 
+       if ( (config.MODE == Timestamp) && 
             (channels[i].totalize > 2) )
          {
          print_signed_picos_as_seconds(channels[i].ts);
@@ -155,7 +174,7 @@ void loop() {
          }
        
        // time interval mode (A->B)
-       if ( (config.MODE == 1) && 
+       if ( (config.MODE == Interval) && 
             (channels[0].ts > 0) && 
             (channels[1].ts > 0) && 
             (channels[0].totalize > 2) ) 
@@ -169,7 +188,7 @@ void loop() {
          }          
        
        // period mode -- subtract last timestamp from current
-       if ( (config.MODE == 2) && 
+       if ( (config.MODE == Period) && 
             (channels[i].totalize > 2) ) 
          {
          print_signed_picos_as_seconds(channels[i].ts - channels[i].last_ts);
@@ -177,7 +196,7 @@ void loop() {
          }  
        
        // timelab mode -- output period data plus TI data
-       if ( (config.MODE == 3) &&
+       if ( (config.MODE == timeLab) &&
             (channels[0].ts > 0) &&
             (channels[1].ts > 0) &&
             (channels[0].totalize > 2) ) {

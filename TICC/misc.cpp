@@ -14,7 +14,6 @@
 #include "board.h"            // Arduino pin definitions
 #include "config.h"           // config and eeprom
 #include "tdc7200.h"          // TDC registers and structures
-#include "UserConfig.h"       // user configuration of TICC
 
 void print_unsigned_picos_as_seconds (uint64_t x) {
   uint64_t sec, secx, frac, frach, fracx, fracl;    

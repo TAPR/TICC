@@ -12,7 +12,5 @@
 #include <Arduino.h>  // for type definitions
 
 #define PS_PER_SEC        (int64_t)  1000000000000  // ps/s
-#define PRINT_REG_RESULTS // if defined, prints time1, time2, clock1, cal1, cal2, tof before timestamp
-//#define DETAIL_TIMING     // if defined, prints execution time
 
 #endif	/* TICC_H */

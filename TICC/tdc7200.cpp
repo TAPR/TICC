@@ -1,4 +1,5 @@
 // tdc7200 - read/write/setup TDC7200 chip
+
 // TICC Time interval Counter based on TICC Shield using TDC7200
 //
 // Copyright John Ackermann N8UR 2016
@@ -9,12 +10,12 @@
 #include <stdint.h>           // define unint16_t, uint32_t
 #include <SPI.h>              // SPI support
 
-#include "ticc.h"             // general config
 #include "misc.h"             // random functions
 #include "board.h"            // Arduino pin definitions
 #include "config.h"           // config and eeprom
 #include "tdc7200.h"          // TDC registers and structures
 
+extern config_t config;
 extern int64_t CLOCK_HZ;
 extern int64_t PICTICK_PS; 
 extern int64_t CLOCK_PERIOD;
@@ -39,14 +40,21 @@ void tdc7200Channel::tdc_setup() {
   digitalWrite(ENABLE, HIGH);  // Needs a low-to-high transition to enable
   delay(5);  // 1.5ms minimum recommended to allow chip LDO to stabilize
 
-  switch (CAL_PERIODS) {
+  switch (CAL_PERIODS) { // convert actual cal periods to bitmask
     case  2: CALIBRATION2_PERIODS = 0x00; break;
     case 10: CALIBRATION2_PERIODS = 0x40; break;
-    case 20: CALIBRATION2_PERIODS = 0x80; break;
+    case 20: CALIBRATION2_PERIODS = 0x80; break; // default
     case 40: CALIBRATION2_PERIODS = 0xC0; break;
   }
   
   AVG_CYCLES = 0x00;  // default 0x00 for 1 measurement cycle
+
+  // NOTE NOTE NOTE
+  // The TDC chip is *supposed* to set INTB after seeing the
+  // first stop edge.  That doesn't work -- the interrupt never happens.
+  // Workaround is to set for two stops, and rely on the COUNTER_OVERFLOW
+  // timer below.  It's ugly, and it slows down the maximum measurement
+  //rate, but it works.
   NUM_STOP = 0x01;    // default 0x00 for 1 stop; 0x01 for 2 stops
 
   reg_byte = CALIBRATION2_PERIODS | AVG_CYCLES | NUM_STOP;
@@ -64,19 +72,23 @@ void tdc7200Channel::tdc_setup() {
   write(INT_MASK, 0x04);           // default 0x07 
 
   // coarse counter overflow occurs when timeN/63 > mask
-  //write(COARSE_CNTR_OVF_H, 0x04);  // default is 0xFF 
+  //write(COARSE_CNTR_OVF_H, 0x00);  // default is 0xFF 
   //write(COARSE_CNTR_OVF_L, 0x00);  // default is 0xFF
 
+  // NOTE NOTE NOTE
+  // See comment above -- setting CLOCK_CNTR_OVF to 0x05, 0x00 provides
+  // a reasonable timeout after measurement completes.
+  // When this occurs, INTB is set and the chip returns.
+  
   //clock counter overflow occurs when clock_countN > mask
-  write(CLOCK_CNTR_OVF_H, 0x05);     // default is 0xFF
+  write(CLOCK_CNTR_OVF_H, config.OVERFLOW);     // default is 0xFF
   write(CLOCK_CNTR_OVF_L, 0x00);     // default is 0xFF
   
 }
 
 // Enable next measurement cycle
 void tdc7200Channel::ready_next() {
-// sets enable bit (START_MEAS in CONFIG1)
-// clears interrupt bits
+
  byte FORCE_CAL = 0x80;      // 0x80 forces cal; 0x00 means no cal interrupted 
  byte PARITY_EN = 0x00;      // parity on would be 0x40
  byte TRIGG_EDGE = 0x00;     // TRIGG rising edge; falling edge would be 0x20
@@ -87,6 +99,8 @@ void tdc7200Channel::ready_next() {
  byte START_MEAS = 0x01;     // 0x01 to start measurement, 0x00 for no effect
  byte reg_byte;
  
+ // sets enable bit (START_MEAS in CONFIG1)
+ // clears interrupt bits
  reg_byte = FORCE_CAL | PARITY_EN | TRIGG_EDGE | STOP_EDGE | \
             START_EDGE | MEASURE_MODE | START_MEAS;   
  write(CONFIG1, reg_byte);     
@@ -99,24 +113,8 @@ int64_t tdc7200Channel::read() {
   int64_t ring_ticks;
   int64_t ring_ps;
   int64_t tof; 
-  
-  // these variables are all int32_t members of the tdc7200Channel class
-  time1Result = readReg24(TIME1);         // START to next 100ns tick
-  time2Result  = readReg24(TIME2);        // 100ns tick to STOP
-  clock1Result = readReg24(CLOCK_COUNT1); // number of 100ns ticks
-  cal1Result = readReg24(CALIBRATION1);   // value of 1 cal cycle
-  cal2Result = readReg24(CALIBRATION2);   // value of CAL_PERIODS cycles
-  #ifdef PRINT_REG_RESULTS 
-    if (totalize > 1) {
-      char tmpbuf[8];
-      sprintf(tmpbuf,"%04x ",time1Result);Serial.print(tmpbuf);
-      sprintf(tmpbuf,"%04x ",time2Result);Serial.print(tmpbuf);
-      sprintf(tmpbuf,"%04x ",clock1Result);Serial.print(tmpbuf);
-      sprintf(tmpbuf,"%04x ",cal1Result);Serial.print(tmpbuf);
-      sprintf(tmpbuf,"%04x ",cal2Result);Serial.print(tmpbuf);
-    }
-  #endif
-  
+
+  //*****************************************************************
   // Datasheet says:
   // normLSB = config.CLOCKPERIOD / calCount  // config.CLOCK_PERIOD = 1e5 ps
   // calCount =  (cal2Result - cal1Result) / (cal2Periods - 1)
@@ -129,13 +127,31 @@ int64_t tdc7200Channel::read() {
   // These steps truncate ringps at 1ps resolution. Since normLSB is 
   // multiplied by up to a few thousand ringticks, the truncation 
   // error is multiplied as well.  So use mult/div to improve resolution.
-
-  // Constants used below:
+ 
+  // For reference, by default:
   // CLOCK_PERIOD is 1e5 picosecond
-  // FUDGE0 is 0
+  // FUDGE0 is 0 
+  // FIX_TIME2 is 0
   // CAL_PERIODS is 20
   // time_dilation is 2500 (adjusts for non-linearity)
- 
+  //*****************************************************************
+  
+  // these variables are all int32_t members of the tdc7200Channel class
+  time1Result = readReg24(TIME1);         // START to next 100ns tick
+  time2Result  = readReg24(TIME2);        // 100ns tick to STOP
+  clock1Result = readReg24(CLOCK_COUNT1); // number of 100ns ticks
+  cal1Result = readReg24(CALIBRATION1);   // value of 1 cal cycle
+  cal2Result = readReg24(CALIBRATION2);   // value of CAL_PERIODS cycles
+  
+  if (config.MODE == Debug) { // print register values in decimal
+      char tmpbuf[8];
+      sprintf(tmpbuf,"%06u ",time1Result);Serial.print(tmpbuf);
+      sprintf(tmpbuf,"%06u ",time2Result);Serial.print(tmpbuf);
+      sprintf(tmpbuf,"%06u ",clock1Result);Serial.print(tmpbuf);
+      sprintf(tmpbuf,"%06u ",cal1Result);Serial.print(tmpbuf);
+      sprintf(tmpbuf,"%06u ",cal2Result);Serial.print(tmpbuf);
+    }
+  
   tof = (int64_t)(clock1Result * CLOCK_PERIOD);
   tof -= (int64_t)fudge0; // subtract delay due to silicon
   
@@ -143,11 +159,11 @@ int64_t tdc7200Channel::read() {
   // time_dilation adjusts for non-linearity at 100ns overflow
   calCount = ((int64_t)(cal2Result - cal1Result) * (int64_t)(1000000 - time_dilation) ) / (int64_t)(CAL_PERIODS - 1); 
 
-  // IGNORE THIS
-  // if FIXED_TIME2 is set, override time2Result with that value
-  //if (fixed_time2) {
-  //  time2Result = (int64_t)fixed_time2;
-  //}
+  // if FIXED_TIME2 is set, substitute measured time2Result (which should be a fixed value,
+  // with any variation being noise, with the provided value.  This reduces jitter.
+  if (fixed_time2) {
+    time2Result = (int64_t)fixed_time2;
+  }
   
   // normLSB *= 10e6, but we've already multiplied the divisor
   // above so we need to do 10e12 here
@@ -160,11 +176,9 @@ int64_t tdc7200Channel::read() {
   
   tof += (int64_t)ring_ps;
 
-#ifdef PRINT_REG_RESULTS
-  if (totalize > 1) {
-    print_signed_picos_as_seconds(tof);Serial.print(" ");
+if (config.MODE == Debug) {
+  print_signed_picos_as_seconds(tof);Serial.print(" ");
   }
-#endif
   
   return (int64_t)tof;
 }

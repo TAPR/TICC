@@ -1,4 +1,5 @@
 // misc.cpp -- miscellaneous TICC functions
+
 // TICC Time interval Counter based on TICC Shield using TDC7200
 //
 // Copyright John Ackermann N8UR 2016
@@ -6,10 +7,9 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-
 #include <stdint.h>           // define unint16_t, uint32_t
 #include <SPI.h>              // SPI support
-#include "ticc.h"             // general config
+
 #include "misc.h"             // random functions
 #include "board.h"            // Arduino pin definitions
 #include "config.h"           // config and eeprom

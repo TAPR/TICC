@@ -2,8 +2,7 @@
 #define TDC7200_H
 
 // TICC Time interval Counter based on TICC Shield using TDC7200
-// version 0.79 14 October 2016
-
+//
 // Copyright John Ackermann N8UR 2016
 // Portions Copyright George Byrkit K9TRV 2016
 // Portions Copyright Jeremy McDermond NH6Z 2016

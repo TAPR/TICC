@@ -1,4 +1,5 @@
 // config.cpp -- set/read/write configuration
+
 // TICC Time interval Counter based on TICC Shield using TDC7200
 //
 // Copyright John Ackermann N8UR 2016
@@ -9,14 +10,14 @@
 #include <stdint.h>           // define unint16_t, uint32_t
 #include <EEPROM.h>           // read/write EEPROM
 #include <SPI.h>
-#include "ticc.h"             // general config
+
 #include "misc.h"             // random functions
 #include "board.h"            // Arduino pin definitions
 #include "config.h"           // config and eeprom
 #include "tdc7200.h"          // TDC registers and structures
 
 extern const char SW_VERSION[17];
-extern const char BOARD_SER_NUM[17];
+extern const char BOARD_ID[17];
 
 MeasureMode UserConfig() {
 ////////////////////////////////////////////////////////////////////////////
@@ -27,6 +28,7 @@ MeasureMode UserConfig() {
 // P    - Period mode
 // I    - time Interval (A-B) mode
 // L    - Dual Channel TI mode for TimeLab
+// D    - Debug mode
 //
 // BUGBUG - This is buggy right now
 
@@ -62,6 +64,7 @@ MeasureMode UserConfig() {
   Serial.println("   P     (P)eriod mode");
   Serial.println("   I     time (I)nterval A->B mode");
   Serial.println("   L     Time(L)ab interval mode");
+  Serial.println("   D     (D)ebug mode");
   Serial.println(),Serial.print("Enter mode: ");
 
   while (!Serial.available())
@@ -90,6 +93,10 @@ MeasureMode UserConfig() {
       m = timeLab;
       return(m); // TimeLab mode
       break;
+    case 'D':
+      m = Debug;
+      return(m); // Debug mode
+      break;
     default :
       Serial.println("Invalid entry; no change made");
       return(NoChange);
@@ -116,11 +123,12 @@ void print_MeasureMode(MeasureMode x) {
 uint16_t eeprom_write_config_default (uint16_t offset) {
   config_t x;
   strncpy(x.SW_VERSION,SW_VERSION,sizeof(SW_VERSION));
-  strncpy(x.BOARD_SER_NUM,BOARD_SER_NUM,sizeof(BOARD_SER_NUM));
+  strncpy(x.BOARD_ID,BOARD_ID,sizeof(BOARD_ID));
   x.MODE = Timestamp; // MODE
   x.CLOCK_HZ = 10000000; // 10 MHz
   x.PICTICK_PS = 100000000; // 100us
   x.CAL_PERIODS = 20; // CAL_PERIODS (2, 10, 20, 40)
+  x.OVERFLOW = 0x05; // measurement timeout
   x.TIME_DILATION[0] = 2500;  // 2500 seems right for chA on C1
   x.TIME_DILATION[1] = 2500;
   x.FIXED_TIME2[0] = 0;
@@ -128,6 +136,25 @@ uint16_t eeprom_write_config_default (uint16_t offset) {
   x.FUDGE0[0] = 0;
   x.FUDGE0[1] = 0;
   EEPROM_writeAnything(offset,x);
+}
+
+void print_config (config_t x) {
+  char tmpbuf[8];
+  Serial.print("EEPROM Version: ");Serial.print(EEPROM.read(CONFIG_START));
+  Serial.print(", Software Version: ");Serial.print(x.SW_VERSION);
+  Serial.print(", Serial Number: ");Serial.println(x.BOARD_ID);
+  Serial.print("Mode: ");print_MeasureMode(x.MODE);
+  Serial.print("Clock Speed: ");Serial.println((uint32_t)x.CLOCK_HZ);
+  Serial.print("Coarse tick (ps): ");Serial.println((uint32_t)x.PICTICK_PS);
+  Serial.print("Cal Periods: ");Serial.println(x.CAL_PERIODS);
+  Serial.print("Timeout: ");
+  sprintf(tmpbuf,"0x%.2X",x.OVERFLOW);Serial.println(tmpbuf);
+  Serial.print("Time Dilation: ");Serial.print((int32_t)x.TIME_DILATION[0]);
+    Serial.print(" (chA), ");Serial.print((int32_t)x.TIME_DILATION[1]);Serial.println(" chB");
+  Serial.print("FIXED_TIME2: ");Serial.print((int32_t)x.FIXED_TIME2[0]);
+    Serial.print(" (chA), ");Serial.print((int32_t)x.FIXED_TIME2[1]);Serial.println(" chB");
+  Serial.print("FUDGE0: ");Serial.print((int32_t)x.FUDGE0[0]);
+    Serial.print(" (chA), ");Serial.print((int32_t)x.FUDGE0[1]);Serial.println(" chB");
 }
 
 

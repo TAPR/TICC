@@ -1,10 +1,14 @@
-TODO-UI -- 24 November 2016
+TODO-UI -- 25 November 2016
 
 The TICC needs a simple character-based menu system to allow the user,
 via a serial console, to update a number of parameters that are stored in
-a struct called "config" of type config_t, shown below.  The first four
-fields (VERSION, SW_VERSION, BOARD_VERSION, and BOARD_ID) would not be
-Changeable via the menu.
+a struct called "config" of type config_t, shown below.
+
+NOTE: you do NOT need a TICC shield to develop or test this code -- it
+only touches Arduino RAM and eeprom.
+
+The first four fields (VERSION, SW_VERSION, BOARD_VERSION, and BOARD_ID) 
+would not be changeable via the menu.
 
 At program startup, there should be a message along the lines of
 "Press any key to enter config mode..." and if a key is pressed within,

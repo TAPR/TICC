@@ -1,0 +1,118 @@
+TODO-UI -- 24 November 2016
+
+The TICC needs a simple character-based menu system to allow the user,
+via a serial console, to update a number of parameters that are stored in
+a struct called "config" of type config_t, shown below.  The first four
+fields (VERSION, SW_VERSION, BOARD_VERSION, and BOARD_ID) would not be
+Changeable via the menu.
+
+At program startup, there should be a message along the lines of
+"Press any key to enter config mode..." and if a key is pressed within,
+say, 5 seconds, display the top menu.  The user should be allowed to
+change multiple parameters if desired, then either write the changes and exit,
+or exit without saving.
+
+At the exit of the routine, we write the changed values into the config
+struct, save the struct to eeprom, and then read back the changed version
+to use during the program run.
+
+All the UI code should be contained within the config.cpp file.  The
+setup() function in the TICC.ino main file will call the config() 
+function; it should return a flag indicating whether the config contents 
+were changed.  Writing and reading the changed version will happen within 
+the setup() function; all the config function needs to do is update the
+values in the config struct if required.
+
+The top level menu should look something like:
+
+1.  Measurement Mode       7.  Trigger Edge
+2.  Clock Speed            8.  Time_Dilation
+3.  Coarse Clock Rate      9.  Fixed_Time2
+4.  Calibration Periods    10. Fudge0
+5.  Timeout                11. Write Changes and Exit
+6.  Master/Slave           12. Discard Changes and Exit
+
+Your choice:
+
+******************************************************
+
+When going into the data entry mode for each item, the display
+should show the current value as well as the default.
+
+Here are details about the inputs for each item:
+
+1.  Measurement Mode
+Currently five modes, and set as an enum called "MeasureMode" but that's 
+not really necessary.  The modes are timestamp, time interval, TimeLab
+(a special mode for multi-channel measurements with the TimeLab software), 
+period, and debug.  Additional modes will likely be added later so there 
+should be room to expand this list.
+ 
+2.  Clock Speed 
+Default is 10000000 (10 MHz).  Valid range is 1 to 16 MHz.  Needs to be stored
+as integer Hertz.
+
+3.  Coarse Clock Rate
+Default is 100000000 ps (100 us).  Needs to be stored as integer picoseconds, 
+but it might be easier for the user to enter as microseconds.  This value is 
+unlikey to change from the default unless someone is seriously experimenting.
+
+4.  Calibration Periods
+This is an int16_t.  Valid choices are 2, 10, 20, and 40.  Default is 20.
+
+5.  Timeout
+This is an int16_t entered and displayed in hex.  Default is 0x05.
+
+6.  Master/Slave
+Two choices here, stored as a char: M (default) or S.
+
+************************
+Menu selections 7 through 10 each have two subchoices, channel A or
+channel B, and the submenu must allow setting each channel independently.
+The default values are the same for each channel, but the user may enter 
+different values for each.
+************************
+
+7.  Trigger Edge
+A char with two choices per channel, R (rising, default) or F (falling).
+
+8.  Time_Dilation
+This is an int64_t entered as a dimensionless int32_t.  Default for each
+channel is 2500.
+
+9.  Fixed_Time2
+This is a dimensionless int64_t.  Default for each channel is 0 (for now;
+that may change as we experiment more).
+
+10. Fudge0
+This is int64_t expressed in picoseconds.  Default for each channel is 0.
+
+11. Write Changes and Exit
+12. Discard Changes and Exit
+
+
+****************************************************************
+
+// configuration structure type -- version 4
+struct config_t {
+  byte       VERSION = EEPROM_VERSION; // one byte   
+  char       SW_VERSION[17];           // up to 16 bytes plus term
+  char       BOARD_VERSION;            // one byte   
+  char       BOARD_ID[17];             // up to 16 bytes plus term
+  
+  // global settings:
+  MeasureMode MODE;                 // (T)imestamp, time (I)nterval
+                                    // Time(L)ab, (P)eriod, (D)ebug (default 'T')
+  int64_t    CLOCK_HZ;              // clock in Hz (default 10 000 000)
+  int64_t    PICTICK_PS;            // coarse tick (default 100 000 000)
+  int16_t    CAL_PERIODS;           // cal periods 2, 10, 20, 40 (default 20)
+  int16_t    TIMEOUT;              // timeout for measurement in hex (default 0x05)
+  char       SYNC_MODE;                // one byte
+  
+  // per-channel settings, arrays of 2 for channels A and B:
+  char       START_EDGE[2];         // (R)ising (default) or (F)alling edge 
+  int64_t    TIME_DILATION[2];      // time dilation factor (default 2500)
+  int64_t    FIXED_TIME2[2];        // if >0 use to replace time2 (default 0)
+  int64_t    FUDGE0[2];             // fudge factor (ps) (default 0)
+  
+};

@@ -8,7 +8,7 @@
 
 //#define DETAIL_TIMING     // if enabled, prints execution time
 
-extern const char SW_VERSION[17] = "1.00";  // 28 October 2016
+extern const char SW_VERSION[17] = "1.01";  // 24 November 2016
 extern const char BOARD_ID[17] = "0123456789";  // how to set this for each board?
 
 #include <stdint.h>           // define unint16_t, uint32_t
@@ -65,15 +65,16 @@ void setup() {
   lastMODE = config.MODE;
   
   // print banner
-  Serial.println();
   Serial.println("TAPR TICC Timestamping Counter");
-  Serial.print("EEPROM Version: ");Serial.println(EEPROM.read(CONFIG_START));
-  Serial.print("Software Version: ");Serial.println(SW_VERSION);
   Serial.println("Copyright 2016 N8UR, K9TRG, NH6Z");
   Serial.println();
-  Serial.println();
 
-  // get and save config change
+  Serial.println("*******************");
+  Serial.println("TICC Configuration: ");
+  print_config(config);
+  Serial.println("*******************");
+  
+  // get and save config change -- NEED TO UPDATE WHEN CONFIG IS MORE ROBUST
   MODE = UserConfig();
   if (MODE == NoChange) {
     MODE = lastMODE;
@@ -91,11 +92,6 @@ void setup() {
   CAL_PERIODS = config.CAL_PERIODS;
 
   
-  Serial.println();
-  Serial.println("*******************");
-  Serial.println("TICC Configuration: ");
-  print_config(config);
-  Serial.println("*******************");
   
   PICcount = 0;
   pinMode(COARSEint, INPUT);

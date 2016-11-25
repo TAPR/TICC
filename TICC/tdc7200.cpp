@@ -81,7 +81,7 @@ void tdc7200Channel::tdc_setup() {
   // When this occurs, INTB is set and the chip returns.
   
   //clock counter overflow occurs when clock_countN > mask
-  write(CLOCK_CNTR_OVF_H, config.OVERFLOW);     // default is 0xFF
+  write(CLOCK_CNTR_OVF_H, config.TIMEOUT);     // default is 0xFF
   write(CLOCK_CNTR_OVF_L, 0x00);     // default is 0xFF
   
 }
@@ -141,16 +141,7 @@ int64_t tdc7200Channel::read() {
   time2Result  = readReg24(TIME2);        // 100ns tick to STOP
   clock1Result = readReg24(CLOCK_COUNT1); // number of 100ns ticks
   cal1Result = readReg24(CALIBRATION1);   // value of 1 cal cycle
-  cal2Result = readReg24(CALIBRATION2);   // value of CAL_PERIODS cycles
-  
-  if (config.MODE == Debug) { // print register values in decimal
-      char tmpbuf[8];
-      sprintf(tmpbuf,"%06u ",time1Result);Serial.print(tmpbuf);
-      sprintf(tmpbuf,"%06u ",time2Result);Serial.print(tmpbuf);
-      sprintf(tmpbuf,"%06u ",clock1Result);Serial.print(tmpbuf);
-      sprintf(tmpbuf,"%06u ",cal1Result);Serial.print(tmpbuf);
-      sprintf(tmpbuf,"%06u ",cal2Result);Serial.print(tmpbuf);
-    }
+  cal2Result = readReg24(CALIBRATION2);   // value of CAL_PERIODS cycle
   
   tof = (int64_t)(clock1Result * CLOCK_PERIOD);
   tof -= (int64_t)fudge0; // subtract delay due to silicon
@@ -177,6 +168,12 @@ int64_t tdc7200Channel::read() {
   tof += (int64_t)ring_ps;
 
 if (config.MODE == Debug) {
+  char tmpbuf[8];
+  sprintf(tmpbuf,"%06u ",time1Result);Serial.print(tmpbuf);
+  sprintf(tmpbuf,"%06u ",time2Result);Serial.print(tmpbuf);
+  sprintf(tmpbuf,"%06u ",clock1Result);Serial.print(tmpbuf);
+  sprintf(tmpbuf,"%06u ",cal1Result);Serial.print(tmpbuf);
+  sprintf(tmpbuf,"%06u ",cal2Result);Serial.print(tmpbuf);
   print_signed_picos_as_seconds(tof);Serial.print(" ");
   }
   

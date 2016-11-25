@@ -10,8 +10,8 @@
 
 #include <EEPROM.h>
 
-#define CONFIG_START      (byte)     0x00 // first byte of config in eeprom
-#define EEPROM_VERSION    (byte)     3 // eeprom struct version
+#define EEPROM_VERSION    (byte)     4              // eeprom struct version
+#define CONFIG_START      (byte)     0x00           // first byte of config in eeprom
 #define PS_PER_SEC        (int64_t)  1000000000000  // ps/s
 
 enum MeasureMode : unsigned char {Timestamp, Interval, Period, timeLab, Debug, NoChange};
@@ -21,8 +21,9 @@ void print_MeasureMode(MeasureMode x);
 // configuration structure type
 struct config_t {
   byte       VERSION = EEPROM_VERSION; // one byte   
-  char       SW_VERSION[17];        // up to 16 bytes plus term
-  char       BOARD_ID[17];     // up to 16 bytes plus term
+  char       SW_VERSION[17];           // up to 16 bytes plus term
+  char       BOARD_VERSION;            // one byte   
+  char       BOARD_ID[17];             // up to 16 bytes plus term
   
   // global settings:
   MeasureMode MODE;                 // (T)imestamp, time (I)nterval
@@ -30,7 +31,8 @@ struct config_t {
   int64_t    CLOCK_HZ;              // clock in Hz (default 10 000 000)
   int64_t    PICTICK_PS;            // coarse tick (default 100 000 000)
   int16_t    CAL_PERIODS;           // cal periods 2, 10, 20, 40 (default 20)
-  int16_t    OVERFLOW;           // timeout for measurement in hex (default 0x05)
+  int16_t    TIMEOUT;              // timeout for measurement in hex (default 0x05)
+  char       SYNC_MODE;                // one byte
   
   // per-channel settings, arrays of 2 for channels A and B:
   char       START_EDGE[2];         // (R)ising (default) or (F)alling edge 

@@ -44,7 +44,7 @@ MeasureMode UserConfig() {
   while (Serial.available())
     inputline[j++] = Serial.read();
 
-  inputline[j] = '/0';
+  inputline[j] = '\0';
   
 // Serial.print("# chars received = "),Serial.println(j);
 // Serial.print("Received input chars: ");
@@ -123,16 +123,19 @@ void print_MeasureMode(MeasureMode x) {
 uint16_t eeprom_write_config_default (uint16_t offset) {
   config_t x;
   strncpy(x.SW_VERSION,SW_VERSION,sizeof(SW_VERSION));
+  x.BOARD_VERSION = 'C';
   strncpy(x.BOARD_ID,BOARD_ID,sizeof(BOARD_ID));
+  
   x.MODE = Timestamp; // MODE
   x.CLOCK_HZ = 10000000; // 10 MHz
   x.PICTICK_PS = 100000000; // 100us
   x.CAL_PERIODS = 20; // CAL_PERIODS (2, 10, 20, 40)
-  x.OVERFLOW = 0x05; // measurement timeout
+  x.TIMEOUT = 0x05; // measurement timeout
+  x.SYNC_MODE = 'M';
   x.TIME_DILATION[0] = 2500;  // 2500 seems right for chA on C1
   x.TIME_DILATION[1] = 2500;
   x.FIXED_TIME2[0] = 0;
-  x.FIXED_TIME2[1] = 0;
+  x.FIXED_TIME2[1] = 1131;  // for channel B on board C3
   x.FUDGE0[0] = 0;
   x.FUDGE0[1] = 0;
   EEPROM_writeAnything(offset,x);
@@ -140,21 +143,23 @@ uint16_t eeprom_write_config_default (uint16_t offset) {
 
 void print_config (config_t x) {
   char tmpbuf[8];
-  Serial.print("EEPROM Version: ");Serial.print(EEPROM.read(CONFIG_START));
-  Serial.print(", Software Version: ");Serial.print(x.SW_VERSION);
-  Serial.print(", Serial Number: ");Serial.println(x.BOARD_ID);
-  Serial.print("Mode: ");print_MeasureMode(x.MODE);
+  Serial.print("Measurement Mode: ");print_MeasureMode(MeasureMode(x.MODE));
+  Serial.print("EEPROM Version: ");Serial.print(EEPROM.read(CONFIG_START)); 
+  Serial.print(", Board Version: ");Serial.println(x.BOARD_VERSION);
+  Serial.print("Software Version: ");Serial.println(x.SW_VERSION);
+  Serial.print("Board Serial Number: ");Serial.println(x.BOARD_ID); 
   Serial.print("Clock Speed: ");Serial.println((uint32_t)x.CLOCK_HZ);
   Serial.print("Coarse tick (ps): ");Serial.println((uint32_t)x.PICTICK_PS);
   Serial.print("Cal Periods: ");Serial.println(x.CAL_PERIODS);
+  Serial.print("SyncMode: ");Serial.println(x.SYNC_MODE);
   Serial.print("Timeout: ");
-  sprintf(tmpbuf,"0x%.2X",x.OVERFLOW);Serial.println(tmpbuf);
+  sprintf(tmpbuf,"0x%.2X",x.TIMEOUT);Serial.println(tmpbuf);
   Serial.print("Time Dilation: ");Serial.print((int32_t)x.TIME_DILATION[0]);
-    Serial.print(" (chA), ");Serial.print((int32_t)x.TIME_DILATION[1]);Serial.println(" chB");
+    Serial.print(" (chA), ");Serial.print((int32_t)x.TIME_DILATION[1]);Serial.println(" (chB)");
   Serial.print("FIXED_TIME2: ");Serial.print((int32_t)x.FIXED_TIME2[0]);
-    Serial.print(" (chA), ");Serial.print((int32_t)x.FIXED_TIME2[1]);Serial.println(" chB");
+    Serial.print(" (chA), ");Serial.print((int32_t)x.FIXED_TIME2[1]);Serial.println(" (chB)");
   Serial.print("FUDGE0: ");Serial.print((int32_t)x.FUDGE0[0]);
-    Serial.print(" (chA), ");Serial.print((int32_t)x.FUDGE0[1]);Serial.println(" chB");
+    Serial.print(" (chA), ");Serial.print((int32_t)x.FUDGE0[1]);Serial.println(" (chB)");
 }
 
 

@@ -1,3 +1,5 @@
+#include <EEPROM.h>
+
 // TICC.ino - master sketch file
 // TICC Time interval Counter based on TICC Shield using TDC7200
 //
@@ -8,7 +10,7 @@
 
 //#define DETAIL_TIMING     // if enabled, prints execution time
 
-extern const char SW_VERSION[17] = "1.01";  // 24 November 2016
+extern const char SW_VERSION[17] = "1.10";  // 10 December 2016
 extern const char BOARD_ID[17] = "0123456789";  // how to set this for each board?
 
 #include <stdint.h>           // define unint16_t, uint32_t
@@ -65,6 +67,7 @@ void setup() {
   lastMODE = config.MODE;
   
   // print banner
+  Serial.println();
   Serial.println("TAPR TICC Timestamping Counter");
   Serial.println("Copyright 2016 N8UR, K9TRG, NH6Z");
   Serial.println();
@@ -74,24 +77,14 @@ void setup() {
   print_config(config);
   Serial.println("*******************");
   
-  // get and save config change -- NEED TO UPDATE WHEN CONFIG IS MORE ROBUST
-  MODE = UserConfig();
-  if (MODE == NoChange) {
-    MODE = lastMODE;
-  } else { 
-    config.MODE = MODE;
-    Serial.println();
-    Serial.print("Measurement Mode = ");
-    print_MeasureMode(MODE);
-    EEPROM_writeAnything(CONFIG_START, config); // save change to config
-  }
+  // get and save config change
+  UserConfig(&config);
+  MODE = config.MODE;
   
   CLOCK_HZ = config.CLOCK_HZ;
   CLOCK_PERIOD = (PS_PER_SEC/CLOCK_HZ);
   PICTICK_PS = config.PICTICK_PS;
   CAL_PERIODS = config.CAL_PERIODS;
-
-  
   
   PICcount = 0;
   pinMode(COARSEint, INPUT);

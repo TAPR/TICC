@@ -14,8 +14,7 @@
 #define CONFIG_START      (byte)     0x00           // first byte of config in eeprom
 #define PS_PER_SEC        (int64_t)  1000000000000  // ps/s
 
-enum MeasureMode : unsigned char {Timestamp, Interval, Period, timeLab, Debug, NoChange};
-MeasureMode UserConfig();
+enum MeasureMode : unsigned char {Timestamp, Interval, Period, timeLab, Debug};
 void print_MeasureMode(MeasureMode x);
 
 // configuration structure type
@@ -32,7 +31,7 @@ struct config_t {
   int64_t    PICTICK_PS;            // coarse tick (default 100 000 000)
   int16_t    CAL_PERIODS;           // cal periods 2, 10, 20, 40 (default 20)
   int16_t    TIMEOUT;              // timeout for measurement in hex (default 0x05)
-  char       SYNC_MODE;                // one byte
+  char       SYNC_MODE;                // one byte:  'M' for master,  'S' for slave
   
   // per-channel settings, arrays of 2 for channels A and B:
   char       START_EDGE[2];         // (R)ising (default) or (F)alling edge 
@@ -42,6 +41,7 @@ struct config_t {
   
 };
 
+void UserConfig(struct config_t *config);
 
 // These allow us to read/write struct in eeprom
 template <class T> int EEPROM_writeAnything(int ee, const T& value)
@@ -64,7 +64,7 @@ template <class T> int EEPROM_readAnything(int ee, T& value)
 
 // read and write config struct in eeprom
 
-uint16_t eeprom_write_config_default (uint16_t offset);
+void eeprom_write_config_default (uint16_t offset);
 void print_config (config_t x);
 
 

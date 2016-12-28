@@ -29,9 +29,9 @@ int inputLineReadIndex = 0;
 char getChar()
 {
   char c;
-  while ( ! Serial.available());     /*    wait for a character   */
+  while ( ! Serial.available())      /*    wait for a character   */     ;
   c = Serial.read();
-  Serial.print(c);                      // echo the character received
+  Serial.print(c);                      // echo the character receivednp
   return c;
 }
 
@@ -52,8 +52,7 @@ char getChar(int charSourceIsLine)
   else return '\n';
 }
 
-// Get a string of characters from Serial input.  Return when buffer inputLine is full
-// or when a newline character is received.
+// Get a string of characters from Serial input.  Return when buffer inputLine is full or when a newline character is received.
 // The newline is not put into inputLine, but inputLine is always null-terminated.
 // ToDo:  
 // (1) allow use of Backspace  DONE
@@ -200,12 +199,13 @@ void printHzAsMHz(int64_t x)
   int64_t MHz = x / 1000000;
   int64_t Hz = MHz * 1000000;
   int64_t fract = x - Hz;
-  sprintf(str, "%lld.", MHz), Serial.print(str);
-  sprintf(str,"%06lld", fract), Serial.print(str);
+  sprintf(str, "%ld.", (int32_t)MHz), Serial.print(str);
+  sprintf(str,"%06ld", (int32_t)fract), Serial.print(str);
 }
 
 void measurementMode(struct config_t *pConfigInfo)
 {
+  int valid = 1;
 Serial.println("Setup mode.  Valid single-letter commands are:"), Serial.println();
   Serial.println("   T     Timestamp mode");
   Serial.println("   P     Period mode");
@@ -214,6 +214,9 @@ Serial.println("Setup mode.  Valid single-letter commands are:"), Serial.println
   Serial.println("   D     Debug mode");
   Serial.println(),  Serial.print("Enter mode: ");
 
+  do
+  {
+    valid = 1;
    switch( toupper(getChar()))
   {
     case 'T': pConfigInfo->MODE = Timestamp;    break;
@@ -221,9 +224,11 @@ Serial.println("Setup mode.  Valid single-letter commands are:"), Serial.println
     case 'I': pConfigInfo->MODE = Interval;   break;
     case 'L': pConfigInfo->MODE = timeLab;    break;
     case 'D': pConfigInfo->MODE = Debug;    break;
-    default:
+      default:  valid = 0;
+      Serial.println("? Please enter T P I L or D");
     break;
   }
+  } while (valid == 0);
 }
 
 void clockSpeed(struct config_t *pConfigInfo)
@@ -379,7 +384,24 @@ char modeToChar(unsigned char mode)
    return '?';
 }
 
-void doMainMenu(struct config_t *pConfigInfo)      // also display the default values ----------------
+void initializeConfig(struct config_t *x)
+{
+  x->MODE = Timestamp; // MODE
+  x->CLOCK_HZ = 10000000; // 10 MHz
+  x->PICTICK_PS = 100000000; // 100us
+  x->CAL_PERIODS = 20; // CAL_PERIODS (2, 10, 20, 40)
+  x->TIMEOUT = 0x05; // measurement timeout
+  x->SYNC_MODE = 'M';
+  x->START_EDGE[0] = 'R';
+  x->START_EDGE[1] = 'R';
+  x->TIME_DILATION[0] = 2500;  // 2500 seems right for chA on C1
+  x->TIME_DILATION[1] = 2500;
+  x->FIXED_TIME2[0] = 0;
+  x->FIXED_TIME2[1] = 1131;  // for channel B on board C3
+  x->FUDGE0[0] = 0;
+  x->FUDGE0[1] = 0;
+}
+void doSetupMenu(struct config_t *pConfigInfo)      // also display the default values ----------------
 {
   char response;
   for ( ; ; )
@@ -412,6 +434,8 @@ void doMainMenu(struct config_t *pConfigInfo)      // also display the default v
     	    Serial.print(' ');
     	    Serial.println((int32_t)pConfigInfo->FUDGE0[1]);
     	
+  Serial.println();
+  Serial.println("W   Reset all to default values");
     Serial.println("Y   Write changes and exit setup");
     Serial.println("Z   Discard changes and exit setup");
     Serial.println("choose one: ");
@@ -440,6 +464,8 @@ void doMainMenu(struct config_t *pConfigInfo)      // also display the default v
     		break;
     		case 'J':	 fudge0(pConfigInfo);
     		break;
+      case 'W': initializeConfig(pConfigInfo);
+      break;
     		case 'Y':	 // write changes and exit
                       EEPROM_writeAnything(CONFIG_START, *pConfigInfo); // save change to config
                       return;
@@ -447,7 +473,7 @@ void doMainMenu(struct config_t *pConfigInfo)      // also display the default v
     		case 'Z':	// discard changes and exit
                         return;
     		break;
-    		default:	// 'bad selection'
+      default:  Serial.println("???");  // 'bad selection'
     		break;
     }   // switch
   }   // for 
@@ -461,20 +487,22 @@ void UserConfig(struct config_t *pConfigInfo)
 
     Serial.println("Type any character to make changes to TICC configuration.");
     bool configRequested = 0;
-    for (int i = 5; i >= 0; --i)  // wait ~5 sec so user can type something
-    { Serial.print('.');
-      delay(500);
-      Serial.print(i);
-      delay(500);
+    for (int i = 6; i >= 0; --i)  // wait ~6 sec so user can type something
+    { 
+      delay(250);   Serial.print('.');
+      delay(250);   Serial.print('.');
+      delay(250);   Serial.print(i);
+      delay(250);   Serial.print('.');
       if (Serial.available()) 
       { configRequested = 1;
         break;
       }
     }
-    while (Serial.available()) c = Serial.read();   // eat any characters entered before we start  doMainMenu()
-    if (configRequested) doMainMenu(pConfigInfo); 
+        while (Serial.available()) c = Serial.read();   // eat any characters entered before we start  doMainMenu()
+    if (configRequested) doSetupMenu(pConfigInfo); 
 }
   
+
 
 
 // Pretty-print mode

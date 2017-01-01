@@ -14,8 +14,8 @@
 #include <SPI.h>
 
 #include "misc.h"             // random functions
-#include "board.h"            // Arduino pin definitions
 #include "config.h"           // config and eeprom
+#include "board.h"            // Arduino pin definitions
 #include "tdc7200.h"          // TDC registers and structures
 
 extern const char SW_VERSION[17];
@@ -49,11 +49,11 @@ char getChar(int charSourceIsLine)
     Serial.print(inputLine[inputLineReadIndex]);    // Add this as a debug aid
     return inputLine[inputLineReadIndex++];
   }
-  else return '\n';
+  else return getChar();
 }
 
 // Get a string of characters from Serial input.  Return when buffer inputLine is full or when a newline character is received.
-// The newline is not put into inputLine, but inputLine is always null-terminated.
+// The newline is  put into inputLine. In addition, inputLine is always null-terminated.
 // ToDo:  
 // (1) allow use of Backspace  DONE
 // (2) allow use of Home, End, Delete;  
@@ -66,8 +66,9 @@ void getLine()
       newChar = getChar();
       if ( (inputLineIndex > inputLineIndexMax) || (newChar == '\n')  || (newChar == '\r') )
       {
+        inputLine[inputLineIndex++] = '\r';
         inputLine[inputLineIndex] = '\0';
-        return;
+        if (inputLineIndex > 1) return;
       }
       else if (newChar == '\b')
       {
@@ -110,29 +111,21 @@ void getInt64(int64_t *result, int source)
   mantissaFractionPartPower = 1;
   getInt64new = 0;          // If we are successful in building a number, this will be set to one.
   char newChar;
-  for ( ; ; )       // ignore loading spaces, tabs
-  {
-      newChar = getChar(source);
-      if ( (newChar == ' ') || (newChar == '\t') ) continue;    // could use   isspace()
-      else break;
-  }
-  if (newChar == '+') newChar = getChar(source);
-  if (newChar == '-')
+
+  while ( isspace(newChar = getChar(source) )  ) /* ignore leading whitespace */ ;
+  
+  if (newChar == '+') newChar = getChar(source);    // allow leading plus
+  else if (newChar == '-')                                      // handle leading minus
   {
     negative = 1;
     newChar = getChar(source);
   }
-  while (newChar == '0') newChar = getChar(source);   // ignore mantissa leading zeros
-  if (newChar == '.')   // begin mantissa fractional part
-  { newChar = getChar(source);
     while (newChar == '0')
-    {
-      --exponent;
-      newChar = getChar(source);
+    { newChar = getChar(source);   // ignore mantissa leading zeros     
+      getInt64new = 1;                  // but note any zero entered
     }
-    // next char should be '.' or a digit
-  }
-  else if (isdigit(newChar))    // get mantissa integer part
+    
+  if (isdigit(newChar))    // get mantissa integer part
   {
     while (isdigit(newChar))
     {
@@ -142,8 +135,16 @@ void getInt64(int64_t *result, int source)
       newChar = getChar(source);
     }
   }
+  else if (newChar == '.')          // No integer part; begin mantissa fractional part
+  { newChar = getChar(source);
+    while (newChar == '0')
+    {
+      --exponent;
+      newChar = getChar(source);
+    }
+  }
   
-    // newChar should be '.' or beginnng of optional exponent
+    // newChar should be '.' or digit
     if (newChar == '.') newChar = getChar(source);
     while (isdigit(newChar))      // fractional part of mantissa
     {
@@ -158,7 +159,7 @@ void getInt64(int64_t *result, int source)
     {
       newChar = getChar(source);
       if (newChar == '+') newChar = getChar(source);
-      if (newChar == '-') 
+     else if (newChar == '-') 
       {
         exponentNegative = 1;
         newChar = getChar(source);
@@ -384,6 +385,29 @@ char modeToChar(unsigned char mode)
    return '?';
 }
 
+struct config_t defaultConfig() {
+  struct config_t x;
+  x.VERSION == EEPROM_VERSION;
+  strncpy(x.SW_VERSION,SW_VERSION,sizeof(SW_VERSION));
+  x.BOARD_REV = BOARD_REVISION;
+  strncpy(x.BOARD_ID,BOARD_ID,sizeof(BOARD_ID));
+  x.MODE = MEASUREMENT_MODE;
+  x.CLOCK_HZ = CLOCK_HERTZ;
+  x.PICTICK_PS = PICTICK_PICOS;
+  x.CAL_PERIODS = CAL_PER;
+  x.TIMEOUT = TIMEOUT_HEX;
+  x.SYNC_MODE = SYNC;
+  x.START_EDGE[0] = START_EDGE_0;
+  x.START_EDGE[1] = START_EDGE_1;
+  x.TIME_DILATION[0] = TIME_DILATION_0;
+  x.TIME_DILATION[1] = TIME_DILATION_1;
+  x.FIXED_TIME2[0] = FIXED_TIME2_0;
+  x.FIXED_TIME2[1] = FIXED_TIME2_1;
+  x.FUDGE0[0] = FUDGE0_0;
+  x.FUDGE0[1] = FUDGE0_1;
+  return x;
+}
+
 void initializeConfig(struct config_t *x)
 {
   x->MODE = Timestamp; // MODE
@@ -394,10 +418,10 @@ void initializeConfig(struct config_t *x)
   x->SYNC_MODE = 'M';
   x->START_EDGE[0] = 'R';
   x->START_EDGE[1] = 'R';
-  x->TIME_DILATION[0] = 2500;  // 2500 seems right for chA on C1
-  x->TIME_DILATION[1] = 2500;
+  x->TIME_DILATION[0] = 2500;  // SWAG that seems to work
+  x->TIME_DILATION[1] = 2500;  // SWAG that seems to work
   x->FIXED_TIME2[0] = 0;
-  x->FIXED_TIME2[1] = 1131;  // for channel B on board C3
+  x->FIXED_TIME2[1] = 0;
   x->FUDGE0[0] = 0;
   x->FUDGE0[1] = 0;
 }
@@ -407,36 +431,39 @@ void doSetupMenu(struct config_t *pConfigInfo)      // also display the default 
   for ( ; ; )
   {
     Serial.println(), Serial.println();
-    Serial.print("A   Measurement Mode      "); Serial.println( modeToChar(pConfigInfo->MODE));             // enum MeasureMode, default Timestamp
-    Serial.print("B   Clock Speed  (MHz)    "); printHzAsMHz(pConfigInfo->CLOCK_HZ), Serial.println();  // int_64, default 1e7
-    Serial.print("C   Coarse Clock Rate (us)"); printHzAsMHz(pConfigInfo->PICTICK_PS), Serial.println(); // int_64, default 1e8
-    Serial.print("D   Calibration Periods   "); Serial.println((int32_t)pConfigInfo->CAL_PERIODS);            // int_16, choices are 2, 10, 20, 40; default 20
-    Serial.print("E   Timeout               "); Serial.println((int32_t)pConfigInfo->TIMEOUT);                        // int_16, default 5
-    Serial.print("F   Master / Slave        "); Serial.println(pConfigInfo->SYNC_MODE);                             // M (default) or S
+  Serial.print("M   Measurement Mode        "); Serial.print( modeToChar(pConfigInfo->MODE)); Serial.println("               default T");   // enum MeasureMode, default Timestamp
+  Serial.print("S   clock Speed  (MHz)      "); printHzAsMHz(pConfigInfo->CLOCK_HZ), Serial.println("       default 10");           // int_64, default 1e7
+  Serial.print("C   Coarse Clock Rate (us)  "); printHzAsMHz(pConfigInfo->PICTICK_PS), Serial.println("      default 100");         // int_64, default 1e8
+  Serial.print("P   calibration Periods     "); Serial.print((int32_t)pConfigInfo->CAL_PERIODS); Serial.println("              default 20");// int_16, choices are 2, 10, 20, 40; default 20
+  Serial.print("T   Timeout                 "); Serial.print((int32_t)pConfigInfo->TIMEOUT); Serial.println("               default 5");             // int_16, default 5
+  Serial.print("Y   sync:  master / slave   "); Serial.print(pConfigInfo->SYNC_MODE); Serial.println("               default M");                // M (default) or S
     
-    Serial.print("G   Trigger Edge          ");                                     // R(ising) or F(alling)
+  Serial.print("E   trigger Edge            ");     // R(ising) or F(alling)
     	    Serial.print(pConfigInfo->START_EDGE[0]);
     	    Serial.print(' ');
     	    Serial.println(pConfigInfo->START_EDGE[1]);
     	
-    Serial.print("H   Time Dilation         ");                                       // int_64, default 2500
+  Serial.print("D   time Dilation           ");       // int_64, default 2500
     	    Serial.print((int32_t)pConfigInfo->TIME_DILATION[0]);
     	    Serial.print(' ');
-    	    Serial.println((int32_t)pConfigInfo->TIME_DILATION[1]);
+        Serial.print((int32_t)pConfigInfo->TIME_DILATION[1]);
+        Serial.println("       default 2500");
     	
-    Serial.print("I   Fixed Time2           ");                                       // int_64, default 0
+  Serial.print("F   Fixed Time2             ");   // int_64, default 0
         Serial.print((int32_t)pConfigInfo->FIXED_TIME2[0]);
         Serial.print(' ');
-        Serial.println((int32_t)pConfigInfo->FIXED_TIME2[1]);
+      Serial.print((int32_t)pConfigInfo->FIXED_TIME2[1]);
+      Serial.println("          default 0");
      
-    Serial.print("J   Fudge0                ");                                         // int_64, default 0
+  Serial.print("G   fudge0                  ");   // int_64, default 0
     	    Serial.print((int32_t)pConfigInfo->FUDGE0[0]);
     	    Serial.print(' ');
-    	    Serial.println((int32_t)pConfigInfo->FUDGE0[1]);
+        Serial.print((int32_t)pConfigInfo->FUDGE0[1]);
+        Serial.println("             default 0");
     	
   Serial.println();
-  Serial.println("W   Reset all to default values");
-    Serial.println("Y   Write changes and exit setup");
+  Serial.println("R   Reset all to default values");
+  Serial.println("W   Write changes and exit setup");
     Serial.println("Z   Discard changes and exit setup");
     Serial.println("choose one: ");
     
@@ -444,29 +471,30 @@ void doSetupMenu(struct config_t *pConfigInfo)      // also display the default 
   
     switch(response)   
     {
-    		case 'A':	 measurementMode(pConfigInfo);
+      case 'M':  measurementMode(pConfigInfo);
     		break;
-    		case 'B':	 clockSpeed(pConfigInfo);
+      case 'S':  clockSpeed(pConfigInfo);
     		break;
     		case 'C':	 coarseClockRate(pConfigInfo);
     		break;
-    		case 'D':	 calibrationPeriods(pConfigInfo);
+      case 'P':  calibrationPeriods(pConfigInfo);
     		break;
-    		case 'E':	 timeout(pConfigInfo);
+      case 'T':  timeout(pConfigInfo);
     		break;
-    		case 'F':	 masterSlave(pConfigInfo); // (sync mode)
+      case 'Y':  Serial.println("Y selected");
+      masterSlave(pConfigInfo); // (sync mode)
     		break;
-    		case 'G':	 triggerEdge(pConfigInfo);
+      case 'E':  triggerEdge(pConfigInfo);
     		break;
-    		case 'H':	 timeDilation(pConfigInfo);
+      case 'D':  timeDilation(pConfigInfo);
     		break;
-    		case 'I':	 fixedTime2(pConfigInfo);
+      case 'F':  fixedTime2(pConfigInfo);
     		break;
-    		case 'J':	 fudge0(pConfigInfo);
+      case 'G':  fudge0(pConfigInfo);
     		break;
-      case 'W': initializeConfig(pConfigInfo);
+      case 'R': initializeConfig(pConfigInfo);
       break;
-    		case 'Y':	 // write changes and exit
+      case 'W':  // write changes and exit
                       EEPROM_writeAnything(CONFIG_START, *pConfigInfo); // save change to config
                       return;
     		break;
@@ -489,16 +517,12 @@ void UserConfig(struct config_t *pConfigInfo)
     bool configRequested = 0;
     for (int i = 6; i >= 0; --i)  // wait ~6 sec so user can type something
     { 
-      delay(250);   Serial.print('.');
-      delay(250);   Serial.print('.');
-      delay(250);   Serial.print(i);
-      delay(250);   Serial.print('.');
-      if (Serial.available()) 
-      { configRequested = 1;
-        break;
-      }
+      delay(250);   Serial.print('.');      if (Serial.available())       { configRequested = 1;        break;      }
+      delay(250);   Serial.print('.');      if (Serial.available())       { configRequested = 1;        break;      }
+      delay(250);   Serial.print('.');      if (Serial.available())       { configRequested = 1;        break;      }
+      delay(250);   Serial.print(i);        if (Serial.available())       { configRequested = 1;        break;      }
     }
-        while (Serial.available()) c = Serial.read();   // eat any characters entered before we start  doMainMenu()
+    while (Serial.available()) c = Serial.read();   // eat any characters entered before we start  doSetupMenu()
     if (configRequested) doSetupMenu(pConfigInfo); 
 }
   
@@ -525,23 +549,7 @@ void print_MeasureMode(MeasureMode x) {
 }
 
 void eeprom_write_config_default (uint16_t offset) {
-  struct config_t x;
-  strncpy(x.SW_VERSION,SW_VERSION,sizeof(SW_VERSION));
-  x.BOARD_VERSION = 'C';
-  strncpy(x.BOARD_ID,BOARD_ID,sizeof(BOARD_ID));
-  
-  x.MODE = Timestamp; // MODE
-  x.CLOCK_HZ = 10000000; // 10 MHz
-  x.PICTICK_PS = 100000000; // 100us
-  x.CAL_PERIODS = 20; // CAL_PERIODS (2, 10, 20, 40)
-  x.TIMEOUT = 0x05; // measurement timeout
-  x.SYNC_MODE = 'M';
-  x.TIME_DILATION[0] = 2500;  // 2500 seems right for chA on C1
-  x.TIME_DILATION[1] = 2500;
-  x.FIXED_TIME2[0] = 0;
-  x.FIXED_TIME2[1] = 1131;  // for channel B on board C3
-  x.FUDGE0[0] = 0;
-  x.FUDGE0[1] = 0;
+  struct config_t x = defaultConfig();
   EEPROM_writeAnything(offset,x);
 }
 
@@ -549,7 +557,7 @@ void print_config (config_t x) {
   char tmpbuf[8];
   Serial.print("Measurement Mode: ");print_MeasureMode(MeasureMode(x.MODE));
   Serial.print("EEPROM Version: ");Serial.print(EEPROM.read(CONFIG_START)); 
-  Serial.print(", Board Version: ");Serial.println(x.BOARD_VERSION);
+  Serial.print(", Board Version: ");Serial.println(x.BOARD_REV);
   Serial.print("Software Version: ");Serial.println(x.SW_VERSION);
   Serial.print("Board Serial Number: ");Serial.println(x.BOARD_ID); 
   Serial.print("Clock Speed: ");Serial.println((uint32_t)x.CLOCK_HZ);

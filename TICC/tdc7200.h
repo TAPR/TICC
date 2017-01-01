@@ -54,6 +54,7 @@ public:
   const int STOP;  // pin number on Arduino
   const int INTB;  // pin number on Arduino
   const int CSB;   // pin number on Arduino
+  const int LED;   // pin number on Arduino
 
   // NOTE: changed all from signed to unsigned while working on TINT
   volatile int64_t PICstop;
@@ -67,7 +68,7 @@ public:
   int64_t fixed_time2;
   int64_t fudge0;
   
-  tdc7200Channel(char id, int enable, int intb, int csb, int stop);
+  tdc7200Channel(char id, int enable, int intb, int csb, int stop, int led);
   int64_t read();
   void tdc_setup();
   void ready_next();

@@ -10,16 +10,19 @@
 
 //#define DETAIL_TIMING     // if enabled, prints execution time
 
-extern const char SW_VERSION[17] = "1.10";  // 10 December 2016
-extern const char BOARD_ID[17] = "0123456789";  // how to set this for each board?
+/********************************
+All other configuration defaults are in config.h
+*********************************/
+extern const char SW_VERSION[17] = "20170101.1";    // 1 January 2017 - version 1
+extern const char BOARD_ID[17] =   "0123";          // how to set this for each board?
 
 #include <stdint.h>           // define unint16_t, uint32_t
 #include <SPI.h>              // SPI support
 #include <EnableInterrupt.h>  // use faster interrupt library
 
+#include "config.h"           // config and eeprom
 #include "misc.h"             // random functions
 #include "board.h"            // Arduino pin definitions
-#include "config.h"           // config and eeprom
 #include "tdc7200.h"          // TDC registers and structures
 
 
@@ -39,13 +42,21 @@ config_t config;
 MeasureMode MODE, lastMODE;
 
 static tdc7200Channel channels[] = {
-        tdc7200Channel('A', ENABLE_A, INTB_A, CSB_A, STOP_A),
-        tdc7200Channel('B', ENABLE_B, INTB_B, CSB_B, STOP_B),
+        tdc7200Channel('A', ENABLE_A, INTB_A, CSB_A, STOP_A,LED_A),
+        tdc7200Channel('B', ENABLE_B, INTB_B, CSB_B, STOP_B,LED_B),
 };
 
 /****************************************************************/
 void setup() {
   int i;
+  
+  pinMode(COARSEint, INPUT);
+  pinMode(OUT1, OUTPUT);
+  pinMode(OUT2, OUTPUT);
+
+  // turn on the LEDs to show we're alive
+  digitalWrite(LED_A, HIGH);
+  digitalWrite(LED_B, HIGH);
   
   // start the serial library
   Serial.begin(115200);
@@ -69,7 +80,7 @@ void setup() {
   // print banner
   Serial.println();
   Serial.println("TAPR TICC Timestamping Counter");
-  Serial.println("Copyright 2016 N8UR, K9TRG, NH6Z");
+  Serial.println("Copyright 2017 N8UR, K9TRG, NH6Z, WA8YWQ");
   Serial.println();
 
   Serial.println("*******************");
@@ -87,12 +98,8 @@ void setup() {
   CAL_PERIODS = config.CAL_PERIODS;
   
   PICcount = 0;
-  pinMode(COARSEint, INPUT);
-  pinMode(STOP_A, INPUT);
-  pinMode(STOP_B, INPUT);
-  pinMode(STOPAint, INPUT);
-  pinMode(STOPBint, INPUT);
-   
+  
+     
   for(i = 0; i < ARRAY_SIZE(channels); ++i) {
     // initialize the channels struct variables
     channels[i].totalize = 0;
@@ -132,6 +139,10 @@ void setup() {
       Serial.println("# time1 time2 clock1 cal1 cal2 PICstop tof timestamp");
       break;
   } // switch
+  
+// turn the LEDs off
+  digitalWrite(LED_A, LOW);
+  digitalWrite(LED_B, LOW);
  
 } // setup  
 
@@ -147,13 +158,16 @@ void loop() {
          start_micros = micros();
        #endif
        
+       // turn LED on
+       digitalWrite(channels[i].LED, HIGH);
+       
        // read registers and calculate tof
        channels[i].last_tof = channels[i].tof;
        channels[i].tof = channels[i].read();
         
        // done with chip, so get ready for next reading
        channels[i].ready_next(); // Re-arm for next measurement, clear TDC INTB
-       channels[i].totalize++;
+       channels[i].totalize++;      
        
        if (config.MODE == Debug) {
           Serial.print((int32_t)channels[i].PICstop);Serial.print(" ");
@@ -215,7 +229,10 @@ void loop() {
          channels[1].ts = 0;
        
        } // dual channel measurements          
-        
+
+       // turn LED off
+       digitalWrite(channels[i].LED,LOW);
+
       #ifdef DETAIL_TIMING      
         end_micros = micros();         
         Serial.print(" execution time (us) after output: ");

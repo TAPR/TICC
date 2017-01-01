@@ -10,18 +10,37 @@
 
 #include <EEPROM.h>
 
-#define EEPROM_VERSION    (byte)     4              // eeprom struct version
-#define CONFIG_START      (byte)     0x00           // first byte of config in eeprom
-#define PS_PER_SEC        (int64_t)  1000000000000  // ps/s
-
 enum MeasureMode : unsigned char {Timestamp, Interval, Period, timeLab, Debug};
+
+// system defines -- do not change!
+#define BOARD_REVISION    'D'             // production version is 'D'
+#define EEPROM_VERSION    (byte)     98              // eeprom struct version
+#define CONFIG_START      (byte)     0x00            // first byte of config in eeprom
+#define PS_PER_SEC        (int64_t)  1000000000000   // ps/s
+
+// default values for config struct
+#define MEASUREMENT_MODE    (MeasureMode) 0     // Measurement mode -- 0 is Timestamp
+#define CLOCK_HERTZ         (int64_t) 10000000  // 10 MHz
+#define PICTICK_PICOS       (int64_t) 100000000 // 100us
+#define CAL_PER             (int16_t) 20        // CAL_PERIODS (2, 10, 20, 40)
+#define TIMEOUT_HEX         (byte)    0x05      // measurement timeout
+#define SYNC                (char)    'M'       // (M)aster or (S)lave
+#define START_EDGE_0        (char)    'R'       // (R)ising or (F)alling
+#define START_EDGE_1        (char)    'R'       // (R)ising or (F)alling
+#define TIME_DILATION_0     (int64_t) 2500      // SWAG that seems to work
+#define TIME_DILATION_1     (int64_t) 2500      // SWAG that seems to work
+#define FIXED_TIME2_0       (int64_t) 0
+#define FIXED_TIME2_1       (int64_t) 0
+#define FUDGE0_0            (int64_t) 0
+#define FUDGE0_1            (int64_t) 0
+
 void print_MeasureMode(MeasureMode x);
 
 // configuration structure type
 struct config_t {
   byte       VERSION = EEPROM_VERSION; // one byte   
   char       SW_VERSION[17];           // up to 16 bytes plus term
-  char       BOARD_VERSION;            // one byte   
+  char       BOARD_REV;            // one byte   
   char       BOARD_ID[17];             // up to 16 bytes plus term
   
   // global settings:

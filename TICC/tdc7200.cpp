@@ -23,12 +23,13 @@ extern int16_t CAL_PERIODS;
 extern 
 
 // Constructor
-tdc7200Channel::tdc7200Channel(char id, int enable, int intb, int csb, int stop):
-	ID(id), ENABLE(enable), INTB(intb), CSB(csb), STOP(stop) {
+tdc7200Channel::tdc7200Channel(char id, int enable, int intb, int csb, int stop, int led) :
+	ID(id), ENABLE(enable), INTB(intb), CSB(csb), STOP(stop), LED(led) {
 	pinMode(ENABLE,OUTPUT);
 	pinMode(INTB,INPUT);
 	pinMode(CSB,OUTPUT);
 	pinMode(STOP,INPUT);
+  pinMode(LED, OUTPUT);
 };
 
 // TDC7200 configure

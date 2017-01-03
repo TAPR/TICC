@@ -268,7 +268,10 @@ void calibrationPeriods(struct config_t *pConfigInfo)
 void timeout(struct config_t *pConfigInfo)
 {
   int64_t timeout;
-  Serial.print("Timeout "), Serial.print((int32_t)pConfigInfo->TIMEOUT), Serial.println(" Choose a value in the range 0 to 255.  Default 5");  // casting to int32_t discards upper 32 bits
+  char str[8];
+  sprintf(str, "0x%02X", (int32_t)pConfigInfo->TIMEOUT);
+  
+  Serial.print("Timeout "), Serial.print(str), Serial.println(" Choose a value in the range 0 to 255.  Default 5");  // casting to int32_t discards upper 32 bits
   Serial.println("Enter new value and press Enter (or just Enter for no change)");
   getLine();
   inputLineReadIndex = 0;
@@ -391,39 +394,26 @@ struct config_t defaultConfig() {
   strncpy(x.SW_VERSION,SW_VERSION,sizeof(SW_VERSION));
   x.BOARD_REV = BOARD_REVISION;
   strncpy(x.BOARD_ID,BOARD_ID,sizeof(BOARD_ID));
-  x.MODE = MEASUREMENT_MODE;
-  x.CLOCK_HZ = CLOCK_HERTZ;
-  x.PICTICK_PS = PICTICK_PICOS;
-  x.CAL_PERIODS = CAL_PER;
-  x.TIMEOUT = TIMEOUT_HEX;
-  x.SYNC_MODE = SYNC;
-  x.START_EDGE[0] = START_EDGE_0;
-  x.START_EDGE[1] = START_EDGE_1;
-  x.TIME_DILATION[0] = TIME_DILATION_0;
-  x.TIME_DILATION[1] = TIME_DILATION_1;
-  x.FIXED_TIME2[0] = FIXED_TIME2_0;
-  x.FIXED_TIME2[1] = FIXED_TIME2_1;
-  x.FUDGE0[0] = FUDGE0_0;
-  x.FUDGE0[1] = FUDGE0_1;
+  x.MODE = DEFAULT_MODE;
+  x.CLOCK_HZ = DEFAULT_CLOCK_HZ;
+  x.PICTICK_PS = DEFAULT_PICTICK_PS;
+  x.CAL_PERIODS = DEFAULT_CAL_PERIODS;
+  x.TIMEOUT = DEFAULT_TIMEOUT;
+  x.SYNC_MODE = DEFAULT_SYNC_MODE;
+  x.START_EDGE[0] = DEFAULT_START_EDGE_0;
+  x.START_EDGE[1] = DEFAULT_START_EDGE_1;
+  x.TIME_DILATION[0] = DEFAULT_TIME_DILATION_0;
+  x.TIME_DILATION[1] = DEFAULT_TIME_DILATION_1;
+  x.FIXED_TIME2[0] = DEFAULT_FIXED_TIME2_0;
+  x.FIXED_TIME2[1] = DEFAULT_FIXED_TIME2_1;
+  x.FUDGE0[0] = DEFAULT_FUDGE0_0;
+  x.FUDGE0[1] = DEFAULT_FUDGE0_1;
   return x;
 }
 
 void initializeConfig(struct config_t *x)
 {
-  x->MODE = Timestamp; // MODE
-  x->CLOCK_HZ = 10000000; // 10 MHz
-  x->PICTICK_PS = 100000000; // 100us
-  x->CAL_PERIODS = 20; // CAL_PERIODS (2, 10, 20, 40)
-  x->TIMEOUT = 0x05; // measurement timeout
-  x->SYNC_MODE = 'M';
-  x->START_EDGE[0] = 'R';
-  x->START_EDGE[1] = 'R';
-  x->TIME_DILATION[0] = 2500;  // SWAG that seems to work
-  x->TIME_DILATION[1] = 2500;  // SWAG that seems to work
-  x->FIXED_TIME2[0] = 0;
-  x->FIXED_TIME2[1] = 0;
-  x->FUDGE0[0] = 0;
-  x->FUDGE0[1] = 0;
+  *x = defaultConfig();
 }
 void doSetupMenu(struct config_t *pConfigInfo)      // also display the default values ----------------
 {
@@ -435,37 +425,42 @@ void doSetupMenu(struct config_t *pConfigInfo)      // also display the default 
   Serial.print("S   clock Speed  (MHz)      "); printHzAsMHz(pConfigInfo->CLOCK_HZ), Serial.println("       default 10");           // int_64, default 1e7
   Serial.print("C   Coarse Clock Rate (us)  "); printHzAsMHz(pConfigInfo->PICTICK_PS), Serial.println("      default 100");         // int_64, default 1e8
   Serial.print("P   calibration Periods     "); Serial.print((int32_t)pConfigInfo->CAL_PERIODS); Serial.println("              default 20");// int_16, choices are 2, 10, 20, 40; default 20
-  Serial.print("T   Timeout                 "); Serial.print((int32_t)pConfigInfo->TIMEOUT); Serial.println("               default 5");             // int_16, default 5
+  Serial.print("T   Timeout                 "); 
+          char str[8];
+          sprintf(str, "0x%02X", (int32_t)pConfigInfo->TIMEOUT);
+          Serial.print(str); 
+          Serial.println("            default 0x05");          // int_16, default 5
   Serial.print("Y   sync:  master / slave   "); Serial.print(pConfigInfo->SYNC_MODE); Serial.println("               default M");                // M (default) or S
     
   Serial.print("E   trigger Edge            ");     // R(ising) or F(alling)
     	    Serial.print(pConfigInfo->START_EDGE[0]);
     	    Serial.print(' ');
-    	    Serial.println(pConfigInfo->START_EDGE[1]);
-    	
+    	    Serial.print(pConfigInfo->START_EDGE[1]);
+    	    Serial.println("             default R");
+          
   Serial.print("D   time Dilation           ");       // int_64, default 2500
     	    Serial.print((int32_t)pConfigInfo->TIME_DILATION[0]);
     	    Serial.print(' ');
-        Serial.print((int32_t)pConfigInfo->TIME_DILATION[1]);
-        Serial.println("       default 2500");
+          Serial.print((int32_t)pConfigInfo->TIME_DILATION[1]);
+          Serial.println("       default 2500");
     	
   Serial.print("F   Fixed Time2             ");   // int_64, default 0
         Serial.print((int32_t)pConfigInfo->FIXED_TIME2[0]);
         Serial.print(' ');
-      Serial.print((int32_t)pConfigInfo->FIXED_TIME2[1]);
-      Serial.println("          default 0");
+        Serial.print((int32_t)pConfigInfo->FIXED_TIME2[1]);
+        Serial.println("             default 0");
      
   Serial.print("G   fudge0                  ");   // int_64, default 0
-    	    Serial.print((int32_t)pConfigInfo->FUDGE0[0]);
-    	    Serial.print(' ');
+        Serial.print((int32_t)pConfigInfo->FUDGE0[0]);
+    	  Serial.print(' ');
         Serial.print((int32_t)pConfigInfo->FUDGE0[1]);
         Serial.println("             default 0");
     	
   Serial.println();
   Serial.println("R   Reset all to default values");
   Serial.println("W   Write changes and exit setup");
-    Serial.println("Z   Discard changes and exit setup");
-    Serial.println("choose one: ");
+  Serial.println("Z   Discard changes and exit setup");
+  Serial.println("choose one: ");
     
     response = toupper(getChar());    // wait for a character
   
@@ -481,8 +476,7 @@ void doSetupMenu(struct config_t *pConfigInfo)      // also display the default 
     		break;
       case 'T':  timeout(pConfigInfo);
     		break;
-      case 'Y':  Serial.println("Y selected");
-      masterSlave(pConfigInfo); // (sync mode)
+      case 'Y':  masterSlave(pConfigInfo); // (sync mode)
     		break;
       case 'E':  triggerEdge(pConfigInfo);
     		break;
@@ -513,14 +507,15 @@ void UserConfig(struct config_t *pConfigInfo)
     char c;
     while ( ! Serial )   /* wait until Serial port is open */ ;
 
-    Serial.println("Type any character to make changes to TICC configuration.");
+    Serial.println("# Type any character for config menu");  // leading hash so logging programs can ignore
+    Serial.print("# ");
     bool configRequested = 0;
     for (int i = 6; i >= 0; --i)  // wait ~6 sec so user can type something
     { 
       delay(250);   Serial.print('.');      if (Serial.available())       { configRequested = 1;        break;      }
       delay(250);   Serial.print('.');      if (Serial.available())       { configRequested = 1;        break;      }
       delay(250);   Serial.print('.');      if (Serial.available())       { configRequested = 1;        break;      }
-      delay(250);   Serial.print(i);        if (Serial.available())       { configRequested = 1;        break;      }
+      delay(250);   Serial.print('.');      if (Serial.available())       { configRequested = 1;        break;      }
     }
     while (Serial.available()) c = Serial.read();   // eat any characters entered before we start  doSetupMenu()
     if (configRequested) doSetupMenu(pConfigInfo); 
@@ -555,22 +550,22 @@ void eeprom_write_config_default (uint16_t offset) {
 
 void print_config (config_t x) {
   char tmpbuf[8];
-  Serial.print("Measurement Mode: ");print_MeasureMode(MeasureMode(x.MODE));
-  Serial.print("EEPROM Version: ");Serial.print(EEPROM.read(CONFIG_START)); 
+  Serial.print("# Measurement Mode: ");print_MeasureMode(MeasureMode(x.MODE));
+  Serial.print("# EEPROM Version: ");Serial.print(EEPROM.read(CONFIG_START)); 
   Serial.print(", Board Version: ");Serial.println(x.BOARD_REV);
-  Serial.print("Software Version: ");Serial.println(x.SW_VERSION);
-  Serial.print("Board Serial Number: ");Serial.println(x.BOARD_ID); 
-  Serial.print("Clock Speed: ");Serial.println((uint32_t)x.CLOCK_HZ);
-  Serial.print("Coarse tick (ps): ");Serial.println((uint32_t)x.PICTICK_PS);
-  Serial.print("Cal Periods: ");Serial.println(x.CAL_PERIODS);
-  Serial.print("SyncMode: ");Serial.println(x.SYNC_MODE);
-  Serial.print("Timeout: ");
+  Serial.print("# Software Version: ");Serial.println(x.SW_VERSION);
+  Serial.print("# Board Serial Number: ");Serial.println(x.BOARD_ID); 
+  Serial.print("# Clock Speed: ");Serial.println((uint32_t)x.CLOCK_HZ);
+  Serial.print("# Coarse tick (ps): ");Serial.println((uint32_t)x.PICTICK_PS);
+  Serial.print("# Cal Periods: ");Serial.println(x.CAL_PERIODS);
+  Serial.print("# SyncMode: ");Serial.println(x.SYNC_MODE);
+  Serial.print("# Timeout: ");
   sprintf(tmpbuf,"0x%.2X",x.TIMEOUT);Serial.println(tmpbuf);
-  Serial.print("Time Dilation: ");Serial.print((int32_t)x.TIME_DILATION[0]);
+  Serial.print("# Time Dilation: ");Serial.print((int32_t)x.TIME_DILATION[0]);
   Serial.print(" (chA), ");Serial.print((int32_t)x.TIME_DILATION[1]);Serial.println(" (chB)");
-  Serial.print("FIXED_TIME2: ");Serial.print((int32_t)x.FIXED_TIME2[0]);
+  Serial.print("# FIXED_TIME2: ");Serial.print((int32_t)x.FIXED_TIME2[0]);
   Serial.print(" (chA), ");Serial.print((int32_t)x.FIXED_TIME2[1]);Serial.println(" (chB)");
-  Serial.print("FUDGE0: ");Serial.print((int32_t)x.FUDGE0[0]);
+  Serial.print("# FUDGE0: ");Serial.print((int32_t)x.FUDGE0[0]);
   Serial.print(" (chA), ");Serial.print((int32_t)x.FUDGE0[1]);Serial.println(" (chB)");
 }
 

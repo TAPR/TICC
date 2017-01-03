@@ -8,13 +8,14 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
+/* All other configuration defaults are in config.h */
+extern const char SW_VERSION[17] = "20170103.1";    // 2 January 2017 - version 1
+extern const char BOARD_ID[17] =   "0123";          // how to set this for each board?
+/****************************************************/
+
+
 //#define DETAIL_TIMING     // if enabled, prints execution time
 
-/********************************
-All other configuration defaults are in config.h
-*********************************/
-extern const char SW_VERSION[17] = "20170101.1";    // 1 January 2017 - version 1
-extern const char BOARD_ID[17] =   "0123";          // how to set this for each board?
 
 #include <stdint.h>           // define unint16_t, uint32_t
 #include <SPI.h>              // SPI support
@@ -79,14 +80,14 @@ void setup() {
   
   // print banner
   Serial.println();
-  Serial.println("TAPR TICC Timestamping Counter");
-  Serial.println("Copyright 2017 N8UR, K9TRG, NH6Z, WA8YWQ");
+  Serial.println("# TAPR TICC Timestamping Counter");
+  Serial.println("# Copyright 2017 N8UR, K9TRG, NH6Z, WA8YWQ");
   Serial.println();
 
-  Serial.println("*******************");
-  Serial.println("TICC Configuration: ");
+  Serial.println("#####################");
+  Serial.println("# TICC Configuration: ");
   print_config(config);
-  Serial.println("*******************");
+  Serial.println("#####################");
   
   // get and save config change
   UserConfig(&config);

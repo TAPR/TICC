@@ -10,58 +10,63 @@
 
 #include <EEPROM.h>
 
+#define PS_PER_SEC                (int64_t)  1000000000000   // ps/s
 enum MeasureMode : unsigned char {Timestamp, Interval, Period, timeLab, Debug};
 
-// system defines -- do not change!
-#define BOARD_REVISION    'D'             // production version is 'D'
-#define EEPROM_VERSION    (byte)     98              // eeprom struct version
-#define CONFIG_START      (byte)     0x00            // first byte of config in eeprom
-#define PS_PER_SEC        (int64_t)  1000000000000   // ps/s
+/*****************************************************************/
+// system defines
+#define BOARD_REVISION            'D'                        // production version is 'D'
+#define EEPROM_VERSION            (byte)     6               // eeprom struct version
+#define CONFIG_START              (byte)     0x00            // first byte of config in eeprom
 
+/*****************************************************************/
 // default values for config struct
-#define MEASUREMENT_MODE    (MeasureMode) 0     // Measurement mode -- 0 is Timestamp
-#define CLOCK_HERTZ         (int64_t) 10000000  // 10 MHz
-#define PICTICK_PICOS       (int64_t) 100000000 // 100us
-#define CAL_PER             (int16_t) 20        // CAL_PERIODS (2, 10, 20, 40)
-#define TIMEOUT_HEX         (byte)    0x05      // measurement timeout
-#define SYNC                (char)    'M'       // (M)aster or (S)lave
-#define START_EDGE_0        (char)    'R'       // (R)ising or (F)alling
-#define START_EDGE_1        (char)    'R'       // (R)ising or (F)alling
-#define TIME_DILATION_0     (int64_t) 2500      // SWAG that seems to work
-#define TIME_DILATION_1     (int64_t) 2500      // SWAG that seems to work
-#define FIXED_TIME2_0       (int64_t) 0
-#define FIXED_TIME2_1       (int64_t) 0
-#define FUDGE0_0            (int64_t) 0
-#define FUDGE0_1            (int64_t) 0
+#define DEFAULT_MODE              (MeasureMode) 0       // Measurement mode -- 0 is Timestamp
+#define DEFAULT_CLOCK_HZ          (int64_t) 10000000    // 10 MHz
+#define DEFAULT_PICTICK_PS        (int64_t) 100000000   // 100us
+#define DEFAULT_CAL_PERIODS       (int16_t) 20          // CAL_PERIODS (2, 10, 20, 40)
+#define DEFAULT_TIMEOUT           (byte)    0x05        // measurement timeout
+#define DEFAULT_SYNC_MODE         (char)    'M'         // (M)aster or (S)lave
+#define DEFAULT_START_EDGE_0      (char)    'R'         // (R)ising or (F)alling
+#define DEFAULT_START_EDGE_1      (char)    'R'         // (R)ising or (F)alling
+#define DEFAULT_TIME_DILATION_0   (int64_t) 2500        // SWAG that seems to work
+#define DEFAULT_TIME_DILATION_1   (int64_t) 2500        // SWAG that seems to work
+#define DEFAULT_FIXED_TIME2_0     (int64_t) 0           // 0 to calculate, or fixed (~1135)
+#define DEFAULT_FIXED_TIME2_1     (int64_t) 0           // 0 to calculate, or fixed (~1135)
+#define DEFAULT_FUDGE0_0          (int64_t) 0           // Fudge channel A value (ps)
+#define DEFAULT_FUDGE0_1          (int64_t) 0           // Fudge channel B value (ps)
 
-void print_MeasureMode(MeasureMode x);
-
+/*****************************************************************/
 // configuration structure type
 struct config_t {
-  byte       VERSION = EEPROM_VERSION; // one byte   
-  char       SW_VERSION[17];           // up to 16 bytes plus term
-  char       BOARD_REV;            // one byte   
-  char       BOARD_ID[17];             // up to 16 bytes plus term
+  byte       VERSION = EEPROM_VERSION;  // one byte   
+  char       SW_VERSION[17];            // up to 16 bytes plus term
+  char       BOARD_REV;                 // one byte   
+  char       BOARD_ID[17];              // up to 16 bytes plus term
   
   // global settings:
-  MeasureMode MODE;                 // (T)imestamp, time (I)nterval
-                                    // Time(L)ab, (P)eriod, (D)ebug (default 'T')
-  int64_t    CLOCK_HZ;              // clock in Hz (default 10 000 000)
-  int64_t    PICTICK_PS;            // coarse tick (default 100 000 000)
-  int16_t    CAL_PERIODS;           // cal periods 2, 10, 20, 40 (default 20)
-  int16_t    TIMEOUT;              // timeout for measurement in hex (default 0x05)
-  char       SYNC_MODE;                // one byte:  'M' for master,  'S' for slave
+  MeasureMode MODE;                     // (T)imestamp, time (I)nterval
+                                        // Time(L)ab, (P)eriod, (D)ebug (default 'T')
+  int64_t    CLOCK_HZ;                  // clock in Hz (default 10 000 000)
+  int64_t    PICTICK_PS;                // coarse tick (default 100 000 000)
+  int16_t    CAL_PERIODS;               // cal periods 2, 10, 20, 40 (default 20)
+  byte       TIMEOUT;                   // timeout for measurement in hex (default 0x05)
+  char       SYNC_MODE;                 // one byte:  'M' for master,  'S' for slave
   
   // per-channel settings, arrays of 2 for channels A and B:
-  char       START_EDGE[2];         // (R)ising (default) or (F)alling edge 
-  int64_t    TIME_DILATION[2];      // time dilation factor (default 2500)
-  int64_t    FIXED_TIME2[2];        // if >0 use to replace time2 (default 0)
-  int64_t    FUDGE0[2];             // fudge factor (ps) (default 0)
+  char       START_EDGE[2];            // (R)ising (default) or (F)alling edge 
+  int64_t    TIME_DILATION[2];         // time dilation factor (default 2500)
+  int64_t    FIXED_TIME2[2];           // if >0 use to replace time2 (default 0)
+  int64_t    FUDGE0[2];                // fudge factor (ps) (default 0)
   
 };
 
+/*****************************************************************/
+// exposed function prototypes
 void UserConfig(struct config_t *config);
+void print_MeasureMode(MeasureMode x);
 
+/*****************************************************************/
 // These allow us to read/write struct in eeprom
 template <class T> int EEPROM_writeAnything(int ee, const T& value)
 {
@@ -82,7 +87,6 @@ template <class T> int EEPROM_readAnything(int ee, T& value)
 }
 
 // read and write config struct in eeprom
-
 void eeprom_write_config_default (uint16_t offset);
 void print_config (config_t x);
 

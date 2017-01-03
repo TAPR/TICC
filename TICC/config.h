@@ -25,7 +25,7 @@ enum MeasureMode : unsigned char {Timestamp, Interval, Period, timeLab, Debug};
 #define DEFAULT_CLOCK_HZ          (int64_t) 10000000    // 10 MHz
 #define DEFAULT_PICTICK_PS        (int64_t) 100000000   // 100us
 #define DEFAULT_CAL_PERIODS       (int16_t) 20          // CAL_PERIODS (2, 10, 20, 40)
-#define DEFAULT_TIMEOUT           (byte)    0x05        // measurement timeout
+#define DEFAULT_TIMEOUT           (int16_t)  0x05        // measurement timeout
 #define DEFAULT_SYNC_MODE         (char)    'M'         // (M)aster or (S)lave
 #define DEFAULT_START_EDGE_0      (char)    'R'         // (R)ising or (F)alling
 #define DEFAULT_START_EDGE_1      (char)    'R'         // (R)ising or (F)alling
@@ -50,7 +50,7 @@ struct config_t {
   int64_t    CLOCK_HZ;                  // clock in Hz (default 10 000 000)
   int64_t    PICTICK_PS;                // coarse tick (default 100 000 000)
   int16_t    CAL_PERIODS;               // cal periods 2, 10, 20, 40 (default 20)
-  byte       TIMEOUT;                   // timeout for measurement in hex (default 0x05)
+  int16_t    TIMEOUT;                   // timeout for measurement in hex (default 0x05)
   char       SYNC_MODE;                 // one byte:  'M' for master,  'S' for slave
   
   // per-channel settings, arrays of 2 for channels A and B:

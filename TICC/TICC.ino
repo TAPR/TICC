@@ -1,4 +1,3 @@
-#include <EEPROM.h>
 
 // TICC.ino - master sketch file
 // TICC Time interval Counter based on TICC Shield using TDC7200
@@ -8,17 +7,17 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-/* All other configuration defaults are in config.h */
-extern const char SW_VERSION[17] = "20170103.1";    // 2 January 2017 - version 1
-extern const char BOARD_ID[17] =   "0123";          // how to set this for each board?
-/****************************************************/
-
+extern const char SW_VERSION[17] = "20170108.1";    // 8 January 2017 - version 1
 
 //#define DETAIL_TIMING     // if enabled, prints execution time
 
-
 #include <stdint.h>           // define unint16_t, uint32_t
 #include <SPI.h>              // SPI support
+#include <EEPROM.h>
+
+// install EnableInterrupt from the .zip file in the main TICC folder
+// or download from https://github.com/GreyGnome/EnableInterrupt
+// use Sketch/Include Library/Add .ZIP Library to install
 #include <EnableInterrupt.h>  // use faster interrupt library
 
 #include "config.h"           // config and eeprom
@@ -67,8 +66,10 @@ void setup() {
   /*******************************************
    * Configuration read/change/store
   *******************************************/
-  // if no config stored, or wrong version, restore from default 
+  // check or assign serial number
+  get_serial_number();
   
+  // if no config stored, or wrong version, restore from default 
   if ( EEPROM.read(CONFIG_START) != EEPROM_VERSION) { 
     Serial.println("No config found.  Writing default...");
     eeprom_write_config_default(CONFIG_START);  

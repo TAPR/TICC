@@ -18,8 +18,8 @@
 #include "board.h"            // Arduino pin definitions
 #include "tdc7200.h"          // TDC registers and structures
 
-extern const char SW_VERSION[17];
-extern const char BOARD_ID[17];
+extern const char SW_VERSION[17]; // set in TICC.ino
+char SER_NUM[17];          // set by get_ser_num();
 
 #define inputLineIndexMax 125
 char inputLine[128];    // The above define is less than the declared size to ensure against overflow
@@ -393,7 +393,7 @@ struct config_t defaultConfig() {
   x.VERSION == EEPROM_VERSION;
   strncpy(x.SW_VERSION,SW_VERSION,sizeof(SW_VERSION));
   x.BOARD_REV = BOARD_REVISION;
-  strncpy(x.BOARD_ID,BOARD_ID,sizeof(BOARD_ID));
+  strncpy(x.SER_NUM,SER_NUM,sizeof(SER_NUM));
   x.MODE = DEFAULT_MODE;
   x.CLOCK_HZ = DEFAULT_CLOCK_HZ;
   x.PICTICK_PS = DEFAULT_PICTICK_PS;
@@ -554,7 +554,7 @@ void print_config (config_t x) {
   Serial.print("# EEPROM Version: ");Serial.print(EEPROM.read(CONFIG_START)); 
   Serial.print(", Board Version: ");Serial.println(x.BOARD_REV);
   Serial.print("# Software Version: ");Serial.println(x.SW_VERSION);
-  Serial.print("# Board Serial Number: ");Serial.println(x.BOARD_ID); 
+  Serial.print("# Board Serial Number: ");Serial.println(x.SER_NUM); 
   Serial.print("# Clock Speed: ");Serial.println((uint32_t)x.CLOCK_HZ);
   Serial.print("# Coarse tick (ps): ");Serial.println((uint32_t)x.PICTICK_PS);
   Serial.print("# Cal Periods: ");Serial.println(x.CAL_PERIODS);
@@ -569,4 +569,35 @@ void print_config (config_t x) {
   Serial.print(" (chA), ");Serial.print((int32_t)x.FUDGE0[1]);Serial.println(" (chB)");
 }
 
+void get_serial_number() { 
+
+  // Serial number is 8 bytes.  On first run,
+  // check location and if not found, use random()
+  // to generate.  If found, just read, format as string,
+  // and set config.SER_NUM
+  
+  int32_t x,y;  // 2 longs because sprintf can't handle uint64
+  
+  EEPROM_readAnything(SER_NUM_START,x);
+  EEPROM_readAnything(SER_NUM_START+4,y);
+
+  // New Ardiuno has all EEPROM set to 0xFF; example
+  // clear routine sets to 0x00.  Test for both
+  // If no serial number, make one
+  if ( ((x == 0xFFFFFFFF) && (y == 0xFFFFFFFF)) ||
+       ((x == 0x00000000) && (y == 0x00000000)) ) {
+    Serial.println("No serial number found... making one");
+    randomSeed(analogRead(A0));  // seed with noise from A0
+    x = random(0xFFFF);
+    randomSeed(analogRead(A3));  // seed with noise from A3
+    y = random(0xFFFF);
+    EEPROM_writeAnything(SER_NUM_START,x);
+    EEPROM_writeAnything(SER_NUM_START+4,y);
+    sprintf(SER_NUM, "%04lX%04lX", x,y); 
+    Serial.print("Serial Number: ");
+    Serial.println(SER_NUM);
+    delay(7500);
+  }
+  sprintf(SER_NUM, "%04lX%04lX", x,y);
+}
 

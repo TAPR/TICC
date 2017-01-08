@@ -9,16 +9,16 @@
 // Licensed under BSD 2-clause license
 
 #include <EEPROM.h>
-
 #define PS_PER_SEC                (int64_t)  1000000000000   // ps/s
+
 enum MeasureMode : unsigned char {Timestamp, Interval, Period, timeLab, Debug};
 
 /*****************************************************************/
 // system defines
-#define BOARD_REVISION            'D'                        // production version is 'D'
-#define EEPROM_VERSION            (byte)     6               // eeprom struct version
-#define CONFIG_START              (byte)     0x00            // first byte of config in eeprom
-
+#define BOARD_REVISION            'D'                   // production version is 'D'
+#define EEPROM_VERSION            (byte)     7          // eeprom struct version
+#define CONFIG_START              (byte)     0x00       // first byte of config in eeprom
+#define SER_NUM_START             (int16_t)  0x0FF0     // first byte of serial number in eeprom
 /*****************************************************************/
 // default values for config struct
 #define DEFAULT_MODE              (MeasureMode) 0       // Measurement mode -- 0 is Timestamp
@@ -42,7 +42,7 @@ struct config_t {
   byte       VERSION = EEPROM_VERSION;  // one byte   
   char       SW_VERSION[17];            // up to 16 bytes plus term
   char       BOARD_REV;                 // one byte   
-  char       BOARD_ID[17];              // up to 16 bytes plus term
+  char       SER_NUM[17];              // up to 16 bytes plus term
   
   // global settings:
   MeasureMode MODE;                     // (T)imestamp, time (I)nterval
@@ -65,6 +65,7 @@ struct config_t {
 // exposed function prototypes
 void UserConfig(struct config_t *config);
 void print_MeasureMode(MeasureMode x);
+void get_serial_number();
 
 /*****************************************************************/
 // These allow us to read/write struct in eeprom

@@ -491,10 +491,22 @@ void doSetupMenu(struct config_t *pConfigInfo)      // also display the default 
       case 'W':  // write changes and exit
                       EEPROM_writeAnything(CONFIG_START, *pConfigInfo); // save change to config
                       return;
-    		break;
-    		case 'Z':	// discard changes and exit
+    	  break; 
+    		
+    	case 'Z':	// discard changes and exit
                         return;
-    		break;
+    	  break;
+      
+      // this doesn't show up in the menu -- reset entire eeprom to 0xFF (factory
+      // default).  Restart the board to write new serial number and defaults.
+      case 'X':
+        Serial.println("");
+        Serial.println("Setting EEPROM to factory status.  Stand by...");
+        eeprom_clear();
+        Serial.println("Finished.  Restart to set serial number and config defaults.");
+        Serial.println("");
+        return;
+        break;      
       default:  Serial.println("???");  // 'bad selection'
     		break;
     }   // switch
@@ -520,9 +532,6 @@ void UserConfig(struct config_t *pConfigInfo)
     while (Serial.available()) c = Serial.read();   // eat any characters entered before we start  doSetupMenu()
     if (configRequested) doSetupMenu(pConfigInfo); 
 }
-  
-
-
 
 // Pretty-print mode
 void print_MeasureMode(MeasureMode x) {
@@ -553,10 +562,11 @@ void print_config (config_t x) {
   Serial.print("# Measurement Mode: ");print_MeasureMode(MeasureMode(x.MODE));
   Serial.print("# EEPROM Version: ");Serial.print(EEPROM.read(CONFIG_START)); 
   Serial.print(", Board Version: ");Serial.println(x.BOARD_REV);
-  Serial.print("# Software Version: ");Serial.println(x.SW_VERSION);
+  // Print SW version from const, not from eeprom (which won't update until next "W" command)
+  Serial.print("# Software Version: ");Serial.println(SW_VERSION);
   Serial.print("# Board Serial Number: ");Serial.println(x.SER_NUM); 
-  Serial.print("# Clock Speed: ");Serial.println((uint32_t)x.CLOCK_HZ);
-  Serial.print("# Coarse tick (ps): ");Serial.println((uint32_t)x.PICTICK_PS);
+  Serial.print("# Clock Speed: ");printHzAsMHz(x.CLOCK_HZ);Serial.println(" MHz");
+  Serial.print("# Coarse tick: ");printHzAsMHz(x.PICTICK_PS);Serial.println(" usec");
   Serial.print("# Cal Periods: ");Serial.println(x.CAL_PERIODS);
   Serial.print("# SyncMode: ");Serial.println(x.SYNC_MODE);
   Serial.print("# Timeout: ");
@@ -599,5 +609,12 @@ void get_serial_number() {
     delay(7500);
   }
   sprintf(SER_NUM, "%04lX%04lX", x,y);
+}
+
+void eeprom_clear() {
+  // write 0xFF (factory default) to entire eeprom area
+  for (int i = 0 ; i < EEPROM.length() ; i++) {
+  EEPROM.write(i, 0xFF);
+  } 
 }
 

@@ -186,6 +186,12 @@ void loop() {
      #endif
        
 
+    // if poll character is not null, only output if we've received that character via serial
+    // NOTE: this may provide random results if measuring timestamp from both channels!
+    if ( (!config.POLL_CHAR)  ||  // if unset, output everything
+       ( (Serial.available() > 0) && (Serial.read() == config.POLL_CHAR) ) ) {     
+       
+       
        // print results -- single channel modes
        if ( (config.MODE == Timestamp) || (config.MODE == Debug) ) {
         if (channels[i].ts > 0) { // check for sane value
@@ -202,7 +208,7 @@ void loop() {
        
        // print results -- dual channel modes
        if ( (channels[0].ts > 1) && (channels[1].ts > 1) ) { // need both channels to be sane
-         
+        
          channels[0].last_ts = channels[0].ts; // save last values
          channels[1].last_ts = channels[1].ts;   
          
@@ -229,8 +235,10 @@ void loop() {
          
          channels[0].ts = 0; // set to zero for test next time
          channels[1].ts = 0;
-       
-       } // dual channel measurements          
+      
+       }  // dual channel measurements          
+    
+    }
 
        // turn LED off
        digitalWrite(channels[i].LED,LOW);

@@ -16,16 +16,17 @@ enum MeasureMode : unsigned char {Timestamp, Interval, Period, timeLab, Debug};
 /*****************************************************************/
 // system defines
 #define BOARD_REVISION            'D'                   // production version is 'D'
-#define EEPROM_VERSION            (byte)     7          // eeprom struct version
+#define EEPROM_VERSION            (byte)     8          // eeprom struct version
 #define CONFIG_START              (byte)     0x00       // first byte of config in eeprom
 #define SER_NUM_START             (int16_t)  0x0FF0     // first byte of serial number in eeprom
 /*****************************************************************/
 // default values for config struct
 #define DEFAULT_MODE              (MeasureMode) 0       // Measurement mode -- 0 is Timestamp
+#define DEFAULT_POLL_CHAR         (char)    0x00        // In poll mode, wait for this before output
 #define DEFAULT_CLOCK_HZ          (int64_t) 10000000    // 10 MHz
 #define DEFAULT_PICTICK_PS        (int64_t) 100000000   // 100us
 #define DEFAULT_CAL_PERIODS       (int16_t) 20          // CAL_PERIODS (2, 10, 20, 40)
-#define DEFAULT_TIMEOUT           (int16_t)  0x05        // measurement timeout
+#define DEFAULT_TIMEOUT           (int16_t)  0x05       // measurement timeout
 #define DEFAULT_SYNC_MODE         (char)    'M'         // (M)aster or (S)lave
 #define DEFAULT_START_EDGE_0      (char)    'R'         // (R)ising or (F)alling
 #define DEFAULT_START_EDGE_1      (char)    'R'         // (R)ising or (F)alling
@@ -47,6 +48,7 @@ struct config_t {
   // global settings:
   MeasureMode MODE;                     // (T)imestamp, time (I)nterval
                                         // Time(L)ab, (P)eriod, (D)ebug (default 'T')
+  char       POLL_CHAR;                 // In poll mode, wiat for this before output
   int64_t    CLOCK_HZ;                  // clock in Hz (default 10 000 000)
   int64_t    PICTICK_PS;                // coarse tick (default 100 000 000)
   int16_t    CAL_PERIODS;               // cal periods 2, 10, 20, 40 (default 20)

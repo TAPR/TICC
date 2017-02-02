@@ -53,7 +53,7 @@ char getChar(int charSourceIsLine)
 }
 
 // Get a string of characters from Serial input.  Return when buffer inputLine is full or when a newline character is received.
-// The newline is  put into inputLine. In addition, inputLine is always null-terminated.
+// The newline is  put into inputLine. In addition, inputLine is always none-terminated.
 // ToDo:  
 // (1) allow use of Backspace  DONE
 // (2) allow use of Home, End, Delete;  
@@ -232,6 +232,20 @@ Serial.println("Setup mode.  Valid single-letter commands are:"), Serial.println
   } while (valid == 0);
 }
 
+void pollChar(struct config_t *pConfigInfo)
+{
+  Serial.print("Poll Character ");
+  if (pConfigInfo->POLL_CHAR) {
+    Serial.print(pConfigInfo->POLL_CHAR); // normally unse
+  } else {
+    Serial.print("unset");
+  }
+ Serial.println("   Enter one character to set; enter space to unset");
+  char c = toupper(getChar());
+  if (c == ' ') { c = 0x00; }; // so don't use space as the poll character!
+  pConfigInfo->POLL_CHAR = c; 
+}
+
 void clockSpeed(struct config_t *pConfigInfo)
 { int64_t clock;
   Serial.print("Clock speed "), printHzAsMHz(pConfigInfo->CLOCK_HZ), Serial.println(" MHz  (1 to 16 MHz, default 10 MHz)");
@@ -395,6 +409,7 @@ struct config_t defaultConfig() {
   x.BOARD_REV = BOARD_REVISION;
   strncpy(x.SER_NUM,SER_NUM,sizeof(SER_NUM));
   x.MODE = DEFAULT_MODE;
+  x.POLL_CHAR = DEFAULT_POLL_CHAR;
   x.CLOCK_HZ = DEFAULT_CLOCK_HZ;
   x.PICTICK_PS = DEFAULT_PICTICK_PS;
   x.CAL_PERIODS = DEFAULT_CAL_PERIODS;
@@ -415,13 +430,20 @@ void initializeConfig(struct config_t *x)
 {
   *x = defaultConfig();
 }
+
 void doSetupMenu(struct config_t *pConfigInfo)      // also display the default values ----------------
 {
   char response;
   for ( ; ; )
   {
-    Serial.println(), Serial.println();
+  Serial.println(), Serial.println();
   Serial.print("M   Measurement Mode        "); Serial.print( modeToChar(pConfigInfo->MODE)); Serial.println("               default T");   // enum MeasureMode, default Timestamp
+  Serial.print("H   poll cHaracter          "); 
+          if (pConfigInfo->POLL_CHAR) {
+            Serial.print(pConfigInfo->POLL_CHAR);Serial.println("               default unset");          // normally unset
+          } else {
+            Serial.print("unset");Serial.println("           default unset");
+          }
   Serial.print("S   clock Speed  (MHz)      "); printHzAsMHz(pConfigInfo->CLOCK_HZ), Serial.println("       default 10");           // int_64, default 1e7
   Serial.print("C   Coarse Clock Rate (us)  "); printHzAsMHz(pConfigInfo->PICTICK_PS), Serial.println("      default 100");         // int_64, default 1e8
   Serial.print("P   calibration Periods     "); Serial.print((int32_t)pConfigInfo->CAL_PERIODS); Serial.println("              default 20");// int_16, choices are 2, 10, 20, 40; default 20
@@ -468,9 +490,11 @@ void doSetupMenu(struct config_t *pConfigInfo)      // also display the default 
     {
       case 'M':  measurementMode(pConfigInfo);
     		break;
+      case 'H':  pollChar(pConfigInfo);
+        break;
       case 'S':  clockSpeed(pConfigInfo);
     		break;
-    		case 'C':	 coarseClockRate(pConfigInfo);
+      case 'C':	 coarseClockRate(pConfigInfo);
     		break;
       case 'P':  calibrationPeriods(pConfigInfo);
     		break;
@@ -487,14 +511,13 @@ void doSetupMenu(struct config_t *pConfigInfo)      // also display the default 
       case 'G':  fudge0(pConfigInfo);
     		break;
       case 'R': initializeConfig(pConfigInfo);
-      break;
+        break;
       case 'W':  // write changes and exit
                       EEPROM_writeAnything(CONFIG_START, *pConfigInfo); // save change to config
                       return;
     	  break; 
-    		
-    	case 'Z':	// discard changes and exit
-                        return;
+      	case 'Z':	// discard changes and exit
+                      return;
     	  break;
       
       // this doesn't show up in the menu -- reset entire eeprom to 0xFF (factory
@@ -560,6 +583,12 @@ void eeprom_write_config_default (uint16_t offset) {
 void print_config (config_t x) {
   char tmpbuf[8];
   Serial.print("# Measurement Mode: ");print_MeasureMode(MeasureMode(x.MODE));
+  Serial.print("# Poll Character: ");
+  if (x.POLL_CHAR) {
+            Serial.print(x.POLL_CHAR);Serial.println("       default none");          // normally unset
+          } else {
+            Serial.print("none");Serial.println("    default none");
+          }
   Serial.print("# EEPROM Version: ");Serial.print(EEPROM.read(CONFIG_START)); 
   Serial.print(", Board Version: ");Serial.println(x.BOARD_REV);
   // Print SW version from const, not from eeprom (which won't update until next "W" command)

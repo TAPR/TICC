@@ -7,7 +7,7 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-extern const char SW_VERSION[17] = "20170202.1";    // 2 February 2017 - version 1
+extern const char SW_VERSION[17] = "20170213.1";    // 13 February 2017 - version 1
 
 //#define DETAIL_TIMING     // if enabled, prints execution time
 
@@ -17,7 +17,7 @@ extern const char SW_VERSION[17] = "20170202.1";    // 2 February 2017 - version
 
 // install EnableInterrupt from the .zip file in the main TICC folder
 // or download from https://github.com/GreyGnome/EnableInterrupt
-// use Sketch/Include Library/Add .ZIP Library to install
+// use "Sketch/Include Library/Add .ZIP Library" to install
 #include <EnableInterrupt.h>  // use faster interrupt library
 
 #include "config.h"           // config and eeprom
@@ -49,11 +49,12 @@ static tdc7200Channel channels[] = {
 /****************************************************************/
 void setup() {
   int i;
+  boolean last_pin;
   
   pinMode(COARSEint, INPUT);
   pinMode(OUT1, OUTPUT);
   pinMode(OUT2, OUTPUT);
-
+  
   // turn on the LEDs to show we're alive
   digitalWrite(LED_A, HIGH);
   digitalWrite(LED_B, HIGH);
@@ -79,7 +80,7 @@ void setup() {
   EEPROM_readAnything(CONFIG_START, config); 
   lastMODE = config.MODE;
   
-  // print banner
+  // print banner -- all non-data output lines begin with "#" so they're seen as comments
   Serial.println();
   Serial.println("# TAPR TICC Timestamping Counter");
   Serial.println("# Copyright 2017 N8UR, K9TRV, NH6Z, WA8YWQ");
@@ -98,10 +99,7 @@ void setup() {
   CLOCK_PERIOD = (PS_PER_SEC/CLOCK_HZ);
   PICTICK_PS = config.PICTICK_PS;
   CAL_PERIODS = config.CAL_PERIODS;
-  
-  PICcount = 0;
-  
-     
+      
   for(i = 0; i < ARRAY_SIZE(channels); ++i) {
     // initialize the channels struct variables
     channels[i].totalize = 0;
@@ -117,9 +115,39 @@ void setup() {
     channels[i].ready_next();
   }
   
-  enableInterrupt(COARSEint, coarseTimer, FALLING);  // if using NEEDFORSPEED, don't declare this
-  enableInterrupt(STOP_A, catch_stopA, RISING);
-  enableInterrupt(STOP_B, catch_stopB, RISING);
+  /*******************************************
+   * Synchrnonize multiple TICCs sharing common 10 MHz and 10 kHz clocks.
+  *******************************************/ 
+  if (config.SYNC_MODE == 'M') {                     // if we are master, send sync by sending SLAVE_SYNC (A8) high
+    pinMode(SLAVE_SYNC, OUTPUT);                     // set SLAVE_SYNC as output (defaults to input)
+    digitalWrite(SLAVE_SYNC, LOW);                   // make sure it's low
+    delay(1000);                                     // wait a bit in case other boards need to catch up
+    last_pin = digitalRead(COARSEint);               // get current state of COARSE_CLOCK
+    while (digitalRead(COARSEint) == last_pin) {     // loop until COARSE_CLOCK changes
+      delayMicroseconds(5);                          // wait a bit
+      if (i <= 50) {                                 // should never get above 20 (100us)
+        i++;
+        if (i == 50) {                               // something's probably wrong
+          Serial.println("");
+          Serial.println("");
+          Serial.println("# No COARSE_CLOCK... is 10 MHz connected?");
+        }
+      }
+    }
+    digitalWrite(SLAVE_SYNC, HIGH);                  // send sync pulse
+  } else {
+    Serial.println("");
+    Serial.println("");
+    Serial.println("# In slave mode and waiting for sync...");
+  }
+  
+  while (!digitalRead(SLAVE_SYNC)) {}                // whether master or slave, spin until SLAVE_SYNC asserts
+  PICcount = 0;                                      // initialize counter
+  enableInterrupt(COARSEint, coarseTimer, FALLING);  // enable counter interrupt
+  enableInterrupt(STOP_A, catch_stopA, RISING);      // enable interrupt to catch channel A
+  enableInterrupt(STOP_B, catch_stopB, RISING);      // enable interrupt to catch channel B
+  digitalWrite(SLAVE_SYNC, LOW);                     // unassert -- results in ~22uS sync pulse
+  pinMode(SLAVE_SYNC, INPUT);                        // set back to input just to be neat
   
   // print header to stdout
   Serial.println("");

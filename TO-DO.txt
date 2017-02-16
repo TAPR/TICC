@@ -1,7 +1,7 @@
-TICC TO-DO LIST -- 25 November 2016
+TICC TO-DO LIST -- 16 February 2017
 
 1.  Finish user interface (menu system) for configuration.
-See TODO-UI.txt for details.
+See TODO-UI.txt for details. DONE!!! Thanks WA8YWQ!
 
 2.  Change as many variables/operations as possible from 64 bit to 32 bit.
 

@@ -440,7 +440,7 @@ void doSetupMenu(struct config_t *pConfigInfo)      // also display the default 
   Serial.print("M   Measurement Mode        "); Serial.print( modeToChar(pConfigInfo->MODE)); Serial.println("               default T");   // enum MeasureMode, default Timestamp
   Serial.print("H   poll cHaracter          "); 
           if (pConfigInfo->POLL_CHAR) {
-            Serial.print(pConfigInfo->POLL_CHAR);Serial.println("               default unset");          // normally unset
+            Serial.print(pConfigInfo->POLL_CHAR);Serial.println("               default unset"); // normally unset
           } else {
             Serial.print("unset");Serial.println("           default unset");
           }
@@ -585,9 +585,9 @@ void print_config (config_t x) {
   Serial.print("# Measurement Mode: ");print_MeasureMode(MeasureMode(x.MODE));
   Serial.print("# Poll Character: ");
   if (x.POLL_CHAR) {
-            Serial.print(x.POLL_CHAR);Serial.println("       default none");          // normally unset
+            Serial.println(x.POLL_CHAR);          // normally unset
           } else {
-            Serial.print("none");Serial.println("    default none");
+            Serial.println("none");
           }
   Serial.print("# EEPROM Version: ");Serial.print(EEPROM.read(CONFIG_START)); 
   Serial.print(", Board Version: ");Serial.println(x.BOARD_REV);

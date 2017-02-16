@@ -42,12 +42,6 @@ const int CALIBRATION2 =	0x1C;           // default 0x00_0000
 class tdc7200Channel {
 private:
   const int ENABLE;
-  uint32_t time1Result;
-  uint32_t time2Result;
-  uint32_t time3Result;
-  uint32_t clock1Result;
-  uint32_t cal1Result;
-  uint32_t cal2Result;
   
 public:
   const char ID;   // channel letter
@@ -58,6 +52,13 @@ public:
 
   // NOTE: changed all from signed to unsigned while working on TINT
   volatile int64_t PICstop;
+  uint32_t time1Result;
+  uint32_t time2Result;
+  uint32_t time3Result;
+  uint32_t clock1Result;
+  uint32_t cal1Result;
+  uint32_t cal2Result;
+  
   int64_t tof;
   int64_t last_tof;
   int64_t ts;

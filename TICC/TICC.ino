@@ -7,7 +7,7 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-extern const char SW_VERSION[17] = "20170213.1";    // 13 February 2017 - version 1
+extern const char SW_VERSION[17] = "20170215.1";    // 15 February 2017 - version 1
 
 //#define DETAIL_TIMING     // if enabled, prints execution time
 
@@ -191,21 +191,14 @@ void loop() {
        // turn LED on
        digitalWrite(channels[i].LED, HIGH);
        
-       // read registers and calculate tof
-       channels[i].last_tof = channels[i].tof;
-       channels[i].tof = channels[i].read();
-        
-       // done with chip, so get ready for next reading
-       channels[i].ready_next(); // Re-arm for next measurement, clear TDC INTB
-       channels[i].totalize++;      
-       
-       if (config.MODE == Debug) {
-          Serial.print((int32_t)channels[i].PICstop);Serial.print(" ");
-         }
-       
+       channels[i].last_tof = channels[i].tof;  // preserve last value
+       channels[i].last_ts = channels[i].ts;    // preserve last value
+       channels[i].tof = channels[i].read();    // get data from chip
        channels[i].ts = (channels[i].PICstop * (int64_t)PICTICK_PS) - channels[i].tof;
        channels[i].period = channels[i].ts - channels[i].last_ts;
-  
+       channels[i].totalize++;                  // increment number of events   
+       channels[i].ready_next();                // Re-arm for next measurement, clear TDC INTB
+       
      #ifdef DETAIL_TIMING      
        end_micros = micros();         
        Serial.print(" execution time before output (us): ");
@@ -213,60 +206,66 @@ void loop() {
        Serial.println();
      #endif
        
-
     // if poll character is not null, only output if we've received that character via serial
     // NOTE: this may provide random results if measuring timestamp from both channels!
-    if ( (!config.POLL_CHAR)  ||  // if unset, output everything
-       ( (Serial.available() > 0) && (Serial.read() == config.POLL_CHAR) ) ) {     
+    if ( (channels[i].totalize > 2) &&           // throw away first readings 
+         ( (!config.POLL_CHAR)  ||                 // if unset, output everything
+         ( (Serial.available() > 0) && (Serial.read() == config.POLL_CHAR) ) ) ) {   
        
+       switch (config.MODE) {
+         case Timestamp:
+           print_signed_picos_as_seconds(channels[i].ts);
+           Serial.print( " ch");Serial.println(channels[i].ID);    
+         break;
        
-       // print results -- single channel modes
-       if ( (config.MODE == Timestamp) || (config.MODE == Debug) ) {
-        if (channels[i].ts > 0) { // check for sane value
-         print_signed_picos_as_seconds(channels[i].ts);
-         Serial.print( " ch");Serial.println(channels[i].ID);    
-         }
-       }
-
-       // period mode -- subtract last timestamp from current
-       if ( (config.MODE == Period) && (channels[i].totalize > 2) ) {
-         print_signed_picos_as_seconds(channels[i].ts - channels[i].last_ts);
-         Serial.print( " ch");Serial.println(channels[i].ID);    
-       }  
+         case Interval:
+           if ( (channels[0].ts > 1) && (channels[1].ts > 1) ) { // need both channels to be sane
+             print_signed_picos_as_seconds(channels[1].ts - channels[0].ts);
+             Serial.println(" TI(A->B)");
+             channels[0].ts = 0; // set to zero for test next time
+             channels[1].ts = 0; // set to zero for test next time
+           }
+         break;
        
-       // print results -- dual channel modes
-       if ( (channels[0].ts > 1) && (channels[1].ts > 1) ) { // need both channels to be sane
-        
-         channels[0].last_ts = channels[0].ts; // save last values
-         channels[1].last_ts = channels[1].ts;   
-         
-         // time interval mode (A->B)
-         if (config.MODE == Interval) {
-           print_signed_picos_as_seconds(channels[1].ts - channels[0].ts);
-           Serial.println(" TI(A->B)");
-         }
-
-         // timeLab mode
-         if (config.MODE == timeLab) {
-           print_signed_picos_as_seconds(channels[0].ts);
-           Serial.println(" chA");
-           print_signed_picos_as_seconds(channels[1].ts);
-           Serial.println(" chB");
+         case Period:
+           print_signed_picos_as_seconds(channels[i].period);
+           Serial.print( " ch");Serial.println(channels[i].ID);
+         break;
+       
+         case timeLab:
+           if ( (channels[0].ts > 1) && (channels[1].ts > 1) ) { // need both channels to be sane
+             print_signed_picos_as_seconds(channels[0].ts);
+             Serial.println(" chA");
+             print_signed_picos_as_seconds(channels[1].ts);
+             Serial.println(" chB");
            
-           // below is a horrible hack that creates a fake timestamp for
-           // TimeLab -- it's actually tint(B-A) stuck onto the integer
-           // part of the channel B timestamp.
-           print_signed_picos_as_seconds( (channels[1].ts - channels[0].ts) +
-             ( (channels[1].totalize * (int64_t)PS_PER_SEC) - 1) );
-           Serial.println(" chC (B-A)");
-         }
-         
-         channels[0].ts = 0; // set to zero for test next time
-         channels[1].ts = 0;
-      
-       }  // dual channel measurements          
-    
-    }
+             // horrible hack that creates a fake timestamp for
+             // TimeLab -- it's actually tint(B-A) stuck onto the
+             // integer part of the channel B timestamp.
+             print_signed_picos_as_seconds( (channels[1].ts - channels[0].ts) +
+               ( (channels[1].totalize * (int64_t)PS_PER_SEC) - 1) );
+             Serial.println(" chC (B-A)");
+             channels[0].ts = 0; // set to zero for test next time
+             channels[1].ts = 0; // set to zero for test next time
+           } 
+         break;
+  
+         case Debug:
+           char tmpbuf[8];
+           sprintf(tmpbuf,"%06u ",channels[i].time1Result);Serial.print(tmpbuf);
+           sprintf(tmpbuf,"%06u ",channels[i].time2Result);Serial.print(tmpbuf);
+           sprintf(tmpbuf,"%06u ",channels[i].clock1Result);Serial.print(tmpbuf);
+           sprintf(tmpbuf,"%06u ",channels[i].cal1Result);Serial.print(tmpbuf);
+           sprintf(tmpbuf,"%06u ",channels[i].cal2Result);Serial.print(tmpbuf);
+           Serial.print((int32_t)channels[i].PICstop);Serial.print(" ");
+           print_signed_picos_as_seconds(channels[i].tof);Serial.print(" ");
+           print_signed_picos_as_seconds(channels[i].ts);
+           Serial.print( " ch");Serial.println(channels[i].ID);    
+         break;
+  } // switch
+
+
+    } // print result
 
        // turn LED off
        digitalWrite(channels[i].LED,LOW);

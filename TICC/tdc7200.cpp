@@ -167,17 +167,7 @@ int64_t tdc7200Channel::read() {
   ring_ps = ((int64_t)normLSB * (int64_t)ring_ticks) / (int64_t)1000000;
   
   tof += (int64_t)ring_ps;
-
-if (config.MODE == Debug) {
-  char tmpbuf[8];
-  sprintf(tmpbuf,"%06u ",time1Result);Serial.print(tmpbuf);
-  sprintf(tmpbuf,"%06u ",time2Result);Serial.print(tmpbuf);
-  sprintf(tmpbuf,"%06u ",clock1Result);Serial.print(tmpbuf);
-  sprintf(tmpbuf,"%06u ",cal1Result);Serial.print(tmpbuf);
-  sprintf(tmpbuf,"%06u ",cal2Result);Serial.print(tmpbuf);
-  print_signed_picos_as_seconds(tof);Serial.print(" ");
-  }
-  
+ 
   return (int64_t)tof;
 }
 

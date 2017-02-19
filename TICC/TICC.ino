@@ -7,7 +7,7 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-extern const char SW_VERSION[17] = "20170218.1";    // 15 February 2017 - version 1
+extern const char SW_VERSION[17] = "20170219.1";    // 19 February 2017 - version 1
 
 //#define DETAIL_TIMING     // if enabled, prints execution time
 
@@ -85,7 +85,7 @@ void setup() {
   // print banner -- all non-data output lines begin with "#" so they're seen as comments
   Serial.println();
   Serial.println("# TAPR TICC Timestamping Counter");
-  Serial.println("# Copyright 2017 N8UR, K9TRV, NH6Z, WA8YWQ");
+  Serial.println("# Copyright 2016-2017 N8UR, K9TRV, NH6Z, WA8YWQ");
   Serial.println();
 
   Serial.println("#####################");

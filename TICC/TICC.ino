@@ -57,7 +57,9 @@ void setup() {
   
   // turn on the LEDs to show we're alive
   digitalWrite(LED_A, HIGH);
+  digitalWrite(EXT_LED_A, HIGH);
   digitalWrite(LED_B, HIGH);
+  digitalWrite(EXT_LED_B, HIGH);
   
   // start the serial library
   Serial.begin(115200);
@@ -172,7 +174,9 @@ void setup() {
   
 // turn the LEDs off
   digitalWrite(LED_A, LOW);
+  digitalWrite(EXT_LED_A, LOW);
   digitalWrite(LED_B, LOW);
+  digitalWrite(EXT_LED_B, LOW);
  
 } // setup  
 
@@ -190,6 +194,7 @@ void loop() {
        
        // turn LED on
        digitalWrite(channels[i].LED, HIGH);
+       digitalWrite((channels[i].LED) - 2, HIGH); // external LED is two I/Os lower than on-board
        
        channels[i].last_tof = channels[i].tof;  // preserve last value
        channels[i].last_ts = channels[i].ts;    // preserve last value
@@ -269,6 +274,7 @@ void loop() {
 
        // turn LED off
        digitalWrite(channels[i].LED,LOW);
+       digitalWrite((channels[i].LED) - 2, LOW); // external LED is two I/Os lower than on-board   
 
       #ifdef DETAIL_TIMING      
         end_micros = micros();         

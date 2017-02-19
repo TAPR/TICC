@@ -38,8 +38,8 @@ const int SLAVE_SYNC =  A8;  // use to sync multiple boards
 const int AN9 =         A9;  // spare unassigned
 const int AN10 =        A10; // spare unassigned
 const int AN11 =        A11; // spare unassigned
-const int AN12 =        A12; // spare unassigned
-const int AN13 =        A13; // spare unassigned
+const int EXT_LED_A =   A12; // external LED tandem with LED_A
+const int EXT_LED_B =   A13; // external LED tandem with LED_B
 const int LED_A =       A14;
 const int LED_B =       A15;
 

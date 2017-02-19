@@ -2,12 +2,12 @@
 // TICC.ino - master sketch file
 // TICC Time interval Counter based on TICC Shield using TDC7200
 //
-// Copyright John Ackermann N8UR 2016
+// Copyright John Ackermann N8UR 2016-2017
 // Portions Copyright George Byrkit K9TRV 2016
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-extern const char SW_VERSION[17] = "20170215.1";    // 15 February 2017 - version 1
+extern const char SW_VERSION[17] = "20170218.1";    // 15 February 2017 - version 1
 
 //#define DETAIL_TIMING     // if enabled, prints execution time
 

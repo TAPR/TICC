@@ -7,7 +7,7 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-extern const char SW_VERSION[17] = "20170219.1";    // 19 February 2017 - version 1
+extern const char SW_VERSION[17] = "20170220.1";    // 20 February 2017 - version 1
 
 //#define DETAIL_TIMING     // if enabled, prints execution time
 
@@ -54,6 +54,8 @@ void setup() {
   pinMode(COARSEint, INPUT);
   pinMode(OUT1, OUTPUT);
   pinMode(OUT2, OUTPUT);
+  pinMode(EXT_LED_A, OUTPUT);  // need to set these here; on-board LEDs are set up in TDC7200::setup
+  pinMode(EXT_LED_B, OUTPUT);
   
   // turn on the LEDs to show we're alive
   digitalWrite(LED_A, HIGH);

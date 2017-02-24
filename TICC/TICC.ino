@@ -56,12 +56,14 @@ void setup() {
   pinMode(OUT2, OUTPUT);
   pinMode(EXT_LED_A, OUTPUT);  // need to set these here; on-board LEDs are set up in TDC7200::setup
   pinMode(EXT_LED_B, OUTPUT);
-  
+  pinMode(EXT_LED_C, OUTPUT);
+    
   // turn on the LEDs to show we're alive
   digitalWrite(LED_A, HIGH);
   digitalWrite(EXT_LED_A, HIGH);
   digitalWrite(LED_B, HIGH);
   digitalWrite(EXT_LED_B, HIGH);
+  digitalWrite(EXT_LED_C, HIGH);
   
   // start the serial library
   Serial.begin(115200);
@@ -179,13 +181,28 @@ void setup() {
   digitalWrite(EXT_LED_A, LOW);
   digitalWrite(LED_B, LOW);
   digitalWrite(EXT_LED_B, LOW);
- 
+  digitalWrite(EXT_LED_C, LOW); 
 } // setup  
 
 /****************************************************************/
 void loop() {
   int i;
- 
+  static  int32_t last_micros = 0;                // Loop watchdog timestamp
+  static  int64_t last_PICcount = 0;              // Counter state memory
+
+
+  // Ref Clock indicator:
+  // Test every 2.5 coarse tick periods for PICcount changes, and turn on EXT_LED_C if changes are detected
+  if( (micros() - last_micros) > (2.5 * PICTICK_PS / 1000000) ) {  
+    last_micros = micros();               // Update the watchdog timestamp
+    if(PICcount != last_PICcount) {       // Has the counter changed since last sampled?
+      digitalWrite(EXT_LED_C, HIGH);      // Yes: LED goes on
+      last_PICcount = PICcount;            // Save the current counter state
+    } else digitalWrite(EXT_LED_C, LOW);  // No: LED goes off
+  }
+
+
+  // Measurement code follows
   for(i = 0; i < ARRAY_SIZE(channels); ++i) {
      
     // Only need to do anything if INTB is low, otherwise no work to do.

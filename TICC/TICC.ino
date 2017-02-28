@@ -7,13 +7,14 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-extern const char SW_VERSION[17] = "20170220.1";    // 20 February 2017 - version 1
+extern const char SW_VERSION[17] = "20170227.1";    // 27 February 2017 - version 1
 
-//#define DETAIL_TIMING     // if enabled, prints execution time
+// #define DETAIL_TIMING     // if enabled, prints execution time
 
 #include <stdint.h>           // define unint16_t, uint32_t
 #include <SPI.h>              // SPI support
 #include <EEPROM.h>
+#include "board.h"            // LED macros
 
 // install EnableInterrupt from the .zip file in the main TICC folder
 // or download from https://github.com/GreyGnome/EnableInterrupt
@@ -57,11 +58,13 @@ void setup() {
   pinMode(EXT_LED_A, OUTPUT);  // need to set these here; on-board LEDs are set up in TDC7200::setup
   pinMode(EXT_LED_B, OUTPUT);
   
-  // turn on the LEDs to show we're alive
-  digitalWrite(LED_A, HIGH);
-  digitalWrite(EXT_LED_A, HIGH);
-  digitalWrite(LED_B, HIGH);
-  digitalWrite(EXT_LED_B, HIGH);
+  // turn on the LEDs to show we're alive -- use macros from board.h
+  SET_LED_A;
+  SET_EXT_LED_A;
+  SET_LED_B;
+  SET_EXT_LED_B;
+  SET_EXT_LED_CLK;
+  
   
   // start the serial library
   Serial.begin(115200);
@@ -175,16 +178,30 @@ void setup() {
   } // switch
   
 // turn the LEDs off
-  digitalWrite(LED_A, LOW);
-  digitalWrite(EXT_LED_A, LOW);
-  digitalWrite(LED_B, LOW);
-  digitalWrite(EXT_LED_B, LOW);
- 
+  CLR_LED_A;
+  CLR_EXT_LED_A;
+  CLR_LED_B;
+  CLR_EXT_LED_B;
+  CLR_EXT_LED_CLK;
+   
 } // setup  
 
 /****************************************************************/
 void loop() {
   int i;
+  static  int32_t last_micros = 0;                // Loop watchdog timestamp
+  static  int64_t last_PICcount = 0;              // Counter state memory
+
+  // Ref Clock indicator:
+  // Test every 2.5 coarse tick periods for PICcount changes,
+  // and turn on EXT_LED_CLK if changes are detected
+  if( (micros() - last_micros) > 250 ) {  // hard coded to avoid fp math; breaks if PICTICK_PS changes 
+    last_micros = micros();               // Update the watchdog timestamp
+    if(PICcount != last_PICcount) {       // Has the counter changed since last sampled?
+      SET_EXT_LED_CLK;                    // Yes: LED goes on
+      last_PICcount = PICcount;           // Save the current counter state
+    } else CLR_EXT_LED_CLK;               // No: LED goes off
+  }
  
   for(i = 0; i < ARRAY_SIZE(channels); ++i) {
      
@@ -194,10 +211,10 @@ void loop() {
          start_micros = micros();
        #endif
        
-       // turn LED on
-       digitalWrite(channels[i].LED, HIGH);
-       digitalWrite((channels[i].LED) - 2, HIGH); // external LED is two I/Os lower than on-board
-       
+       // turn LED on -- use board.h macro for speed
+       if (i == 0) {SET_LED_A;SET_EXT_LED_A;};
+       if (i == 1) {SET_LED_B;SET_EXT_LED_B;};
+
        channels[i].last_tof = channels[i].tof;  // preserve last value
        channels[i].last_ts = channels[i].ts;    // preserve last value
        channels[i].tof = channels[i].read();    // get data from chip
@@ -215,7 +232,7 @@ void loop() {
        
     // if poll character is not null, only output if we've received that character via serial
     // NOTE: this may provide random results if measuring timestamp from both channels!
-    if ( (channels[i].totalize > 2) &&           // throw away first readings 
+    if ( (channels[i].totalize > 2) &&             // throw away first readings 
          ( (!config.POLL_CHAR)  ||                 // if unset, output everything
          ( (Serial.available() > 0) && (Serial.read() == config.POLL_CHAR) ) ) ) {   
        
@@ -275,9 +292,9 @@ void loop() {
     } // print result
 
        // turn LED off
-       digitalWrite(channels[i].LED,LOW);
-       digitalWrite((channels[i].LED) - 2, LOW); // external LED is two I/Os lower than on-board   
-
+       if (i == 0) {CLR_LED_A;CLR_EXT_LED_A;};
+       if (i == 1) {CLR_LED_B;CLR_EXT_LED_B;};
+       
       #ifdef DETAIL_TIMING      
         end_micros = micros();         
         Serial.print(" execution time (us) after output: ");

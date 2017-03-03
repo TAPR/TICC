@@ -34,7 +34,7 @@ tdc7200Channel::tdc7200Channel(char id, int enable, int intb, int csb, int stop,
 
 // TDC7200 configure
 void tdc7200Channel::tdc_setup() {
-  byte CALIBRATION2_PERIODS, AVG_CYCLES, NUM_STOP, reg_byte;
+  byte CALIBRATION2_PERIODS, AVG_CYCLES, NUM_STOP;
    
   digitalWrite(ENABLE, LOW);
   delay(5);  
@@ -58,15 +58,16 @@ void tdc7200Channel::tdc_setup() {
   //rate, but it works.
   NUM_STOP = 0x01;    // default 0x00 for 1 stop; 0x01 for 2 stops
 
-  reg_byte = CALIBRATION2_PERIODS | AVG_CYCLES | NUM_STOP;
+  config_byte2 = CALIBRATION2_PERIODS | AVG_CYCLES | NUM_STOP;
 
+  // TODO: check whether this is necessary; may be cruft from early testing
   boolean state = true;
   boolean last_state = true;
   while (state || last_state) { // catch COARSE falling edge tO align phase
     last_state = state;
     state = digitalRead(COARSEint);
     }
-  write(CONFIG2, reg_byte);
+  write(CONFIG2, config_byte2);
 
   // enable interrupts:
   // 0x01 new measurement, 0x02 COARSE_OVF, 0x04 CLOCK_OVF 
@@ -84,28 +85,38 @@ void tdc7200Channel::tdc_setup() {
   //clock counter overflow occurs when clock_countN > mask
   write(CLOCK_CNTR_OVF_H, config.TIMEOUT);     // default is 0xFF
   write(CLOCK_CNTR_OVF_L, 0x00);     // default is 0xFF
+
+  // now build config1 register byte
+  // sets trigger edge
+  // sets enable bit (START_MEAS in CONFIG1)
+  // clears interrupt bits
+      
+  byte FORCE_CAL = 0x80;      // 0x80 forces cal; 0x00 means no cal interrupted 
+  byte PARITY_EN = 0x00;      // parity on would be 0x40
+  byte TRIGG_EDGE = 0x00;     // TRIGG rising edge; falling edge would be 0x20 -- not used
+  byte STOP_EDGE = 0x00;      // STOP rising edge; falling edge would be 0x10
   
-}
+  // set trigger edge
+  byte START_EDGE = 0x00;  // START default 0x00 for rising edge; falling edge would be 0x08
+  if ( (ID == 'A') && (config.START_EDGE[0] == 'F') ) {
+    START_EDGE = 0x08;
+    }
+  if ( (ID == 'B') && (config.START_EDGE[1] == 'F') ) {
+    START_EDGE = 0x08;
+    }
+
+  byte RESERVED;              // high bit for MEASUREMENT MODE; reserved
+  byte MEASURE_MODE = 0x02;   // 0x00 for mode 1, 0x02 for mode 2
+  byte START_MEAS = 0x01;     // 0x01 to start measurement, 0x00 for no effect
+
+  config_byte1 = FORCE_CAL | PARITY_EN | TRIGG_EDGE | STOP_EDGE | \
+            START_EDGE | MEASURE_MODE | START_MEAS;   
+  }
 
 // Enable next measurement cycle
 void tdc7200Channel::ready_next() {
-
- byte FORCE_CAL = 0x80;      // 0x80 forces cal; 0x00 means no cal interrupted 
- byte PARITY_EN = 0x00;      // parity on would be 0x40
- byte TRIGG_EDGE = 0x00;     // TRIGG rising edge; falling edge would be 0x20
- byte STOP_EDGE = 0x00;      // STOP rising edge; falling edge would be 0x10
- byte START_EDGE = 0x00;     // START rising dege; falling edge would be 0x08
- byte RESERVED;              // high bit for MEASUREMENT MODE; reserved
- byte MEASURE_MODE = 0x02;   // 0x00 for mode 1, 0x02 for mode 2
- byte START_MEAS = 0x01;     // 0x01 to start measurement, 0x00 for no effect
- byte reg_byte;
- 
- // sets enable bit (START_MEAS in CONFIG1)
- // clears interrupt bits
- reg_byte = FORCE_CAL | PARITY_EN | TRIGG_EDGE | STOP_EDGE | \
-            START_EDGE | MEASURE_MODE | START_MEAS;   
- write(CONFIG1, reg_byte);     
-}
+  write(CONFIG1, config_byte1);
+  }
 
 // Read TDC
 int64_t tdc7200Channel::read() {

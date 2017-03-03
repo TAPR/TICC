@@ -600,6 +600,8 @@ void print_config (config_t x) {
   Serial.print("# SyncMode: ");Serial.println(x.SYNC_MODE);
   Serial.print("# Timeout: ");
   sprintf(tmpbuf,"0x%.2X",x.TIMEOUT);Serial.println(tmpbuf);
+  Serial.print("# Trigger Edge: ");Serial.print(x.START_EDGE[0]);Serial.print(" (chA), ");
+  Serial.print(x.START_EDGE[1]);Serial.println(" (chB)");
   Serial.print("# Time Dilation: ");Serial.print((int32_t)x.TIME_DILATION[0]);
   Serial.print(" (chA), ");Serial.print((int32_t)x.TIME_DILATION[1]);Serial.println(" (chB)");
   Serial.print("# FIXED_TIME2: ");Serial.print((int32_t)x.FIXED_TIME2[0]);

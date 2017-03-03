@@ -68,6 +68,9 @@ public:
   int64_t time_dilation;
   int64_t fixed_time2;
   int64_t fudge0;
+
+  byte    config_byte1;
+  byte    config_byte2;
   
   tdc7200Channel(char id, int enable, int intb, int csb, int stop, int led);
   int64_t read();

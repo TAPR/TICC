@@ -7,9 +7,9 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-extern const char SW_VERSION[17] = "20170227.1";    // 27 February 2017 - version 1
+extern const char SW_VERSION[17] = "20170302.1";    // 3 March 2017 - version 1
 
-// #define DETAIL_TIMING     // if enabled, prints execution time
+//#define DETAIL_TIMING     // if enabled, prints execution time
 
 #include <stdint.h>           // define unint16_t, uint32_t
 #include <SPI.h>              // SPI support
@@ -297,7 +297,7 @@ void loop() {
        
       #ifdef DETAIL_TIMING      
         end_micros = micros();         
-        Serial.print(" execution time (us) after output: ");
+        Serial.print(" execution time (us) including output: ");
         Serial.print(end_micros - start_micros);
         Serial.println();
       #endif

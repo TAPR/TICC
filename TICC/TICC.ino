@@ -7,13 +7,14 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-extern const char SW_VERSION[17] = "20170302.1";    // 3 March 2017 - version 1
+extern const char SW_VERSION[17] = "20170303.1";    // 3 March 2017 - version 1
 
 //#define DETAIL_TIMING     // if enabled, prints execution time
 
 #include <stdint.h>           // define unint16_t, uint32_t
 #include <SPI.h>              // SPI support
-#include <EEPROM.h>
+#include <EEPROM.h>           // eeprom library
+
 #include "board.h"            // LED macros
 
 // install EnableInterrupt from the .zip file in the main TICC folder
@@ -48,7 +49,10 @@ static tdc7200Channel channels[] = {
 };
 
 /****************************************************************/
-void setup() {
+void setup() { }              // we have a better way
+
+void ticc_setup() {
+   
   int i;
   boolean last_pin;
   
@@ -67,8 +71,10 @@ void setup() {
   
   
   // start the serial library
+  Serial.end();               // first close in case we've come here from a break
   Serial.begin(115200);
   // start the SPI library:
+  SPI.end();                  // first close in case we've come here from a break
   SPI.begin();
   
   /*******************************************
@@ -184,14 +190,19 @@ void setup() {
   CLR_EXT_LED_B;
   CLR_EXT_LED_CLK;
    
-} // setup  
+} // ticc_setup  
 
 /****************************************************************/
 void loop() {
+
+ticc_setup();                                     // initialize and optionally go to config
+
+while ( (!Serial.available() ) && (Serial.read() != '#') ) {        // test for break character  
+  
   int i;
   static  int32_t last_micros = 0;                // Loop watchdog timestamp
   static  int64_t last_PICcount = 0;              // Counter state memory
-
+    
   // Ref Clock indicator:
   // Test every 2.5 coarse tick periods for PICcount changes,
   // and turn on EXT_LED_CLK if changes are detected
@@ -304,7 +315,14 @@ void loop() {
 
     } // if INTB
   } // for
+
+} // while loop testing for break character
+
+Serial.println("Got break character... exiting loop");
+delay(100);
+
 } // loop()
+
 
 /****************************************************************/
  

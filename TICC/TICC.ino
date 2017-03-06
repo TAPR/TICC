@@ -7,7 +7,7 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-extern const char SW_VERSION[17] = "20170303.1";    // 3 March 2017 - version 1
+extern const char SW_VERSION[17] = "20170305.1";    // 5 March 2017 - version 1
 
 //#define DETAIL_TIMING     // if enabled, prints execution time
 

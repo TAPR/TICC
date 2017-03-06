@@ -15,11 +15,11 @@
 #include "config.h"           // config and eeprom
 #include "tdc7200.h"          // TDC registers and structures
 
-void print_unsigned_picos_as_seconds (uint64_t x) {
+void print_signed_picos_as_seconds (uint64_t x) {
   uint64_t sec, secx, frac, frach, fracx, fracl;    
   char str[128];
   
-  sec = x / 1000000000000;
+  sec = abs(x / 1000000000000);
   secx = sec * 1000000000000;
   frac = x - secx;
 
@@ -38,7 +38,7 @@ void print_signed_picos_as_seconds (int64_t x) {
   int64_t sec, secx, frac, frach, fracx, fracl;    
   char str[128];
   
-  sec = x / 1000000000000;
+  sec = abs(x / 1000000000000);  // hopefully avoid double negative sign.  Thanks, Curt!
   secx = sec * 1000000000000;
   frac = abs(x - secx);
   

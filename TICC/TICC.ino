@@ -197,7 +197,7 @@ void loop() {
 
 ticc_setup();                                     // initialize and optionally go to config
 
-while ( (!Serial.available() ) && (Serial.read() != '#') ) {        // test for break character  
+while ( Serial.read() != '#') {        // test for break character  
   
   int i;
   static  int32_t last_micros = 0;                // Loop watchdog timestamp

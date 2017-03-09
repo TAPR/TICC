@@ -7,7 +7,7 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-extern const char SW_VERSION[17] = "20170308.1";    // 8 March 2017 - version 1
+extern const char SW_VERSION[17] = "20170309.1";    // 9 March 2017 - version 1
 
 //#define DETAIL_TIMING     // if enabled, prints execution time
 
@@ -30,7 +30,8 @@ extern const char SW_VERSION[17] = "20170308.1";    // 8 March 2017 - version 1
 
 #ifdef DETAIL_TIMING
   int32_t start_micros;
-  int32_t end_micros;
+  int32_t calc_micros;
+  int32_t total_micros;
 #endif
 
 volatile int64_t PICcount;
@@ -245,18 +246,15 @@ void loop() {
          channels[i].ready_next();                // Re-arm for next measurement, clear TDC INTB
        
        #ifdef DETAIL_TIMING      
-         end_micros = micros();         
-         Serial.print(" execution time before output (us): ");
-         Serial.print(end_micros - start_micros);
-         Serial.println();
+         //calc_micros = micros() - start_micros;         
        #endif
        
       // if poll character is not null, only output if we've received that character via serial
       // NOTE: this may provide random results if measuring timestamp from both channels!
-      if ( (channels[i].totalize > 2) &&             // throw away first readings 
-           ( (!config.POLL_CHAR)  ||                 // if unset, output everything
+      if ( (channels[i].totalize > 2) &&             // throw away first readings      
+         ( (!config.POLL_CHAR)  ||                 // if unset, output everything
            ( (Serial.available() > 0) && (Serial.read() == config.POLL_CHAR) ) ) ) {   
-       
+      
          switch (config.MODE) {
            case Timestamp:
              print_signed_picos_as_seconds(channels[i].ts);
@@ -320,10 +318,8 @@ void loop() {
        if (i == 1) {CLR_LED_B;CLR_EXT_LED_B;};
        
       #ifdef DETAIL_TIMING      
-        end_micros = micros();         
-        Serial.print(" execution time (us) including output: ");
-        Serial.print(end_micros - start_micros);
-        Serial.println();
+        total_micros = micros() - start_micros;         
+        Serial.println(total_micros);
       #endif
 
       } // if INTB

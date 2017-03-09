@@ -17,8 +17,8 @@ const int OUT2 =        3;   // spare output
 const int STOP_A =      12;
 const int STOP_B =      13;
 #elif (BOARD_REVISION == 'D')
-const int STOP_A =      2;
-const int STOP_B =      3;
+const int STOP_A =      2;   // PINE,4
+const int STOP_B =      3;   // PINE,5
 const int OUT1 =        12;  // spare output
 const int OUT2 =        13;  // spare output
 #endif
@@ -29,8 +29,8 @@ const int CSB_A  =      6;
 const int CSB_B =       7;
 const int INP1 =        8;   // spare input
 const int INP2 =        9;   // spare input
-const int INTB_A =  	  10;
-const int INTB_B =      11;
+const int INTB_A =  	  10;  // PINB,4
+const int INTB_B =      11;  // PINB,5
 const int D16 =         16;  // spare unassigned
 const int D17 =         17;  // spare unassigned
 const int COARSEint =   18;  // hardware interrupt for COARSE clock

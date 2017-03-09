@@ -214,6 +214,7 @@ Serial.println("Setup mode.  Valid single-letter commands are:"), Serial.println
   Serial.println("   I     time Interval A->B mode");
   Serial.println("   L     TimeLab interval mode");
   Serial.println("   D     Debug mode");
+  Serial.println("   N     Null output mode");
   Serial.println(),  Serial.print("Enter mode: ");
 
   do
@@ -226,8 +227,9 @@ Serial.println("Setup mode.  Valid single-letter commands are:"), Serial.println
     case 'I': pConfigInfo->MODE = Interval;   break;
     case 'L': pConfigInfo->MODE = timeLab;    break;
     case 'D': pConfigInfo->MODE = Debug;    break;
+    case 'N': pConfigInfo->MODE = Null;    break;
       default:  valid = 0;
-      Serial.println("? Please enter T P I L or D");
+      Serial.println("? Please enter T P I L D or N");
     break;
   }
   } while (valid == 0);

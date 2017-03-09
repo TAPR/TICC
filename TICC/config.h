@@ -11,7 +11,7 @@
 #include <EEPROM.h>
 #define PS_PER_SEC                (int64_t)  1000000000000   // ps/s
 
-enum MeasureMode : unsigned char {Timestamp, Interval, Period, timeLab, Debug};
+enum MeasureMode : unsigned char {Timestamp, Interval, Period, timeLab, Debug, Null};
 
 /*****************************************************************/
 // system defines

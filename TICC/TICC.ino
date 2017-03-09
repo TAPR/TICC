@@ -7,9 +7,9 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-extern const char SW_VERSION[17] = "20170305.1";    // 5 March 2017 - version 1
+extern const char SW_VERSION[17] = "20170308.1";    // 8 March 2017 - version 1
 
-//#define DETAIL_TIMING     // if enabled, prints execution time
+#define DETAIL_TIMING     // if enabled, prints execution time
 
 #include <stdint.h>           // define unint16_t, uint32_t
 #include <SPI.h>              // SPI support
@@ -48,9 +48,15 @@ static tdc7200Channel channels[] = {
         tdc7200Channel('B', ENABLE_B, INTB_B, CSB_B, STOP_B,LED_B),
 };
 
-/****************************************************************/
-void setup() { }              // we have a better way
+/****************************************************************
+We don't use the default setup() routine -- see
+ticc_setup() below
+****************************************************************/
+void setup() { }
 
+/****************************************************************
+Here is where setup really happensw
+****************************************************************/
 void ticc_setup() {
    
   int i;
@@ -195,112 +201,119 @@ void ticc_setup() {
 /****************************************************************/
 void loop() {
 
-ticc_setup();                                     // initialize and optionally go to config
 
-while ( Serial.read() != '#') {        // test for break character  
+  ticc_setup();                                     // initialize and optionally go to config
+
+  while (1) {
+    if ( Serial.read() == '#') {        // test for break character
+      break;
+    }
   
-  int i;
-  static  int32_t last_micros = 0;                // Loop watchdog timestamp
-  static  int64_t last_PICcount = 0;              // Counter state memory
+    int i;
+    static  int32_t last_micros = 0;                // Loop watchdog timestamp
+    static  int64_t last_PICcount = 0;              // Counter state memory
     
-  // Ref Clock indicator:
-  // Test every 2.5 coarse tick periods for PICcount changes,
-  // and turn on EXT_LED_CLK if changes are detected
-  if( (micros() - last_micros) > 250 ) {  // hard coded to avoid fp math; breaks if PICTICK_PS changes 
-    last_micros = micros();               // Update the watchdog timestamp
-    if(PICcount != last_PICcount) {       // Has the counter changed since last sampled?
-      SET_EXT_LED_CLK;                    // Yes: LED goes on
-      last_PICcount = PICcount;           // Save the current counter state
-    } else CLR_EXT_LED_CLK;               // No: LED goes off
-  }
+    // Ref Clock indicator:
+    // Test every 2.5 coarse tick periods for PICcount changes,
+    // and turn on EXT_LED_CLK if changes are detected
+    if( (micros() - last_micros) > 250 ) {  // hard coded to avoid fp math; breaks if PICTICK_PS changes 
+      last_micros = micros();               // Update the watchdog timestamp
+      if(PICcount != last_PICcount) {       // Has the counter changed since last sampled?
+        SET_EXT_LED_CLK;                    // Yes: LED goes on
+        last_PICcount = PICcount;           // Save the current counter state
+      } else CLR_EXT_LED_CLK;               // No: LED goes off
+    }
  
-  for(i = 0; i < ARRAY_SIZE(channels); ++i) {
+    for(i = 0; i < ARRAY_SIZE(channels); ++i) {
      
-    // Only need to do anything if INTB is low, otherwise no work to do.
-     if(digitalRead(channels[i].INTB)==0) {
-       #ifdef DETAIL_TIMING
-         start_micros = micros();
+      // Only need to do anything if INTB is low, otherwise no work to do.
+       if(digitalRead(channels[i].INTB)==0) {
+         #ifdef DETAIL_TIMING
+           start_micros = micros();
+         #endif
+       
+         // turn LED on -- use board.h macro for speed
+         if (i == 0) {SET_LED_A;SET_EXT_LED_A;};
+         if (i == 1) {SET_LED_B;SET_EXT_LED_B;};
+
+         channels[i].last_tof = channels[i].tof;  // preserve last value
+         channels[i].last_ts = channels[i].ts;    // preserve last value
+         channels[i].tof = channels[i].read();    // get data from chip
+         channels[i].ts = (channels[i].PICstop * (int64_t)PICTICK_PS) - channels[i].tof;
+         channels[i].period = channels[i].ts - channels[i].last_ts;
+         channels[i].totalize++;                  // increment number of events   
+         channels[i].ready_next();                // Re-arm for next measurement, clear TDC INTB
+       
+       #ifdef DETAIL_TIMING      
+         end_micros = micros();         
+         Serial.print(" execution time before output (us): ");
+         Serial.print(end_micros - start_micros);
+         Serial.println();
        #endif
        
-       // turn LED on -- use board.h macro for speed
-       if (i == 0) {SET_LED_A;SET_EXT_LED_A;};
-       if (i == 1) {SET_LED_B;SET_EXT_LED_B;};
-
-       channels[i].last_tof = channels[i].tof;  // preserve last value
-       channels[i].last_ts = channels[i].ts;    // preserve last value
-       channels[i].tof = channels[i].read();    // get data from chip
-       channels[i].ts = (channels[i].PICstop * (int64_t)PICTICK_PS) - channels[i].tof;
-       channels[i].period = channels[i].ts - channels[i].last_ts;
-       channels[i].totalize++;                  // increment number of events   
-       channels[i].ready_next();                // Re-arm for next measurement, clear TDC INTB
+      // if poll character is not null, only output if we've received that character via serial
+      // NOTE: this may provide random results if measuring timestamp from both channels!
+      if ( (channels[i].totalize > 2) &&             // throw away first readings 
+           ( (!config.POLL_CHAR)  ||                 // if unset, output everything
+           ( (Serial.available() > 0) && (Serial.read() == config.POLL_CHAR) ) ) ) {   
        
-     #ifdef DETAIL_TIMING      
-       end_micros = micros();         
-       Serial.print(" execution time before output (us): ");
-       Serial.print(end_micros - start_micros);
-       Serial.println();
-     #endif
+         switch (config.MODE) {
+           case Timestamp:
+             print_signed_picos_as_seconds(channels[i].ts);
+             Serial.print( " ch");Serial.println(channels[i].ID);    
+           break;
        
-    // if poll character is not null, only output if we've received that character via serial
-    // NOTE: this may provide random results if measuring timestamp from both channels!
-    if ( (channels[i].totalize > 2) &&             // throw away first readings 
-         ( (!config.POLL_CHAR)  ||                 // if unset, output everything
-         ( (Serial.available() > 0) && (Serial.read() == config.POLL_CHAR) ) ) ) {   
+           case Interval:
+             if ( (channels[0].ts > 1) && (channels[1].ts > 1) ) { // need both channels to be sane
+               print_signed_picos_as_seconds(channels[1].ts - channels[0].ts);
+               Serial.println(" TI(A->B)");
+               channels[0].ts = 0; // set to zero for test next time
+               channels[1].ts = 0; // set to zero for test next time
+             }
+           break;
        
-       switch (config.MODE) {
-         case Timestamp:
-           print_signed_picos_as_seconds(channels[i].ts);
-           Serial.print( " ch");Serial.println(channels[i].ID);    
-         break;
+           case Period:
+             print_signed_picos_as_seconds(channels[i].period);
+             Serial.print( " ch");Serial.println(channels[i].ID);
+           break;
        
-         case Interval:
-           if ( (channels[0].ts > 1) && (channels[1].ts > 1) ) { // need both channels to be sane
-             print_signed_picos_as_seconds(channels[1].ts - channels[0].ts);
-             Serial.println(" TI(A->B)");
-             channels[0].ts = 0; // set to zero for test next time
-             channels[1].ts = 0; // set to zero for test next time
-           }
-         break;
-       
-         case Period:
-           print_signed_picos_as_seconds(channels[i].period);
-           Serial.print( " ch");Serial.println(channels[i].ID);
-         break;
-       
-         case timeLab:
-           if ( (channels[0].ts > 1) && (channels[1].ts > 1) ) { // need both channels to be sane
-             print_signed_picos_as_seconds(channels[0].ts);
-             Serial.println(" chA");
-             print_signed_picos_as_seconds(channels[1].ts);
-             Serial.println(" chB");
+           case timeLab:
+             if ( (channels[0].ts > 1) && (channels[1].ts > 1) ) { // need both channels to be sane
+               print_signed_picos_as_seconds(channels[0].ts);
+               Serial.println(" chA");
+               print_signed_picos_as_seconds(channels[1].ts);
+               Serial.println(" chB");
            
-             // horrible hack that creates a fake timestamp for
-             // TimeLab -- it's actually tint(B-A) stuck onto the
-             // integer part of the channel B timestamp.
-             print_signed_picos_as_seconds( (channels[1].ts - channels[0].ts) +
-               ( (channels[1].totalize * (int64_t)PS_PER_SEC) - 1) );
-             Serial.println(" chC (B-A)");
-             channels[0].ts = 0; // set to zero for test next time
-             channels[1].ts = 0; // set to zero for test next time
-           } 
-         break;
+               // horrible hack that creates a fake timestamp for
+               // TimeLab -- it's actually tint(B-A) stuck onto the
+               // integer part of the channel B timestamp.
+               print_signed_picos_as_seconds( (channels[1].ts - channels[0].ts) +
+                 ( (channels[1].totalize * (int64_t)PS_PER_SEC) - 1) );
+               Serial.println(" chC (B-A)");
+               channels[0].ts = 0; // set to zero for test next time
+               channels[1].ts = 0; // set to zero for test next time
+             } 
+           break;
   
-         case Debug:
-           char tmpbuf[8];
-           sprintf(tmpbuf,"%06u ",channels[i].time1Result);Serial.print(tmpbuf);
-           sprintf(tmpbuf,"%06u ",channels[i].time2Result);Serial.print(tmpbuf);
-           sprintf(tmpbuf,"%06u ",channels[i].clock1Result);Serial.print(tmpbuf);
-           sprintf(tmpbuf,"%06u ",channels[i].cal1Result);Serial.print(tmpbuf);
-           sprintf(tmpbuf,"%06u ",channels[i].cal2Result);Serial.print(tmpbuf);
-           Serial.print((int32_t)channels[i].PICstop);Serial.print(" ");
-           print_signed_picos_as_seconds(channels[i].tof);Serial.print(" ");
-           print_signed_picos_as_seconds(channels[i].ts);
-           Serial.print( " ch");Serial.println(channels[i].ID);    
-         break;
-  } // switch
+           case Debug:
+             char tmpbuf[8];
+             sprintf(tmpbuf,"%06u ",channels[i].time1Result);Serial.print(tmpbuf);
+             sprintf(tmpbuf,"%06u ",channels[i].time2Result);Serial.print(tmpbuf);
+             sprintf(tmpbuf,"%06u ",channels[i].clock1Result);Serial.print(tmpbuf);
+             sprintf(tmpbuf,"%06u ",channels[i].cal1Result);Serial.print(tmpbuf);
+             sprintf(tmpbuf,"%06u ",channels[i].cal2Result);Serial.print(tmpbuf);
+             Serial.print((int32_t)channels[i].PICstop);Serial.print(" ");
+             print_signed_picos_as_seconds(channels[i].tof);Serial.print(" ");
+             print_signed_picos_as_seconds(channels[i].ts);
+             Serial.print( " ch");Serial.println(channels[i].ID);    
+           break;
+
+         case Null:
+           break;
+    } // switch
 
 
-    } // print result
+ } // print result
 
        // turn LED off
        if (i == 0) {CLR_LED_A;CLR_EXT_LED_A;};
@@ -313,18 +326,21 @@ while ( Serial.read() != '#') {        // test for break character
         Serial.println();
       #endif
 
-    } // if INTB
-  } // for
+      } // if INTB
+    } // for
+  } // while (1) loop
 
-} // while loop testing for break character
+  Serial.println();
+  Serial.println("Got break character... exiting loop");
+  Serial.println();
+  delay(100);
 
-Serial.println("Got break character... exiting loop");
-delay(100);
-
-} // loop()
+} // main loop()
 
 
-/****************************************************************/
+/****************************************************************
+ * Interrupt Service Routines
+ ****************************************************************/
  
 // ISR for timer. Capture PICcount on each channel's STOP 0->1 transition.
 void coarseTimer() {

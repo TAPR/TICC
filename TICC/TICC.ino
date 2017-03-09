@@ -9,7 +9,7 @@
 
 extern const char SW_VERSION[17] = "20170308.1";    // 8 March 2017 - version 1
 
-#define DETAIL_TIMING     // if enabled, prints execution time
+//#define DETAIL_TIMING     // if enabled, prints execution time
 
 #include <stdint.h>           // define unint16_t, uint32_t
 #include <SPI.h>              // SPI support

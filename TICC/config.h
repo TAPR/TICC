@@ -3,7 +3,7 @@
 
 // TICC Time interval Counter based on TICC Shield using TDC7200
 //
-// Copyright John Ackermann N8UR 2016
+// Copyright John Ackermann N8UR 2016-2019
 // Portions Copyright George Byrkit K9TRV 2016
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
@@ -16,7 +16,7 @@ enum MeasureMode : unsigned char {Timestamp, Interval, Period, timeLab, Debug, N
 /*****************************************************************/
 // system defines
 #define BOARD_REVISION            'D'                   // production version is 'D'
-#define EEPROM_VERSION            (byte)     8          // eeprom struct version
+#define EEPROM_VERSION            (byte)     9          // eeprom struct version
 #define CONFIG_START              (byte)     0x00       // first byte of config in eeprom
 #define SER_NUM_START             (int16_t)  0x0FF0     // first byte of serial number in eeprom
 /*****************************************************************/
@@ -28,6 +28,10 @@ enum MeasureMode : unsigned char {Timestamp, Interval, Period, timeLab, Debug, N
 #define DEFAULT_CAL_PERIODS       (int16_t) 20          // CAL_PERIODS (2, 10, 20, 40)
 #define DEFAULT_TIMEOUT           (int16_t)  0x05       // measurement timeout
 #define DEFAULT_SYNC_MODE         (char)    'M'         // (M)aster or (S)lave
+#define DEFAULT_NAME_0            (char)    'A'
+#define DEFAULT_NAME_1            (char)    'B'
+#define DEFAULT_PROP_DELAY_0      (int64_t)  0
+#define DEFAULT_PROP_DELAY_1      (int64_t)  0
 #define DEFAULT_START_EDGE_0      (char)    'R'         // (R)ising or (F)alling
 #define DEFAULT_START_EDGE_1      (char)    'R'         // (R)ising or (F)alling
 #define DEFAULT_TIME_DILATION_0   (int64_t) 2500        // SWAG that seems to work
@@ -55,8 +59,10 @@ struct config_t {
   int16_t    TIMEOUT;                   // timeout for measurement in hex (default 0x05)
   char       SYNC_MODE;                 // one byte:  'M' for master,  'S' for slave
   
-  // per-channel settings, arrays of 2 for channels A and B:
+  // per-channel settings, arrays of 2 for channels 0 and 1:
   char       START_EDGE[2];            // (R)ising (default) or (F)alling edge 
+  char       NAME[2];                  // user-set channel name
+  int64_t    PROP_DELAY[2];            // user-set offset value (ps)
   int64_t    TIME_DILATION[2];         // time dilation factor (default 2500)
   int64_t    FIXED_TIME2[2];           // if >0 use to replace time2 (default 0)
   int64_t    FUDGE0[2];                // fudge factor (ps) (default 0)

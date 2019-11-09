@@ -2,12 +2,12 @@
 // TICC.ino - master sketch file
 // TICC Time interval Counter based on TICC Shield using TDC7200
 //
-// Copyright John Ackermann N8UR 2016-2017
+// Copyright John Ackermann N8UR 2016-2019
 // Portions Copyright George Byrkit K9TRV 2016
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-extern const char SW_VERSION[17] = "20170309.1";    // 9 March 2017 - version 1
+extern const char SW_VERSION[17] = "20191103.1";    // 29 October 2019 - version 1
 
 //#define DETAIL_TIMING     // if enabled, prints execution time
 
@@ -44,8 +44,8 @@ config_t config;
 MeasureMode MODE, lastMODE;
 
 static tdc7200Channel channels[] = {
-        tdc7200Channel('A', ENABLE_A, INTB_A, CSB_A, STOP_A,LED_A),
-        tdc7200Channel('B', ENABLE_B, INTB_B, CSB_B, STOP_B,LED_B),
+        tdc7200Channel('0', ENABLE_0, INTB_0, CSB_0, STOP_0,LED_0),
+        tdc7200Channel('1', ENABLE_1, INTB_1, CSB_1, STOP_1,LED_1),
 };
 
 /****************************************************************
@@ -65,14 +65,14 @@ void ticc_setup() {
   pinMode(COARSEint, INPUT);
   pinMode(OUT1, OUTPUT);
   pinMode(OUT2, OUTPUT);
-  pinMode(EXT_LED_A, OUTPUT);  // need to set these here; on-board LEDs are set up in TDC7200::setup
-  pinMode(EXT_LED_B, OUTPUT);
+  pinMode(EXT_LED_0, OUTPUT);  // need to set these here; on-board LEDs are set up in TDC7200::setup
+  pinMode(EXT_LED_1, OUTPUT);
   
   // turn on the LEDs to show we're alive -- use macros from board.h
-  SET_LED_A;
-  SET_EXT_LED_A;
-  SET_LED_B;
-  SET_EXT_LED_B;
+  SET_LED_0;
+  SET_EXT_LED_0;
+  SET_LED_1;
+  SET_EXT_LED_1;
   SET_EXT_LED_CLK;
   
   
@@ -102,7 +102,7 @@ void ticc_setup() {
   // print banner -- all non-data output lines begin with "#" so they're seen as comments
   Serial.println();
   Serial.println("# TAPR TICC Timestamping Counter");
-  Serial.println("# Copyright 2016-2017 N8UR, K9TRV, NH6Z, WA8YWQ");
+  Serial.println("# Copyright 2016-2019 N8UR, K9TRV, NH6Z, WA8YWQ");
   Serial.println();
 
   Serial.println("#####################");
@@ -125,6 +125,8 @@ void ticc_setup() {
     channels[i].PICstop = 0;
     channels[i].tof = 0;
     channels[i].ts = 0;
+    channels[i].name = config.NAME[i];
+    channels[i].prop_delay = config.PROP_DELAY[i];
     channels[i].time_dilation = config.TIME_DILATION[i];
     channels[i].fixed_time2 = config.FIXED_TIME2[i];
     channels[i].fudge0 = config.FUDGE0[i];
@@ -138,6 +140,7 @@ void ticc_setup() {
    * Synchrnonize multiple TICCs sharing common 10 MHz and 10 kHz clocks.
   *******************************************/ 
   if (config.SYNC_MODE == 'M') {                     // if we are master, send sync by sending SLAVE_SYNC (A8) high
+    delay(2000);                                      // but first sleep to allow slave boards to get ready
     pinMode(SLAVE_SYNC, OUTPUT);                     // set SLAVE_SYNC as output (defaults to input)
     digitalWrite(SLAVE_SYNC, LOW);                   // make sure it's low
     delay(1000);                                     // wait a bit in case other boards need to catch up
@@ -163,8 +166,8 @@ void ticc_setup() {
   while (!digitalRead(SLAVE_SYNC)) {}                // whether master or slave, spin until SLAVE_SYNC asserts
   PICcount = 0;                                      // initialize counter
   enableInterrupt(COARSEint, coarseTimer, FALLING);  // enable counter interrupt
-  enableInterrupt(STOP_A, catch_stopA, RISING);      // enable interrupt to catch channel A
-  enableInterrupt(STOP_B, catch_stopB, RISING);      // enable interrupt to catch channel B
+  enableInterrupt(STOP_0, catch_stop0, RISING);      // enable interrupt to catch channel A
+  enableInterrupt(STOP_1, catch_stop1, RISING);      // enable interrupt to catch channel 1
   digitalWrite(SLAVE_SYNC, LOW);                     // unassert -- results in ~22uS sync pulse
   pinMode(SLAVE_SYNC, INPUT);                        // set back to input just to be neat
   
@@ -190,10 +193,10 @@ void ticc_setup() {
   } // switch
   
 // turn the LEDs off
-  CLR_LED_A;
-  CLR_EXT_LED_A;
-  CLR_LED_B;
-  CLR_EXT_LED_B;
+  CLR_LED_0;
+  CLR_EXT_LED_0;
+  CLR_LED_1;
+  CLR_EXT_LED_1;
   CLR_EXT_LED_CLK;
    
 } // ticc_setup  
@@ -212,6 +215,8 @@ void loop() {
     int i;
     static  int32_t last_micros = 0;                // Loop watchdog timestamp
     static  int64_t last_PICcount = 0;              // Counter state memory
+    static  int64_t last_ts = 0;                    // Last timestamp so we can test for out-of-order
+    static  char    last_name;                      // Last channel name
     
     // Ref Clock indicator:
     // Test every 2.5 coarse tick periods for PICcount changes,
@@ -233,13 +238,14 @@ void loop() {
          #endif
        
          // turn LED on -- use board.h macro for speed
-         if (i == 0) {SET_LED_A;SET_EXT_LED_A;};
-         if (i == 1) {SET_LED_B;SET_EXT_LED_B;};
+         if (i == 0) {SET_LED_0;SET_EXT_LED_0;};
+         if (i == 1) {SET_LED_1;SET_EXT_LED_1;};
 
          channels[i].last_tof = channels[i].tof;  // preserve last value
          channels[i].last_ts = channels[i].ts;    // preserve last value
          channels[i].tof = channels[i].read();    // get data from chip
          channels[i].ts = (channels[i].PICstop * (int64_t)PICTICK_PS) - channels[i].tof;
+         channels[i].ts -= channels[i].prop_delay;     // subtract propagation delay
          channels[i].period = channels[i].ts - channels[i].last_ts;
          channels[i].totalize++;                  // increment number of events   
          channels[i].ready_next();                // Re-arm for next measurement, clear TDC INTB
@@ -252,8 +258,22 @@ void loop() {
       
          switch (config.MODE) {
            case Timestamp:
-             print_signed_picos_as_seconds(channels[i].ts);
-             Serial.print( " ch");Serial.println(channels[i].ID);    
+             if (channels[i].ts > last_ts) {
+               print_signed_picos_as_seconds(channels[i].ts);
+               Serial.print( " ch");Serial.println(channels[i].name);
+               last_ts = channels[i].ts;
+               last_name = channels[i].name;    
+             } else {
+               print_signed_picos_as_seconds(channels[i].ts);
+               Serial.print( " ch");Serial.println(channels[i].name);    
+               print_signed_picos_as_seconds(last_ts);
+               Serial.print( " ch out of order");Serial.println(last_name);
+               last_ts = channels[i].ts;
+               last_name = channels[i].name;        
+               
+             }
+             
+               
            break;
        
            case Interval:
@@ -267,22 +287,22 @@ void loop() {
        
            case Period:
              print_signed_picos_as_seconds(channels[i].period);
-             Serial.print( " ch");Serial.println(channels[i].ID);
+             Serial.print( " ch");Serial.println(channels[i].name);
            break;
        
            case timeLab:
              if ( (channels[0].ts > 1) && (channels[1].ts > 1) ) { // need both channels to be sane
                print_signed_picos_as_seconds(channels[0].ts);
-               Serial.println(" chA");
+               Serial.print(" ");Serial.println(channels[0].name);
                print_signed_picos_as_seconds(channels[1].ts);
-               Serial.println(" chB");
+               Serial.print(" ");Serial.println(channels[1].name);
            
                // horrible hack that creates a fake timestamp for
-               // TimeLab -- it's actually tint(B-A) stuck onto the
-               // integer part of the channel B timestamp.
+               // TimeLab -- it's actually tint(1-0) stuck onto the
+               // integer part of the channel 1 timestamp.
                print_signed_picos_as_seconds( (channels[1].ts - channels[0].ts) +
                  ( (channels[1].totalize * (int64_t)PS_PER_SEC) - 1) );
-               Serial.println(" chC (B-A)");
+               Serial.print("chC (");Serial.print(channels[1].name);Serial.print("-");Serial.print(channels[0].name);Serial.println(")"); 
                channels[0].ts = 0; // set to zero for test next time
                channels[1].ts = 0; // set to zero for test next time
              } 
@@ -298,7 +318,7 @@ void loop() {
              Serial.print((int32_t)channels[i].PICstop);Serial.print(" ");
              print_signed_picos_as_seconds(channels[i].tof);Serial.print(" ");
              print_signed_picos_as_seconds(channels[i].ts);
-             Serial.print( " ch");Serial.println(channels[i].ID);    
+             Serial.print( " ch");Serial.println(channels[i].name);    
            break;
 
          case Null:
@@ -309,8 +329,8 @@ void loop() {
  } // print result
 
        // turn LED off
-       if (i == 0) {CLR_LED_A;CLR_EXT_LED_A;};
-       if (i == 1) {CLR_LED_B;CLR_EXT_LED_B;};
+       if (i == 0) {CLR_LED_0;CLR_EXT_LED_0;};
+       if (i == 1) {CLR_LED_1;CLR_EXT_LED_1;};
        
       #ifdef DETAIL_TIMING
         end_micros = micros() - start_micros;               
@@ -338,11 +358,11 @@ void coarseTimer() {
   PICcount++;
 }  
 
-void catch_stopA() {
+void catch_stop0() {
   channels[0].PICstop = PICcount;
 }
 
-void catch_stopB() {
+void catch_stop1() {
   channels[1].PICstop = PICcount;  
 }
 /****************************************************************/

@@ -2,7 +2,7 @@
 
 // TICC Time interval Counter based on TICC Shield using TDC7200
 //
-// Copyright John Ackermann N8UR 2016
+// Copyright John Ackermann N8UR 2016-2019
 // Portions Copyright George Byrkit K9TRV 2016
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
@@ -98,10 +98,10 @@ void tdc7200Channel::tdc_setup() {
   
   // set trigger edge
   byte START_EDGE = 0x00;  // START default 0x00 for rising edge; falling edge would be 0x08
-  if ( (ID == 'A') && (config.START_EDGE[0] == 'F') ) {
+  if ( (ID == '0') && (config.START_EDGE[0] == 'F') ) {
     START_EDGE = 0x08;
     }
-  if ( (ID == 'B') && (config.START_EDGE[1] == 'F') ) {
+  if ( (ID == '1') && (config.START_EDGE[1] == 'F') ) {
     START_EDGE = 0x08;
     }
 

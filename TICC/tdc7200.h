@@ -3,7 +3,7 @@
 
 // TICC Time interval Counter based on TICC Shield using TDC7200
 //
-// Copyright John Ackermann N8UR 2016
+// Copyright John Ackermann N8UR 2016-2019
 // Portions Copyright George Byrkit K9TRV 2016
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
@@ -44,7 +44,7 @@ private:
   const int ENABLE;
   
 public:
-  const char ID;   // channel letter
+  const char ID;   // channel number
   const int STOP;  // pin number on Arduino
   const int INTB;  // pin number on Arduino
   const int CSB;   // pin number on Arduino
@@ -65,9 +65,12 @@ public:
   int64_t last_ts; 
   int64_t period;
   int64_t totalize;
+  int64_t prop_delay;
   int64_t time_dilation;
   int64_t fixed_time2;
   int64_t fudge0;
+
+  char      name; // channel name
 
   byte    config_byte1;
   byte    config_byte2;

@@ -2,7 +2,7 @@
 
 // TICC Time interval Counter based on TICC Shield using TDC7200
 //
-// Copyright John Ackermann N8UR 2016
+// Copyright John Ackermann N8UR 2016-2019
 // Portions Copyright George Byrkit K9TRV 2016
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
@@ -15,7 +15,7 @@
 #include "config.h"           // config and eeprom
 #include "tdc7200.h"          // TDC registers and structures
 
-void print_signed_picos_as_seconds (uint64_t x) {
+void print_unsigned_picos_as_seconds (uint64_t x) {
   uint64_t sec, secx, frac, frach, fracx, fracl;    
   char str[128];
   

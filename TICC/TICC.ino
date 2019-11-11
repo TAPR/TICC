@@ -129,7 +129,8 @@ void ticc_setup() {
     channels[i].prop_delay = config.PROP_DELAY[i];
     channels[i].time_dilation = config.TIME_DILATION[i];
     channels[i].fixed_time2 = config.FIXED_TIME2[i];
-    channels[i].fudge0 = config.FUDGE0[i];
+    // For user convenience, we allow two settings that additively determine delay
+    channels[i].fudge = config.PROP_DELAY[i] + config.FUDGE0[i];
 
     // setup the chips
     channels[i].tdc_setup();

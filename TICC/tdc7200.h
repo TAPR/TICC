@@ -68,7 +68,7 @@ public:
   int64_t prop_delay;
   int64_t time_dilation;
   int64_t fixed_time2;
-  int64_t fudge0;
+  int64_t fudge;
 
   char      name; // channel name
 

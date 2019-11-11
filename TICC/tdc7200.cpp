@@ -142,7 +142,7 @@ int64_t tdc7200Channel::read() {
  
   // For reference, by default:
   // CLOCK_PERIOD is 1e5 picosecond
-  // FUDGE0 is 0 
+  // FUDGE is 0 
   // FIX_TIME2 is 0
   // CAL_PERIODS is 20
   // time_dilation is 2500 (adjusts for non-linearity)
@@ -156,7 +156,7 @@ int64_t tdc7200Channel::read() {
   cal2Result = readReg24(CALIBRATION2);   // value of CAL_PERIODS cycle
   
   tof = (int64_t)(clock1Result * CLOCK_PERIOD);
-  tof -= (int64_t)fudge0; // subtract delay due to silicon
+  tof -= (int64_t)fudge; // subtract delay due to silicon and prop delay
   
   // calCount *= 10e6; divide back later
   // time_dilation adjusts for non-linearity at 100ns overflow

@@ -7,7 +7,7 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-extern const char SW_VERSION[17] = "20191103.1";    // 29 October 2019 - version 1
+extern const char SW_VERSION[17] = "20191111.1";    // 11 November 2019 - version 1
 
 //#define DETAIL_TIMING     // if enabled, prints execution time
 
@@ -216,9 +216,7 @@ void loop() {
     int i;
     static  int32_t last_micros = 0;                // Loop watchdog timestamp
     static  int64_t last_PICcount = 0;              // Counter state memory
-    static  int64_t last_ts = 0;                    // Last timestamp so we can test for out-of-order
-    static  char    last_name;                      // Last channel name
-    
+ 
     // Ref Clock indicator:
     // Test every 2.5 coarse tick periods for PICcount changes,
     // and turn on EXT_LED_CLK if changes are detected
@@ -259,22 +257,8 @@ void loop() {
       
          switch (config.MODE) {
            case Timestamp:
-             if (channels[i].ts > last_ts) {
                print_signed_picos_as_seconds(channels[i].ts);
                Serial.print( " ch");Serial.println(channels[i].name);
-               last_ts = channels[i].ts;
-               last_name = channels[i].name;    
-             } else {
-               print_signed_picos_as_seconds(channels[i].ts);
-               Serial.print( " ch");Serial.println(channels[i].name);    
-               print_signed_picos_as_seconds(last_ts);
-               Serial.print( " ch out of order");Serial.println(last_name);
-               last_ts = channels[i].ts;
-               last_name = channels[i].name;        
-               
-             }
-             
-               
            break;
        
            case Interval:

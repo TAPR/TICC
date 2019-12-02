@@ -7,7 +7,7 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-extern const char SW_VERSION[17] = "20191111.1";    // 11 November 2019 - version 1
+extern const char SW_VERSION[17] = "20191202.1";    // 02 December 2019 - version 1
 
 //#define DETAIL_TIMING     // if enabled, prints execution time
 
@@ -67,15 +67,14 @@ void ticc_setup() {
   pinMode(OUT2, OUTPUT);
   pinMode(EXT_LED_0, OUTPUT);  // need to set these here; on-board LEDs are set up in TDC7200::setup
   pinMode(EXT_LED_1, OUTPUT);
+  pinMode(EXT_LED_CLK,OUTPUT);
   
   // turn on the LEDs to show we're alive -- use macros from board.h
   SET_LED_0;
   SET_EXT_LED_0;
   SET_LED_1;
   SET_EXT_LED_1;
-  SET_EXT_LED_CLK;
-  
-  
+   
   // start the serial library
   Serial.end();               // first close in case we've come here from a break
   Serial.begin(115200);
@@ -141,7 +140,7 @@ void ticc_setup() {
    * Synchrnonize multiple TICCs sharing common 10 MHz and 10 kHz clocks.
   *******************************************/ 
   if (config.SYNC_MODE == 'M') {                     // if we are master, send sync by sending SLAVE_SYNC (A8) high
-    delay(2000);                                      // but first sleep to allow slave boards to get ready
+    delay(2000);                                     // but first sleep to allow slave boards to get ready
     pinMode(SLAVE_SYNC, OUTPUT);                     // set SLAVE_SYNC as output (defaults to input)
     digitalWrite(SLAVE_SYNC, LOW);                   // make sure it's low
     delay(1000);                                     // wait a bit in case other boards need to catch up

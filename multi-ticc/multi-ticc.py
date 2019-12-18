@@ -17,7 +17,7 @@
 #
 ################################################################################
 
-############################   multi_ticc.py    ################################
+############################   multi-ticc.py    ################################
 
 import sys
 import time
@@ -27,18 +27,24 @@ import socket
 import serial         # install python3-serial
 import argparse       # install python3-argparse
 
-version = '20191107.1'
+version = '20191217.1'
+
+HOST = '0.0.0.0'
 
 def get_data(s,q):
     min_line_length = 18  # serial line shorter than this is bogus
     # get first possibly partial line and throw away
     line = s.readline()
     while True:
-        line = s.readline().decode('ascii').strip()
-        # ignore comments and short lines
-        if (not line.startswith('#')) and (len(line) >= min_line_length):
-            if not q.full():
-                q.put(line)
+        try:
+            line = s.readline().decode('ascii').strip()
+            # ignore comments and short lines
+            if (not line.startswith('#')) and (len(line) >= min_line_length):
+                if not q.full():
+                    q.put(line)
+        except serial.SerialException:
+            print("Oops serial port error:", sys.exc_info()[0])
+            sys.exit(1)
 
 def ch_handler(channels,inqueue,qlist):
     while True:
@@ -47,17 +53,18 @@ def ch_handler(channels,inqueue,qlist):
             break
         if not qlist[0].full():
             qlist[0].put(line)
+        if not qlist[1].full():
+            qlist[1].put(line)
         for index,x in enumerate(channels):
             if x in line:
-                if not qlist[index + 1].full():
-                    qlist[index + 1].put(line)
+                if not qlist[index + 2].full():
+                    qlist[index + 2].put(line)
         inqueue.task_done()
     
 def demuxed_port_listener(base_tcp_port,index,q,channels):
-    HOST = '0.0.0.0'
     tcp_port = base_tcp_port + index
     print("Listening and ready to send",
-                channels[index - 1],"on port",tcp_port)
+                channels[index - 2],"on port",tcp_port)
 
     while True:
         s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
@@ -83,10 +90,33 @@ def demuxed_port_listener(base_tcp_port,index,q,channels):
                 conn.close()
             conn.close()
 
-def muxed_port_listener(tcp_port,q,channels):
-    HOST = '0.0.0.0'
-
+def muxed_port_listener(tcp_port,q):
     print("Listening and ready to send multiplexed data on port",tcp_port)
+
+    while True:
+        s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+        s.bind((HOST, tcp_port))
+        s.listen(1)
+        while True:
+            conn, addr = s.accept()
+            print("Client connection accepted from", addr)
+            try:
+                # empty the queue so we don't have gaps in data
+                while not q.empty():
+                    q.get(False)
+                while True:
+                    line = q.get()
+                    line = line + '\n'
+                    line = bytes(line,'ascii')
+                    conn.send(line)
+                    q.task_done()
+            except socket.error as msg:
+                print("Client connection closed by",addr)
+                conn.close()
+            conn.close()
+
+def sorted_port_listener(tcp_port,q):
+    print("Listening and ready to send sorted data on port",tcp_port)
 
     while True:
         s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
@@ -113,14 +143,17 @@ def muxed_port_listener(tcp_port,q,channels):
                 conn.close()
             conn.close()
 
+###############################################################################
+# Main routine
+###############################################################################
 def main():
 
     print("N8UR multi_ticc.py -- version",version)
     # get params; use default if not specified on command line
     a = argparse.ArgumentParser()
     a.add_argument('--comports',nargs='*',type=str,
-        default = ['/dev/ttyACM0','/dev/ttyACM1',
-            '/dev/ttyACM2','/dev/ttyACM3'])
+        default = ['/dev/ttyTICC0','/dev/ttyTICC1',
+            '/dev/ttyTICC2','/dev/ttyTICC3'])
     a.add_argument('--chnames',nargs='*',type=str,
         default = ['chA','chB','chC','chD','chE','chF','chG','chH'])
     a.add_argument('--baseport',type=int,default = 9190)
@@ -152,11 +185,14 @@ def main():
 
     # make output queues
     ch_queues = []
-    # first is a priority queue to dump channel data in time
+    # First is a multiplexed queue with all data, FIFO
+    ch_queues.append(queue.Queue(5))
+
+    # Next is a priority queue to dump channel data in time
     # sequence so we make it a bit bigger to allow for sorting
     ch_queues.append(queue.PriorityQueue(50))
 
-    # and add a queue for each channel
+    # then add a queue for each channel
     for x in channels:
         ch_queues.append(queue.Queue(5))
 
@@ -170,8 +206,11 @@ def main():
     for index,x in enumerate(ch_queues):
         if index == 0:
             thread = threading.Thread(target=muxed_port_listener, 
-                args=(base_tcp_port,x,channels),daemon=True)
-        else:
+                args=(base_tcp_port,x),daemon=True)
+        if index == 1:
+            thread = threading.Thread(target=sorted_port_listener, 
+                args=(base_tcp_port + 1,x),daemon=True)
+        if index > 1:
             thread = threading.Thread(target=demuxed_port_listener, 
                 args=(base_tcp_port,index,x,channels),daemon=True)
         thread.start()

@@ -17,7 +17,7 @@
 #
 ################################################################################
 
-############################   multi-ticc.py    ################################
+#########################   multi-ticc_server.py    ############################
 
 import sys
 import time
@@ -27,7 +27,7 @@ import socket
 import serial         # install python3-serial
 import argparse       # install python3-argparse
 
-version = '20191217.1'
+version = '20191219.1'
 
 HOST = '0.0.0.0'
 
@@ -148,7 +148,7 @@ def sorted_port_listener(tcp_port,q):
 ###############################################################################
 def main():
 
-    print("N8UR multi_ticc.py -- version",version)
+    print("N8UR multi-ticc_server.py -- version",version)
     # get params; use default if not specified on command line
     a = argparse.ArgumentParser()
     a.add_argument('--comports',nargs='*',type=str,

@@ -1,0 +1,17 @@
+[Unit]
+Description=multi-ticc server script
+After=network-online.target syslog.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/pi/
+ExecStart=/home/pi/multi-ticc_server.py
+StandardOutput=syslog
+StandardError=syslog
+User=pi
+Group=users
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+

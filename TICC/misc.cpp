@@ -30,8 +30,15 @@ void print_unsigned_picos_as_seconds (uint64_t x, int places) {
   fracl = frac - fracx;
 
   sprintf(str,"%lu.",sec), Serial.print(str);
-  sprintf(str, "%06lu", frach), Serial.print(str);
-  sprintf(str, "%06lu", fracl), Serial.print(str);  
+
+  if (places <= 6) {
+    sprintf(str, "%0*lu", frach), places, Serial.print(str);
+  } else {
+    sprintf(str, "%06lu", frach), Serial.print(str);
+  }
+  if (places > 6) {
+    sprintf(str, "%0*lu", fracl), places - 6, Serial.print(str);
+  }
 } 
 
 void print_signed_picos_as_seconds (int64_t x, int places) {
@@ -52,6 +59,12 @@ void print_signed_picos_as_seconds (int64_t x, int places) {
     Serial.print("-");
   }
   sprintf(str,"%ld.",sec), Serial.print(str);
-  sprintf(str, "%06ld", frach), Serial.print(str);
-  sprintf(str, "%06ld", fracl), Serial.print(str);  
+  if (places <= 6) {
+    sprintf(str, "%0*ld", frach), places, Serial.print(str);
+  } else {
+    sprintf(str, "%06ld", frach), Serial.print(str);
+  }
+  if (places > 6) {
+    sprintf(str, "%0*ld", fracl), places - 6, Serial.print(str);
+  }
 }

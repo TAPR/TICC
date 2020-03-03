@@ -21,6 +21,13 @@ SYMLINK+="ttyTICC2"
 SUBSYSTEM=="tty",  ENV{ID_PATH}=="platform-3f980000.usb-usb-0:1.5:1.0", \
 SYMLINK+="ttyTICC3"
 
-3.  When executed, the "multi-ticc_reset.py" program will send a 100 ms reset 
-pulse to the TICCs.
+4.  Using sudo, copy "multi-ticc_server.service" to /lib/systemd/system
+and issue "sudo systemctl enable multi-ticc_server".  This will tell
+the system to start /home/pi/multi-ticc_server.py automatically on boot.
+To start the server manually, enter "sudo systemctl start multi-ticc_server".
+
+5.  When executed, the "multi-ticc_reset.py" program will send a 100 ms reset 
+pulse to the TICCs.  The multi-ticc_server.py program automatically does this,
+but it might be necessary if you need to reset the TICCs during operation,
+for example if the 10 MHz clock source has been removed and reconnected.
 

@@ -15,7 +15,7 @@
 #include "config.h"           // config and eeprom
 #include "tdc7200.h"          // TDC registers and structures
 
-void print_unsigned_picos_as_seconds (uint64_t x) {
+void print_unsigned_picos_as_seconds (uint64_t x, int places) {
   uint64_t sec, secx, frac, frach, fracx, fracl;    
   char str[128];
   
@@ -34,7 +34,7 @@ void print_unsigned_picos_as_seconds (uint64_t x) {
   sprintf(str, "%06lu", fracl), Serial.print(str);  
 } 
 
-void print_signed_picos_as_seconds (int64_t x) {
+void print_signed_picos_as_seconds (int64_t x, int places) {
   int64_t sec, secx, frac, frach, fracx, fracl;    
   char str[128];
   

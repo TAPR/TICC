@@ -9,16 +9,19 @@
 // Licensed under BSD 2-clause license
 
 #include <EEPROM.h>
+
 #define PS_PER_SEC                (int64_t)  1000000000000   // ps/s
+#define MAX_INT64                (uint64_t)  9223372036854775807  // 2^63 - 1
 
 enum MeasureMode : unsigned char {Timestamp, Interval, Period, timeLab, Debug, Null};
 
 /*****************************************************************/
 // system defines
 #define BOARD_REVISION            'D'                   // production version is 'D'
-#define EEPROM_VERSION            (byte)     9          // eeprom struct version
+#define EEPROM_VERSION            (byte)     10         // eeprom struct version
 #define CONFIG_START              (byte)     0x00       // first byte of config in eeprom
 #define SER_NUM_START             (int16_t)  0x0FF0     // first byte of serial number in eeprom
+#define PLACES                    (int)      11         // how many decimal places to include in data output (11 = 10ps resolution)
 /*****************************************************************/
 // default values for config struct
 #define DEFAULT_MODE              (MeasureMode) 0       // Measurement mode -- 0 is Timestamp
@@ -26,7 +29,8 @@ enum MeasureMode : unsigned char {Timestamp, Interval, Period, timeLab, Debug, N
 #define DEFAULT_CLOCK_HZ          (int64_t) 10000000    // 10 MHz
 #define DEFAULT_PICTICK_PS        (int64_t) 100000000   // 100us
 #define DEFAULT_CAL_PERIODS       (int16_t) 20          // CAL_PERIODS (2, 10, 20, 40)
-#define DEFAULT_TIMEOUT           (int16_t)  0x05       // measurement timeout
+#define DEFAULT_TIMEOUT           (int16_t) 0x05        // measurement timeout
+#define DEFAULT_WRAP              (int64_t) MAX_INT64   // timestamp rollover in 100 us ticks
 #define DEFAULT_SYNC_MODE         (char)    'M'         // (M)aster or (S)lave
 #define DEFAULT_NAME_0            (char)    'A'
 #define DEFAULT_NAME_1            (char)    'B'
@@ -57,7 +61,8 @@ struct config_t {
   int64_t    PICTICK_PS;                // coarse tick (default 100 000 000)
   int16_t    CAL_PERIODS;               // cal periods 2, 10, 20, 40 (default 20)
   int16_t    TIMEOUT;                   // timeout for measurement in hex (default 0x05)
-  char       SYNC_MODE;                 // one byte:  'M' for master,  'S' for slave
+  int64_t    WRAP;                      // wraparound value for PICcount
+  char       SYNC_MODE;                 // one byte:  'M' for master,  'S' for client
   
   // per-channel settings, arrays of 2 for channels 0 and 1:
   char       START_EDGE[2];            // (R)ising (default) or (F)alling edge 

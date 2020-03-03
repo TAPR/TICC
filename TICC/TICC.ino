@@ -7,7 +7,7 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-extern const char SW_VERSION[17] = "20191202.1";    // 02 December 2019 - version 1
+extern const char SW_VERSION[17] = "20200303.1";    // 3 March 2020 - version 1
 
 //#define DETAIL_TIMING     // if enabled, prints execution time
 
@@ -39,6 +39,7 @@ int64_t CLOCK_HZ;
 int64_t PICTICK_PS; 
 int64_t CLOCK_PERIOD;
 int16_t CAL_PERIODS;
+int64_t MAX_TICKS;
 
 config_t config;
 MeasureMode MODE, lastMODE;
@@ -117,6 +118,7 @@ void ticc_setup() {
   CLOCK_PERIOD = (PS_PER_SEC/CLOCK_HZ);
   PICTICK_PS = config.PICTICK_PS;
   CAL_PERIODS = config.CAL_PERIODS;
+  MAX_TICKS = config.WRAP;
       
   for(i = 0; i < ARRAY_SIZE(channels); ++i) {
     // initialize the channels struct variables
@@ -131,7 +133,7 @@ void ticc_setup() {
     // For user convenience, we allow two settings that additively determine delay
     channels[i].fudge = config.PROP_DELAY[i] + config.FUDGE0[i];
 
-    // setup the chips
+    // set up the chips
     channels[i].tdc_setup();
     channels[i].ready_next();
   }
@@ -139,10 +141,10 @@ void ticc_setup() {
   /*******************************************
    * Synchrnonize multiple TICCs sharing common 10 MHz and 10 kHz clocks.
   *******************************************/ 
-  if (config.SYNC_MODE == 'M') {                     // if we are master, send sync by sending SLAVE_SYNC (A8) high
-    delay(2000);                                     // but first sleep to allow slave boards to get ready
-    pinMode(SLAVE_SYNC, OUTPUT);                     // set SLAVE_SYNC as output (defaults to input)
-    digitalWrite(SLAVE_SYNC, LOW);                   // make sure it's low
+  if (config.SYNC_MODE == 'M') {                     // if we are master, send sync by sending CLIENT_SYNC (A8) high
+    delay(2000);                                     // but first sleep to allow client boards to get ready
+    pinMode(CLIENT_SYNC, OUTPUT);                    // set CLIENT_SYNC as output (defaults to input)
+    digitalWrite(CLIENT_SYNC, LOW);                  // make sure it's low
     delay(1000);                                     // wait a bit in case other boards need to catch up
     last_pin = digitalRead(COARSEint);               // get current state of COARSE_CLOCK
     while (digitalRead(COARSEint) == last_pin) {     // loop until COARSE_CLOCK changes
@@ -156,20 +158,20 @@ void ticc_setup() {
         }
       }
     }
-    digitalWrite(SLAVE_SYNC, HIGH);                  // send sync pulse
+    digitalWrite(CLIENT_SYNC, HIGH);                  // send sync pulse
   } else {
     Serial.println("");
     Serial.println("");
-    Serial.println("# In slave mode and waiting for sync...");
+    Serial.println("# In client mode and waiting for sync...");
   }
   
-  while (!digitalRead(SLAVE_SYNC)) {}                // whether master or slave, spin until SLAVE_SYNC asserts
+  while (!digitalRead(CLIENT_SYNC)) {}               // whether master or client, spin until CLIENT_SYNC asserts
   PICcount = 0;                                      // initialize counter
   enableInterrupt(COARSEint, coarseTimer, FALLING);  // enable counter interrupt
   enableInterrupt(STOP_0, catch_stop0, RISING);      // enable interrupt to catch channel A
   enableInterrupt(STOP_1, catch_stop1, RISING);      // enable interrupt to catch channel 1
-  digitalWrite(SLAVE_SYNC, LOW);                     // unassert -- results in ~22uS sync pulse
-  pinMode(SLAVE_SYNC, INPUT);                        // set back to input just to be neat
+  digitalWrite(CLIENT_SYNC, LOW);                    // unassert -- results in ~22uS sync pulse
+  pinMode(CLIENT_SYNC, INPUT);                       // set back to input just to be neat
   
   // print header to stdout
   Serial.println("");
@@ -203,7 +205,6 @@ void ticc_setup() {
 
 /****************************************************************/
 void loop() {
-
 
   ticc_setup();                                     // initialize and optionally go to config
 
@@ -256,13 +257,13 @@ void loop() {
       
          switch (config.MODE) {
            case Timestamp:
-               print_signed_picos_as_seconds(channels[i].ts);
+               print_signed_picos_as_seconds(channels[i].ts, PLACES);
                Serial.print( " ch");Serial.println(channels[i].name);
            break;
        
            case Interval:
              if ( (channels[0].ts > 1) && (channels[1].ts > 1) ) { // need both channels to be sane
-               print_signed_picos_as_seconds(channels[1].ts - channels[0].ts);
+               print_signed_picos_as_seconds(channels[1].ts - channels[0].ts, PLACES);
                Serial.println(" TI(A->B)");
                channels[0].ts = 0; // set to zero for test next time
                channels[1].ts = 0; // set to zero for test next time
@@ -270,22 +271,22 @@ void loop() {
            break;
        
            case Period:
-             print_signed_picos_as_seconds(channels[i].period);
+             print_signed_picos_as_seconds(channels[i].period, PLACES);
              Serial.print( " ch");Serial.println(channels[i].name);
            break;
        
            case timeLab:
              if ( (channels[0].ts > 1) && (channels[1].ts > 1) ) { // need both channels to be sane
-               print_signed_picos_as_seconds(channels[0].ts);
+               print_signed_picos_as_seconds(channels[0].ts, PLACES);
                Serial.print(" ");Serial.println(channels[0].name);
-               print_signed_picos_as_seconds(channels[1].ts);
+               print_signed_picos_as_seconds(channels[1].ts, PLACES);
                Serial.print(" ");Serial.println(channels[1].name);
            
                // horrible hack that creates a fake timestamp for
                // TimeLab -- it's actually tint(1-0) stuck onto the
                // integer part of the channel 1 timestamp.
-               print_signed_picos_as_seconds( (channels[1].ts - channels[0].ts) +
-                 ( (channels[1].totalize * (int64_t)PS_PER_SEC) - 1) );
+               print_signed_picos_as_seconds( (channels[1].ts - channels[0].ts, PLACES) +
+                 ( (channels[1].totalize * (int64_t)PS_PER_SEC) - 1), PLACES );
                Serial.print("chC (");Serial.print(channels[1].name);Serial.print("-");Serial.print(channels[0].name);Serial.println(")"); 
                channels[0].ts = 0; // set to zero for test next time
                channels[1].ts = 0; // set to zero for test next time
@@ -300,8 +301,8 @@ void loop() {
              sprintf(tmpbuf,"%06u ",channels[i].cal1Result);Serial.print(tmpbuf);
              sprintf(tmpbuf,"%06u ",channels[i].cal2Result);Serial.print(tmpbuf);
              Serial.print((int32_t)channels[i].PICstop);Serial.print(" ");
-             print_signed_picos_as_seconds(channels[i].tof);Serial.print(" ");
-             print_signed_picos_as_seconds(channels[i].ts);
+             print_signed_picos_as_seconds(channels[i].tof, PLACES);Serial.print(" ");
+             print_signed_picos_as_seconds(channels[i].ts, PLACES);
              Serial.print( " ch");Serial.println(channels[i].name);    
            break;
 
@@ -340,6 +341,9 @@ void loop() {
 // ISR for timer. Capture PICcount on each channel's STOP 0->1 transition.
 void coarseTimer() {
   PICcount++;
+  if (PICcount == MAX_TICKS) {
+    PICcount = 0;
+  }
 }  
 
 void catch_stop0() {

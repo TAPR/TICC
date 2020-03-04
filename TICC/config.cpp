@@ -304,13 +304,13 @@ void ts_wrap(struct config_t *pConfigInfo)
 {
   // The final ts_wrap is an int64 value of 100 us ticks, and the default is (2^63 - 1).  Input here is in
   // seconds to make life easier for the user. 
-  int64_t wrap;
+  int64_t secs;
   Serial.print("Timestamp Wraparound"), Serial.print(((int32_t)pConfigInfo->WRAP) / 10000), Serial.println(" seconds.  Default is bignum");
   Serial.println("Enter new value (in seconds) and press Enter (or just Enter for no change)");
   getLine();
   inputLineReadIndex = 0;
-  getInt64(&wrap, 1);
-  pConfigInfo->WRAP= wrap * 1e4;
+  getInt64(&secs, 1);
+  pConfigInfo->WRAP = secs * 1e4;
 }
 
 void masterClient(struct config_t *pConfigInfo)
@@ -474,39 +474,39 @@ void doSetupMenu(struct config_t *pConfigInfo)      // also display the default 
   for ( ; ; )
   {
   Serial.println(), Serial.println();
-  Serial.print("A   Measurement Mode (default T)                "); Serial.println( modeToChar(pConfigInfo->MODE));  // enum MeasureMode, default Timestamp
-  Serial.print("B   poll cHaracter (default unset)              "); 
+  Serial.print("A   measurement mode (default T)                "); Serial.println( modeToChar(pConfigInfo->MODE));  // enum MeasureMode, default Timestamp
+  Serial.print("B   poll character (default unset)              "); 
           if (pConfigInfo->POLL_CHAR) {
             Serial.println(pConfigInfo->POLL_CHAR); // normally unset
           } else {
             Serial.println("unset");
           }
-  Serial.print("C   clock Speed in MHz (default 10)             "); printHzAsMHz(pConfigInfo->CLOCK_HZ), Serial.println();       // int_64
+  Serial.print("C   clock speed in MHz (default 10)             "); printHzAsMHz(pConfigInfo->CLOCK_HZ), Serial.println();       // int_64
 
-  Serial.print("D   Coarse Clock Rate in us) (default 100)      "); printHzAsMHz(pConfigInfo->PICTICK_PS), Serial.println();   // int_64
+  Serial.print("D   coarse clock rate in us) (default 100)      "); printHzAsMHz(pConfigInfo->PICTICK_PS), Serial.println();   // int_64
   
-  Serial.print("E   calibration Periods (default 20)            "); Serial.println((int32_t)pConfigInfo->CAL_PERIODS);  // int_16, choices are 2, 10, 20, 40
+  Serial.print("E   calibration periods (default 20)            "); Serial.println((int32_t)pConfigInfo->CAL_PERIODS);  // int_16, choices are 2, 10, 20, 40
   
-  Serial.print("F   Timeout (default 0x05)                      ");       // int16 
+  Serial.print("F   timeout (default 0x05)                      ");       // int16 
     char str[8];sprintf(str, "0x%02X", (int32_t)pConfigInfo->TIMEOUT);Serial.println(str);
 
-  Serial.print("G   TS Wrap (default bignum)                    "); Serial.print(((int32_t)pConfigInfo->WRAP) / 1000);       // int64 
+  Serial.print("G   ts wrap (default bignum)                    "); Serial.print(((int32_t)pConfigInfo->WRAP) / 10000); Serial.println(); // int64 
   
   Serial.print("H   sync:  master / client (default M)           "); Serial.print(pConfigInfo->SYNC_MODE); Serial.println();  // M (default) or S
   
-  Serial.print("I   channel Name (default A/B)                  ");  
+  Serial.print("I   channel name (default A/B)                  ");  
     Serial.print(pConfigInfo->NAME[0]);Serial.print('/');Serial.println(pConfigInfo->NAME[1]);        
   
-  Serial.print("J   prOp delay (default 0)                      ");       // int_64, default 0
+  Serial.print("J   prop delay (default 0)                      ");       // int_64, default 0
     Serial.print((int32_t)pConfigInfo->PROP_DELAY[0]);Serial.print(' ');Serial.println((int32_t)pConfigInfo->PROP_DELAY[1]);
     	
-  Serial.print("K   trigger Edge (default R R)                  ");     // R(ising) or F(alling)
+  Serial.print("K   trigger edge (default R R)                  ");     // R(ising) or F(alling)
     Serial.print(pConfigInfo->START_EDGE[0]);Serial.print(' ');Serial.println(pConfigInfo->START_EDGE[1]);
           
-  Serial.print("L   time Dilation (default 2500)                ");       // int_64, default 2500
+  Serial.print("L   time dilation (default 2500)                ");       // int_64, default 2500
     Serial.print((int32_t)pConfigInfo->TIME_DILATION[0]);Serial.print(' ');Serial.println((int32_t)pConfigInfo->TIME_DILATION[1]);
     	  
-  Serial.print("M   Fixed Time2 (default 0)                     ");   // int_64, default 0
+  Serial.print("M   fixed time2 (default 0)                     ");   // int_64, default 0
     Serial.print((int32_t)pConfigInfo->FIXED_TIME2[0]);Serial.print(' ');Serial.println((int32_t)pConfigInfo->FIXED_TIME2[1]);
      
   Serial.print("N   fudge0 (default 0)                          ");   // int_64, default 0
@@ -535,19 +535,21 @@ void doSetupMenu(struct config_t *pConfigInfo)      // also display the default 
     		break;
       case 'F':  timeout(pConfigInfo);
     		break;
-      case 'G':  masterClient(pConfigInfo); // (sync mode)
-    		break;
-      case 'H':  channel_name(pConfigInfo);
-    		break;
-      case 'I':  prop_delay(pConfigInfo);
+      case 'G':  ts_wrap(pConfigInfo);
         break;
-      case 'J':  triggerEdge(pConfigInfo);
+      case 'H':  masterClient(pConfigInfo); // (sync mode)
     		break;
-      case 'K':  timeDilation(pConfigInfo);
+      case 'I':  channel_name(pConfigInfo);
     		break;
-      case 'L':  fixedTime2(pConfigInfo);
+      case 'J':  prop_delay(pConfigInfo);
+        break;
+      case 'K':  triggerEdge(pConfigInfo);
     		break;
-      case 'M':  fudge0(pConfigInfo);
+      case 'L':  timeDilation(pConfigInfo);
+    		break;
+      case 'M':  fixedTime2(pConfigInfo);
+    		break;
+      case 'N':  fudge0(pConfigInfo);
     		break;
       case '1': initializeConfig(pConfigInfo);
         break;
@@ -636,7 +638,7 @@ void print_config (config_t x) {
   Serial.print("# Clock Speed: ");printHzAsMHz(x.CLOCK_HZ);Serial.println(" MHz");
   Serial.print("# Coarse tick: ");printHzAsMHz(x.PICTICK_PS);Serial.println(" usec");
   Serial.print("# Cal Periods: ");Serial.println(x.CAL_PERIODS);
-  Serial.print("# TS Wrap:  ");Serial.print(((int32_t)x.WRAP) / 10000);
+  Serial.print("# Timestamp Wrap:  ");print_int64(x.WRAP  / 10000);Serial.println(" seconds");
   Serial.print("# SyncMode: ");Serial.println(x.SYNC_MODE);
   Serial.print("# Ch Names: ");Serial.print(x.NAME[0]);Serial.print("/");Serial.println(x.NAME[1]);
   Serial.print("# PropDelay: ");Serial.print((int32_t)x.PROP_DELAY[0]);

@@ -17,7 +17,7 @@
 
 void print_unsigned_picos_as_seconds (uint64_t x, int places) {
   uint64_t sec, secx, frac, frach, fracx, fracl;    
-  char str[128];
+   char str[24],str1[8],str2[8];
   
   sec = abs(x / 1000000000000);
   secx = sec * 1000000000000;
@@ -29,21 +29,19 @@ void print_unsigned_picos_as_seconds (uint64_t x, int places) {
   fracx = frach * 1000000;
   fracl = frac - fracx;
 
-  sprintf(str,"%lu.",sec), Serial.print(str);
-
-  if (places <= 6) {
-    sprintf(str, "%0*lu", frach), places, Serial.print(str);
-  } else {
-    sprintf(str, "%06lu", frach), Serial.print(str);
-  }
-  if (places > 6) {
-    sprintf(str, "%0*lu", fracl), places - 6, Serial.print(str);
-  }
+  sprintf(str,"%lu.",sec);
+  Serial.print(str);
+  sprintf(str1, "%6lu", frach);
+  sprintf(str2, "%6lu", fracl);
+  sprintf(str, "%s%s", str1, str2);
+  str[places] = '\0';  // chop off to PLACES resolution   
+  Serial.print(str);
+  
 } 
 
 void print_signed_picos_as_seconds (int64_t x, int places) {
   int64_t sec, secx, frac, frach, fracx, fracl;    
-  char str[128];
+  char str[24],str1[8],str2[8];
   
   sec = abs(x / 1000000000000);  // hopefully avoid double negative sign.  Thanks, Curt!
   secx = sec * 1000000000000;
@@ -58,13 +56,19 @@ void print_signed_picos_as_seconds (int64_t x, int places) {
   if (x < 0) {
     Serial.print("-");
   }
-  sprintf(str,"%ld.",sec), Serial.print(str);
-  if (places <= 6) {
-    sprintf(str, "%0*ld", frach), places, Serial.print(str);
-  } else {
-    sprintf(str, "%06ld", frach), Serial.print(str);
-  }
-  if (places > 6) {
-    sprintf(str, "%0*ld", fracl), places - 6, Serial.print(str);
-  }
+  
+  sprintf(str,"%ld.",sec);
+  Serial.print(str);
+ 
+  sprintf(str1, "%6ld", frach);
+  sprintf(str2, "%6ld", fracl);
+  sprintf(str, "%s%s", str1, str2);
+  str[places] = '\0';  // chop off to PLACES resolution 
+  Serial.print(str);
+}
+
+void print_int64(int64_t x) {
+  uint32_t low = x % 0xFFFFFFFF;
+  uint32_t high = (x >> 32) % 0xFFFFFFFF;
+  Serial.print(low + high);
 }

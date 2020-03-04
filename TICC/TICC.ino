@@ -2,7 +2,7 @@
 // TICC.ino - master sketch file
 // TICC Time interval Counter based on TICC Shield using TDC7200
 //
-// Copyright John Ackermann N8UR 2016-2019
+// Copyright John Ackermann N8UR 2016-2020
 // Portions Copyright George Byrkit K9TRV 2016
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
@@ -39,7 +39,7 @@ int64_t CLOCK_HZ;
 int64_t PICTICK_PS; 
 int64_t CLOCK_PERIOD;
 int16_t CAL_PERIODS;
-int64_t MAX_TICKS;
+int64_t WRAP;
 
 config_t config;
 MeasureMode MODE, lastMODE;
@@ -102,7 +102,7 @@ void ticc_setup() {
   // print banner -- all non-data output lines begin with "#" so they're seen as comments
   Serial.println();
   Serial.println("# TAPR TICC Timestamping Counter");
-  Serial.println("# Copyright 2016-2019 N8UR, K9TRV, NH6Z, WA8YWQ");
+  Serial.println("# Copyright 2016-2020 N8UR, K9TRV, NH6Z, WA8YWQ");
   Serial.println();
 
   Serial.println("#####################");
@@ -118,8 +118,8 @@ void ticc_setup() {
   CLOCK_PERIOD = (PS_PER_SEC/CLOCK_HZ);
   PICTICK_PS = config.PICTICK_PS;
   CAL_PERIODS = config.CAL_PERIODS;
-  MAX_TICKS = config.WRAP;
-      
+  WRAP = config.WRAP;
+       
   for(i = 0; i < ARRAY_SIZE(channels); ++i) {
     // initialize the channels struct variables
     channels[i].totalize = 0;
@@ -139,7 +139,7 @@ void ticc_setup() {
   }
   
   /*******************************************
-   * Synchrnonize multiple TICCs sharing common 10 MHz and 10 kHz clocks.
+   * Synchronize multiple TICCs sharing common 10 MHz and 10 kHz clocks.
   *******************************************/ 
   if (config.SYNC_MODE == 'M') {                     // if we are master, send sync by sending CLIENT_SYNC (A8) high
     delay(2000);                                     // but first sleep to allow client boards to get ready
@@ -178,16 +178,16 @@ void ticc_setup() {
   Serial.println("");
   switch (config.MODE) {
     case Timestamp:
-      Serial.println("# timestamp (seconds)");
+      Serial.print("# timestamp (seconds with ");Serial.print(PLACES);Serial.println(" decimal places)");
       break;
     case Interval:
-      Serial.println("#time interval A->B (seconds)");
+      Serial.print("# time interval A->B (seconds with ");Serial.print(PLACES);Serial.println(" decimal places)");
       break;
     case Period:
-      Serial.println("# period (seconds)");
+      Serial.print("# period (seconds with ");Serial.print(PLACES);Serial.println(" decimal places)");
       break;
     case timeLab:
-      Serial.println("# timestamp chA, chB; interval chA->B (seconds)");
+      Serial.print("# timestamp chA, chB; interval chA->B (seconds with ");Serial.print(PLACES);Serial.println(" decimal places)");
       break;
     case Debug:
       Serial.println("# time1 time2 clock1 cal1 cal2 PICstop tof timestamp");
@@ -341,7 +341,7 @@ void loop() {
 // ISR for timer. Capture PICcount on each channel's STOP 0->1 transition.
 void coarseTimer() {
   PICcount++;
-  if (PICcount == MAX_TICKS) {
+  if (PICcount == WRAP) {
     PICcount = 0;
   }
 }  

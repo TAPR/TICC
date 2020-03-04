@@ -30,7 +30,7 @@ enum MeasureMode : unsigned char {Timestamp, Interval, Period, timeLab, Debug, N
 #define DEFAULT_PICTICK_PS        (int64_t) 100000000   // 100us
 #define DEFAULT_CAL_PERIODS       (int16_t) 20          // CAL_PERIODS (2, 10, 20, 40)
 #define DEFAULT_TIMEOUT           (int16_t) 0x05        // measurement timeout
-#define DEFAULT_WRAP              (int64_t) MAX_INT64   // timestamp rollover in 100 us ticks
+#define DEFAULT_WRAP              (int64_t) 9223372036854775807  // timestamp rollover in 100 us ticks; max 2^63 - 1
 #define DEFAULT_SYNC_MODE         (char)    'M'         // (M)aster or (S)lave
 #define DEFAULT_NAME_0            (char)    'A'
 #define DEFAULT_NAME_1            (char)    'B'

@@ -497,7 +497,7 @@ void doSetupMenu(struct config_t *pConfigInfo)      // also display the default 
 
   Serial.print("G   ts wrap (default bignum)                    "); print_int64(pConfigInfo->WRAP / 10000); Serial.println(); // int64_t ; will be 1e4 to low if left default
   
-  Serial.print("H   sync:  master / client (default M)           "); Serial.print(pConfigInfo->SYNC_MODE); Serial.println();  // M (default) or S
+  Serial.print("H   sync:  master / client (default M)          "); Serial.print(pConfigInfo->SYNC_MODE); Serial.println();  // M (default) or S
   
   Serial.print("I   channel name (default A/B)                  ");  
     Serial.print(pConfigInfo->NAME[0]);Serial.print('/');Serial.println(pConfigInfo->NAME[1]);        

@@ -7,7 +7,7 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-extern const char SW_VERSION[17] = "20200303.1";    // 3 March 2020 - version 1
+extern const char SW_VERSION[17] = "20200305.1";    // 5 March 2020 - version 1
 
 //#define DETAIL_TIMING     // if enabled, prints execution time
 
@@ -119,7 +119,7 @@ void ticc_setup() {
   PICTICK_PS = config.PICTICK_PS;
   CAL_PERIODS = config.CAL_PERIODS;
   WRAP = config.WRAP;
-       
+   
   for(i = 0; i < ARRAY_SIZE(channels); ++i) {
     // initialize the channels struct variables
     channels[i].totalize = 0;

@@ -1,0 +1,43 @@
+Version 20200412.1 has the following significant changes, as well as
+cosmetic and bug fixes:
+
+1.  Output resolution is now 11 decimal places rather than 12.  The last
+(1 ps) digit of the TICC output is purely noise and adds no information.
+It also contributes to issues with floating point precision.  The number
+of decimal places to print is set in the PLACES define in config.h.
+
+2.  The configuration menu has been restructured because I ran out of
+useful mnemonics.  The commands are now simply identified by sequential
+letters.
+
+3.  It is possible to configure a timestamp "rollover" or "wraparound" 
+value via the "G" command in the config menu.  The default is 0 which means 
+there is no rollover and timestamps will increase indefinitely for the 
+next few million years.  Setting the value to 1 means the wrap will happen
+at 10 (one "0"), to 2 means 100 (two "0"s), etc.  Using rollover is a way
+to avoid loss of floating point precision (see below).
+
+4.  The config menu item "Master/Slave" has been changed to "Host/Client".
+The functionality is the same.
+
+5.  The new "I" command, "channel name" allows you to assign names other than
+the default "A" and "B" to the two channels.
+
+ON FLOATING POINT PRECISION
+Most computer programs process non-integer numeric data using floating point
+operations that have about 15.9 digits of precision.  If the number's
+combined integer and fractional places are 16 or more, the accuracy of the
+last decimal places is reduced.  This effect becomes apparent on long
+timestamp series; if 12 decimal places are used to represent single
+picoseconds, there is potential accuracy loss (which shows up as noise)
+when the integer part of the timestamp exceeds 999 seconds (though
+it is usually not apparent until 10000 seconds or greater).  The effect
+increases as the total number of digits increases.
+
+This new firmware version has two features to remediate this problem:
+First, the fractional part of the output is now 11 places (10 ps 
+resolution) instead of 12. Second, the integer part of the timestamp can
+be set to wrap, like a car odometer, at 10/100/1000, etc. seconds.  That
+constrains the number of digits.  Most time analysis software can
+be set to compensate for the wraps.
+ 

@@ -11,14 +11,13 @@ from gpiozero import OutputDevice
 from time import sleep
 
 pin21 = OutputDevice(21)
-conffile = '/home/jra/ticc_avrdude.conf'
 comport = '/dev/ttyTICC0'
 hexfile = sys.argv[1]
 
 for comport in \
     ['/dev/ttyTICC0','/dev/ttyTICC1','/dev/ttyTICC2','/dev/ttyTICC3']:
-    cmd = 'avrdude -v -patmega2560 -cwiring -b115200 -D -P' + comport + ' -C' \
-        + conffile + ' -Uflash:w:' + hexfile + ':i'
+    cmd = 'avrdude -v -patmega2560 -cwiring -b115200 -D -P' + comport + \
+        ' -Uflash:w:' + hexfile + ':i'
 
     pin21.on()
     sleep(0.01)

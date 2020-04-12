@@ -12,5 +12,5 @@ It's an easy way to upload the .hex file from a Windows machine
 For Linux or other platform users, included in this directory is a
 command line utility called "ticc_updater.py" which will upload the
 hex file to an Arduino Mega 2560.  Use it as follows:
-    ./ticc_updater /dev/ttyACM0 ./TICC.ino-20200412.1.hex
+    ./ticc_updater.py /dev/ttyACM0 ./TICC.ino-20200412.1.hex
 

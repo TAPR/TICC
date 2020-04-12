@@ -10,6 +10,11 @@ Arduino Mega 2560.
 * Changes to support multi-TICC
 * Other cleanup
 
+NOTE: To build the TICC firmware, you will need to install the
+EnableInterrupt library, which is included in this directory.  The
+simplest way to install is to open the Arduino IDE and go to
+sketch/Include Library/Add Zip Library and select EnableInterrupts.zip.
+
 The TICC is a circuit board mated to an Arduino Mega 2560 controller that 
 allows very high resolution time interval measurements -- down to less than 
 60 picoseconds (trillionths of a second).  

@@ -3,8 +3,9 @@ cosmetic and bug fixes:
 
 1.  Output resolution is now 11 decimal places rather than 12.  The last
 (1 ps) digit of the TICC output is purely noise and adds no information.
-It also contributes to issues with floating point precision.  The number
-of decimal places to print is set in the PLACES define in config.h.
+It also contributes to issues with floating point precision (see below).
+The number of decimal places to print is set in the PLACES define in 
+config.h.
 
 2.  The configuration menu has been restructured because I ran out of
 useful mnemonics.  The commands are now simply identified by sequential
@@ -28,11 +29,11 @@ Most computer programs process non-integer numeric data using floating point
 operations that have about 15.9 digits of precision.  If the number's
 combined integer and fractional places are 16 or more, the accuracy of the
 last decimal places is reduced.  This effect becomes apparent on long
-timestamp series; if 12 decimal places are used to represent single
-picoseconds, there is potential accuracy loss (which shows up as noise)
-when the integer part of the timestamp exceeds 999 seconds (though
-it is usually not apparent until 10000 seconds or greater).  The effect
-increases as the total number of digits increases.
+timestamp series of low-noise data; if 12 decimal places are used to 
+represent single picoseconds, there is potential accuracy loss (which shows 
+up as noise) when the integer part of the timestamp exceeds 999 seconds,
+though it is usually not apparent until 10000 seconds or greater.  The
+effect increases as the total number of digits increases.
 
 This new firmware version has two features to remediate this problem:
 First, the fractional part of the output is now 11 places (10 ps 

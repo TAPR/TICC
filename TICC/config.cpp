@@ -302,19 +302,19 @@ void timeout(struct config_t *pConfigInfo)
 
 void ts_wrap(struct config_t *pConfigInfo)
 {
-  // The final ts_wrap is an int64 value of 100 us ticks, and the default is (2^63 - 1).
-  // Input is in seconds to make life easier for the user. 
-  int64_t secs;
-  Serial.print("Timestamp Wraparound"), Serial.print(((int32_t)pConfigInfo->WRAP) / 10000), Serial.println(" seconds.  Default is bignum");
-  Serial.println("Enter new value (in seconds; 0 for default) and press Enter (or just Enter for no change)");
+  // The final value here has a practical range from 0 through 10.  0 is default and means no timestamp
+  // wrap. If not zero, value is the number of integer places left of the decimal point
+  
+  int64_t wrap;
+  Serial.print("Timestamp Wraparound"), Serial.print(pConfigInfo->WRAP), Serial.println(" Default is no wrap");
+  Serial.println("Enter new value for number of integers in timestamp (0 for no wrap) and press Enter (or just Enter for no change)");
   getLine();
   inputLineReadIndex = 0;
-  getInt64(&secs, 1);
-  if (secs == 0) {
-    secs = DEFAULT_WRAP;
-    pConfigInfo->WRAP = secs;
+  getInt64(&wrap, 1);
+  if (wrap == 0) {
+    pConfigInfo->WRAP = DEFAULT_WRAP;
   } else {
-    pConfigInfo->WRAP = secs * 1e4;
+    pConfigInfo->WRAP = wrap;
   }
 }
 
@@ -495,7 +495,7 @@ void doSetupMenu(struct config_t *pConfigInfo)      // also display the default 
   Serial.print("F   timeout (default 0x05)                      ");       // int16 
     char str[8];sprintf(str, "0x%02X", (int32_t)pConfigInfo->TIMEOUT);Serial.println(str);
 
-  Serial.print("G   ts wrap (default bignum)                    "); print_int64(pConfigInfo->WRAP / 10000); Serial.println(); // int64_t ; will be 1e4 to low if left default
+  Serial.print("G   ts wrap (default 0 = none)                  "); Serial.print(pConfigInfo->WRAP); Serial.println(); // int16_t
   
   Serial.print("H   sync:  master / client (default M)          "); Serial.print(pConfigInfo->SYNC_MODE); Serial.println();  // M (default) or S
   
@@ -643,7 +643,7 @@ void print_config (config_t x) {
   Serial.print("# Clock Speed: ");printHzAsMHz(x.CLOCK_HZ);Serial.println(" MHz");
   Serial.print("# Coarse tick: ");printHzAsMHz(x.PICTICK_PS);Serial.println(" usec");
   Serial.print("# Cal Periods: ");Serial.println(x.CAL_PERIODS);
-  Serial.print("# Timestamp Wrap:  ");print_int64(x.WRAP  / 10000);Serial.println(" seconds"); // NOTE: this will be 1e4 to low if WRAP is left to default
+  Serial.print("# Timestamp Wrap:  ");Serial.print(x.WRAP);Serial.println("");
   Serial.print("# SyncMode: ");Serial.println(x.SYNC_MODE);
   Serial.print("# Ch Names: ");Serial.print(x.NAME[0]);Serial.print("/");Serial.println(x.NAME[1]);
   Serial.print("# PropDelay: ");Serial.print((int32_t)x.PROP_DELAY[0]);

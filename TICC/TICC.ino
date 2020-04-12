@@ -7,7 +7,7 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-extern const char SW_VERSION[17] = "20200305.1";    // 5 March 2020 - version 1
+extern const char SW_VERSION[17] = "20200412.1";    // 12 April 2020 - version 1
 
 //#define DETAIL_TIMING     // if enabled, prints execution time
 
@@ -39,7 +39,7 @@ int64_t CLOCK_HZ;
 int64_t PICTICK_PS; 
 int64_t CLOCK_PERIOD;
 int16_t CAL_PERIODS;
-int64_t WRAP;
+int16_t WRAP;
 
 config_t config;
 MeasureMode MODE, lastMODE;
@@ -104,11 +104,11 @@ void ticc_setup() {
   Serial.println("# TAPR TICC Timestamping Counter");
   Serial.println("# Copyright 2016-2020 N8UR, K9TRV, NH6Z, WA8YWQ");
   Serial.println();
-
   Serial.println("#####################");
   Serial.println("# TICC Configuration: ");
   print_config(config);
   Serial.println("#####################");
+  Serial.println();
   
   // get and save config change
   UserConfig(&config);
@@ -257,7 +257,7 @@ void loop() {
       
          switch (config.MODE) {
            case Timestamp:
-               print_signed_picos_as_seconds(channels[i].ts, PLACES);
+               print_timestamp(channels[i].ts, PLACES, WRAP);
                Serial.print( " ch");Serial.println(channels[i].name);
            break;
        
@@ -341,10 +341,7 @@ void loop() {
 // ISR for timer. Capture PICcount on each channel's STOP 0->1 transition.
 void coarseTimer() {
   PICcount++;
-  if (PICcount == WRAP) {
-    PICcount = 0;
-  }
-}  
+ }  
 
 void catch_stop0() {
   channels[0].PICstop = PICcount;

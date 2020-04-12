@@ -11,4 +11,6 @@ void print_unsigned_picos_as_seconds (uint64_t x, int places);
 
 void print_signed_picos_as_seconds (int64_t x, int places);
 
+void print_timestamp(int64_t x, int places, int32_t wrap);
+
 void print_int64(int64_t x);

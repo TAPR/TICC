@@ -14,3 +14,8 @@ command line utility called "ticc_updater.py" which will upload the
 hex file to an Arduino Mega 2560.  Use it as follows:
     ./ticc_updater.py /dev/ttyACM0 ./TICC.ino-20200412.1.hex
 
+IMPORTANT -- if you have installed a shorting jumper on the "DISABLE
+AUTO REBOOT" header (located near the chB SMA connector), remove that
+jumper before programming.  You may replace it after programming is
+complete.  Presence of the jumper makes the Arduino refuse to go into
+programming mode unless other special hoops are jumped through.

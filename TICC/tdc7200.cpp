@@ -227,7 +227,7 @@ uint32_t tdc7200Channel::readReg24(byte address) {
   uint16_t mid = SPI.transfer(0x00);
   uint16_t lsb = SPI.transfer(0x00);
 
-  value = (msb << 16) + (mid << 8) + lsb;
+  value = ((uint32_t)msb << 16) + (mid << 8) + lsb;
 
   digitalWrite(CSB, HIGH);
   SPI.endTransaction();

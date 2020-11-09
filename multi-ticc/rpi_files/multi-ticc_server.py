@@ -2,9 +2,10 @@
 # note: -u for unbuffered stdout
 
 ###############################  N8UR multiTICC  ###############################
+#########################   multi-ticc_server.py    ############################
 #
-#	Copyright 2019 by John Ackermann, N8UR jra@febo.com https://febo.com
-#	Version number can be found in the ashglobal.py file
+#	Copyright 2019, 2020 by John Ackermann, N8UR
+#       jra@febo.com https://febo.com
 #
 #	This program is free software; you can redistribute it and/or modify
 #	it under the terms of the GNU General Public License as published by
@@ -18,21 +19,55 @@
 #
 ################################################################################
 
-#########################   multi-ticc_server.py    ############################
-
 import sys
 import time
 import queue
 import threading
+import logging
 import socket
-import serial         # install python3-serial
-import argparse       # install python3-argparse
-from gpiozero import OutputDevice
-from time import sleep
+import time
+import serial       # install python3-serial
+import argparse     # install python3-argparse
+import gpiozero     # install python3-gpiozero         
 
-version = '20191219.1'
+################################################################################
+version = '20201109.1'
 
+# BASE_PORT carries multiplexed unsorted data
+# BASE_PORT + 1 carries multiplexed sorted data
+# BASE_PORT + N carries channel (N-2) data
+BASE_PORT = 9190
+
+# placeholder
 HOST = '0.0.0.0'
+
+# Serial interface speed
+BAUD_RATE = 115200
+
+# List of device names
+DEVICES = ['/dev/ttyTICC0','/dev/ttyTICC1','/dev/ttyTICC2','/dev/ttyTICC3']
+
+# List of channel names
+CHANNELS = ['chA','chB','chC','chD','chE','chF','chG','chH']
+
+###############################################################################
+# Functions
+###############################################################################
+def get_opts():
+    # get params; use default if not specified on command line
+    a = argparse.ArgumentParser()
+    a.add_argument('--comports',nargs='*',type=str, default = DEVICES)
+    a.add_argument('--chnames',nargs='*',type=str, default = CHANNELS)
+    a.add_argument('--baseport',type=int,default = BASE_PORT)
+    a.add_argument('--baudrate',type=int,default = BAUD_RATE)
+
+    args = a.parse_args()
+
+    global hwports, channels, base_tcp_port, baudrate
+    hwports = args.comports
+    channels = args.chnames
+    base_tcp_port = args.baseport
+    baudrate = str(args.baudrate) # convert to string for serial object
 
 def get_data(s,q):
     min_line_length = 18  # serial line shorter than this is bogus
@@ -46,7 +81,8 @@ def get_data(s,q):
                 if not q.full():
                     q.put(line)
         except serial.SerialException:
-            print("Oops serial port error:", sys.exc_info()[0])
+            msg = "Oops serial port error: " + sys.exc_info()[0]
+            logging.error(msg)
             sys.exit(1)
 
 def ch_handler(channels,inqueue,qlist):
@@ -66,8 +102,9 @@ def ch_handler(channels,inqueue,qlist):
     
 def demuxed_port_listener(base_tcp_port,index,q,channels):
     tcp_port = base_tcp_port + index
-    print("Listening and ready to send",
-                channels[index - 2],"on port",tcp_port,"\n")
+    msg = "Listening and ready to send " + str(channels[index - 2]) + \
+        " on port " + str(tcp_port)
+    logging.info(msg)
 
     while True:
         s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
@@ -75,7 +112,8 @@ def demuxed_port_listener(base_tcp_port,index,q,channels):
         s.listen(1)
         while True:
             conn, addr = s.accept()
-            print("Client connection accepted from", addr,"\n")
+            msg = "Client connection accepted from" + addr
+            logging.info(msg)
             try:
                 # empty the queue so we don't have gaps in data
                 while not q.empty():
@@ -89,12 +127,15 @@ def demuxed_port_listener(base_tcp_port,index,q,channels):
                     conn.send(line)
                     q.task_done()
             except socket.error as msg:
-                print("Client connection closed by",addr,"\n")
+                msg = "Client connection closed by" + addr
+                logging.info(str)
                 conn.close()
             conn.close()
 
 def muxed_port_listener(tcp_port,q):
-    print("Listening and ready to send multiplexed data on port",tcp_port,"\n")
+    msg = "Listening and ready to send multiplexed data on port " + \
+            str(tcp_port)
+    logging.info(msg)
 
     while True:
         s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
@@ -102,7 +143,8 @@ def muxed_port_listener(tcp_port,q):
         s.listen(1)
         while True:
             conn, addr = s.accept()
-            print("Client connection accepted from", addr,"\n")
+            msg = "Client connection accepted from" + addr
+            logging.info(msg)
             try:
                 # empty the queue so we don't have gaps in data
                 while not q.empty():
@@ -114,12 +156,13 @@ def muxed_port_listener(tcp_port,q):
                     conn.send(line)
                     q.task_done()
             except socket.error as msg:
-                print("Client connection closed by",addr,"\n")
+                logging.info("Client connection closed by",addr)
                 conn.close()
             conn.close()
 
 def sorted_port_listener(tcp_port,q):
-    print("Listening and ready to send sorted data on port",tcp_port,"\n")
+    msg = "Listening and ready to send sorted data on port " + str(tcp_port)
+    logging.info(msg)
 
     while True:
         s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
@@ -127,7 +170,7 @@ def sorted_port_listener(tcp_port,q):
         s.listen(1)
         while True:
             conn, addr = s.accept()
-            print("Client connection accepted from", addr,"\n")
+            logging.info("Client connection accepted from", addr)
             try:
                 # empty the queue so we don't have gaps in data
                 while not q.empty():
@@ -141,8 +184,9 @@ def sorted_port_listener(tcp_port,q):
                         line = bytes(line,'ascii')
                         conn.send(line)
                         q.task_done()
-            except socket.error as msg:
-                print("Client connection closed by",addri,"\n")
+            except socket.error as m:
+                msg = "Client connection closed by" + addr
+                logging.error(msg)
                 conn.close()
             conn.close()
 
@@ -151,31 +195,25 @@ def sorted_port_listener(tcp_port,q):
 ###############################################################################
 def main():
 
-    print("N8UR multi-ticc_server.py -- version",version,"\n")
-    # get params; use default if not specified on command line
-    a = argparse.ArgumentParser()
-    a.add_argument('--comports',nargs='*',type=str,
-        default = ['/dev/ttyTICC0','/dev/ttyTICC1',
-            '/dev/ttyTICC2','/dev/ttyTICC3'])
-    a.add_argument('--chnames',nargs='*',type=str,
-        default = ['chA','chB','chC','chD','chE','chF','chG','chH'])
-    a.add_argument('--baseport',type=int,default = 9190)
-    a.add_argument('--baudrate',type=int,default = 115200)
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
 
-    args = a.parse_args()
-    hwports = args.comports
-    channels = args.chnames
-    base_tcp_port = args.baseport
-    baudrate = str(args.baudrate)    # convert to string for serial object
+    print()
+    msg = "N8UR multi-ticc_server.py -- version " + version
+    logging.info(msg)
+    print()
+
+    # get arguments
+    get_opts()
 
     # reset the TICCs
-    pin21 = OutputDevice(21)
-    print("Sending reset pulse...")
+    pin21 = gpiozero.OutputDevice(21)
+    logging.info("Sending reset pulse...")
     pin21.on()
-    sleep(0.1)
+    time.sleep(0.1)
     pin21.off()
     pin21.close
-    sleep(10)
+    logging.info("Sleeping for 10 seconds to allow reset...")
+    time.sleep(10)
 
     # open serial ports using a thread for each; dump into serqueue
     serports = []
@@ -183,7 +221,8 @@ def main():
     serqueue = queue.Queue(20)
     for x in hwports:
         try:
-            print("Attempting to open", x, "...\n")
+            msg = "Attempting to open " + x + "..."
+            logging.info(msg)
             p = serial.Serial(x,baudrate)
             serports.append(p)
             thread = threading.Thread(target=get_data, 
@@ -191,8 +230,9 @@ def main():
             thread.start()
             serthreads.append(thread)
         except serial.SerialException:
-            print("Oops... error", sys.exc_info()[0],
-                    "occured opening", x,"!\n")
+            msg = "Oops... error" + sys.exc_info()[0] + \
+                "occured opening" + x + "!"
+            logging.error(msg)
             sys.exit(1)
 
     # make output queues
@@ -232,7 +272,7 @@ def main():
         try:
             time.sleep(0.01)
         except KeyboardInterrupt:
-            print("\nExiting...\n")
+            logging.info("\nExiting...")
             for x in serports:
                 x.close()
             sys.exit(0)

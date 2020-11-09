@@ -112,7 +112,7 @@ def demuxed_port_listener(base_tcp_port,index,q,channels):
         s.listen(1)
         while True:
             conn, addr = s.accept()
-            msg = "Client connection accepted from" + addr
+            msg = "Client connection accepted from " + str(addr)
             logging.info(msg)
             try:
                 # empty the queue so we don't have gaps in data
@@ -127,7 +127,7 @@ def demuxed_port_listener(base_tcp_port,index,q,channels):
                     conn.send(line)
                     q.task_done()
             except socket.error as msg:
-                msg = "Client connection closed by" + addr
+                msg = "Client connection closed by " + str(addr)
                 logging.info(str)
                 conn.close()
             conn.close()
@@ -143,7 +143,7 @@ def muxed_port_listener(tcp_port,q):
         s.listen(1)
         while True:
             conn, addr = s.accept()
-            msg = "Client connection accepted from" + addr
+            msg = "Client connection accepted from " + str(addr)
             logging.info(msg)
             try:
                 # empty the queue so we don't have gaps in data
@@ -156,7 +156,8 @@ def muxed_port_listener(tcp_port,q):
                     conn.send(line)
                     q.task_done()
             except socket.error as msg:
-                logging.info("Client connection closed by",addr)
+                msg = "Client connection closed by " + str(addr)
+                logging.error(msg)
                 conn.close()
             conn.close()
 
@@ -170,7 +171,8 @@ def sorted_port_listener(tcp_port,q):
         s.listen(1)
         while True:
             conn, addr = s.accept()
-            logging.info("Client connection accepted from", addr)
+            msg = "Client connection accepted from " + str(addr)
+            logging.info(msg)
             try:
                 # empty the queue so we don't have gaps in data
                 while not q.empty():
@@ -185,7 +187,7 @@ def sorted_port_listener(tcp_port,q):
                         conn.send(line)
                         q.task_done()
             except socket.error as m:
-                msg = "Client connection closed by" + addr
+                msg = "Client connection closed by " + str(addr)
                 logging.error(msg)
                 conn.close()
             conn.close()

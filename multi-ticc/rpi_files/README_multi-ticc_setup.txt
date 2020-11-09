@@ -2,10 +2,9 @@ Raspberry Pi configuration for multi-TICC -- 09 November 2020
 
 0.  The device hostname has been set to "multi-ticc1" with DHCP
 turned on for the ethernet port.  Use login "pi" and password 
-"n8ga2020" (which you of course should change).  If your client 
-supports avahi ("zeroconf") you should be able to ssh to the 
-system as "multi-ticc1.local".  If not, you'll need to figure out 
-what address your DHCP server has assigned.  
+given to you.  If your client supports avahi ("zeroconf") you should 
+be able to ssh to the system as "multi-ticc1.local".  If not, you'll 
+need to figure out what address your DHCP server has assigned.  
 
 WiFi and Bluetooth are disabled.  To change that, edit /boot/config.txt
 and comment either or both of these lines near the end of the file:

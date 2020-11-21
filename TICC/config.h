@@ -61,7 +61,7 @@ struct config_t {
   int16_t    CAL_PERIODS;               // cal periods 2, 10, 20, 40 (default 20)
   int16_t    TIMEOUT;                   // timeout for measurement in hex (default 0x05)
   int16_t    WRAP;                      // wraparound value for PICcount
-  char       SYNC_MODE;                 // one byte:  'M' for master,  'S' for client
+  char       SYNC_MODE;                 // one byte:  'M' for master,  'C' for client
   
   // per-channel settings, arrays of 2 for channels 0 and 1:
   char       START_EDGE[2];            // (R)ising (default) or (F)alling edge 

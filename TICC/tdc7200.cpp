@@ -50,13 +50,7 @@ void tdc7200Channel::tdc_setup() {
   
   AVG_CYCLES = 0x00;  // default 0x00 for 1 measurement cycle
 
-  // NOTE NOTE NOTE
-  // The TDC chip is *supposed* to set INTB after seeing the
-  // first stop edge.  That doesn't work -- the interrupt never happens.
-  // Workaround is to set for two stops, and rely on the COUNTER_OVERFLOW
-  // timer below.  It's ugly, and it slows down the maximum measurement
-  //rate, but it works.
-  NUM_STOP = 0x01;    // default 0x00 for 1 stop; 0x01 for 2 stops
+  NUM_STOP = 0x00;    // default 0x00 for 1 stop; 0x01 for 2 stops
 
   config_byte2 = CALIBRATION2_PERIODS | AVG_CYCLES | NUM_STOP;
 
@@ -71,7 +65,7 @@ void tdc7200Channel::tdc_setup() {
 
   // enable interrupts:
   // 0x01 new measurement, 0x02 COARSE_OVF, 0x04 CLOCK_OVF 
-  write(INT_MASK, 0x04);           // default 0x07 
+  write(INT_MASK, 0x07);           // default 0x07 
 
   // coarse counter overflow occurs when timeN/63 > mask
   //write(COARSE_CNTR_OVF_H, 0x00);  // default is 0xFF 
@@ -110,8 +104,17 @@ void tdc7200Channel::tdc_setup() {
   byte START_MEAS = 0x01;     // 0x01 to start measurement, 0x00 for no effect
 
   config_byte1 = FORCE_CAL | PARITY_EN | TRIGG_EDGE | STOP_EDGE | \
-            START_EDGE | MEASURE_MODE | START_MEAS;   
+            START_EDGE | MEASURE_MODE | START_MEAS;
+
+  // ack all existing interrupt conditions
+  tdc_ack_int();
   }
+
+// Acknowledge interrupts
+void tdc7200Channel::tdc_ack_int() {
+  uint8_t intstat = readReg8(INT_STATUS);
+  write(INT_STATUS, intstat);
+}
 
 // Enable next measurement cycle
 void tdc7200Channel::ready_next() {
@@ -178,7 +181,10 @@ int64_t tdc7200Channel::read() {
   ring_ps = ((int64_t)normLSB * (int64_t)ring_ticks) / (int64_t)1000000;
   
   tof += (int64_t)ring_ps;
- 
+
+  // Ack all interrupts
+  tdc_ack_int();
+
   return (int64_t)tof;
 }
 

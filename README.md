@@ -30,4 +30,4 @@ the "binaries" folder.
 
 A user's manual is contained in the "docs" folder.
 
-The TICC is available from http://tapr.org/kits_ticc.html.
+The TICC is available from https://tapr.org/product/tapr-ticc/.

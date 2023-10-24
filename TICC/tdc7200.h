@@ -3,7 +3,7 @@
 
 // TICC Time interval Counter based on TICC Shield using TDC7200
 //
-// Copyright John Ackermann N8UR 2016-2020
+// Copyright John Ackermann N8UR 2016-2022
 // Portions Copyright George Byrkit K9TRV 2016
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
@@ -65,6 +65,7 @@ public:
   int64_t last_ts; 
   int64_t period;
   int64_t totalize;
+  int64_t ts_seconds;       // integer part of timestamp; used for TimeLab mode
   int64_t prop_delay;
   int64_t time_dilation;
   int64_t fixed_time2;

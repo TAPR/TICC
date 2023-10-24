@@ -2,7 +2,7 @@
 
 // TICC Time interval Counter based on TICC Shield using TDC7200
 //
-// Copyright John Ackermann N8UR 2016-2020
+// Copyright John Ackermann N8UR 2016-2022
 // Portions Copyright George Byrkit K9TRV 2016
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Portions Copyright David McQuate WA8YWQ 2016
@@ -37,8 +37,8 @@ char getChar()
 }
 
 // get a character
-// if  charSourceIsLine != 0   get the next character from inputLine
-// inputLineReadIndex should be set to 0 after filling  inputLine and
+// if  charSourceIsLine != 0 get the next character from inputLine
+// inputLineReadIndex should be set to 0 after filling inputLine and
 // before calling getChar
 char getChar(int charSourceIsLine)
 {
@@ -53,8 +53,9 @@ char getChar(int charSourceIsLine)
   else return getChar();
 }
 
-// Get a string of characters from Serial input.  Return when buffer inputLine is full or when a newline character is received.
-// The newline is  put into inputLine. In addition, inputLine is always none-terminated.
+// Get a string of characters from Serial input.  Return when buffer inputLine is full 
+// or when a newline character is received. The newline is put into inputLine. 
+// In addition, inputLine is always none-terminated.
 // ToDo:  
 // (1) allow use of Backspace  DONE
 // (2) allow use of Home, End, Delete;  
@@ -84,11 +85,11 @@ void getLine()
 /**********************************************************************************************************/
 // Convert character to int64.
 // The 64-bit integer part is placed in result.
-// Handles any optionally-signed floating point format number, as long as it fits in [64 bit].[64 bit]
-// In principle, that could mean up to 9,223,372,036,854,775,807
-// No, maybe half that?  4,611,686,018,427,387,903 ?
+// Handles any optionally-signed floating point format number, as long as it 
+// fits in [64 bit].[64 bit]. In principle, that could mean up to 
+// 9,223,372,036,854,775,807 No, maybe half that?  4,611,686,018,427,387,903?
 // The values below are made available so that the fractional part may be used.
-// The value of the fraction is    mantissaFractionPart / mantissaFractionPartPower
+// The value of the fraction is mantissaFractionPart / mantissaFractionPartPower
 // The number of fraction digits is limited to 18.
 // Algorithm based on http://krashan.ppa.pl/articles/stringtofloat/
 
@@ -100,7 +101,8 @@ void getLine()
 
 // if 'source' is 0, characters are obtained from the Serial port;
 // if source is 1, characters come from inputLine, using inputLineIndex
-// parse Serial input and return value in result.  Result is unchanged if only a newline is received.  In this case getInt64new remains 0.
+// parse Serial input and return value in result.  Result is unchanged if
+// only a newline is received.  In this case getInt64new remains 0.
 void getInt64(int64_t *result, int source)   
 {
   int negative = 0;
@@ -111,23 +113,23 @@ void getInt64(int64_t *result, int source)
   mantissaIntegerPart = 0;
   mantissaFractionPart = 0;
   mantissaFractionPartPower = 1;
-  getInt64new = 0;          // If we are successful in building a number, this will be set to one.
+  getInt64new = 0;                                  // Set to 1 if successful in building a number
   char newChar;
 
-  while ( isspace(newChar = getChar(source) )  ) /* ignore leading whitespace */ ;
+  while ( isspace(newChar = getChar(source) )  ) ;  // ignore leading whitespace
   
   if (newChar == '+') newChar = getChar(source);    // allow leading plus
-  else if (newChar == '-')                                      // handle leading minus
+  else if (newChar == '-')                          // handle leading minus
   {
     negative = 1;
     newChar = getChar(source);
   }
     while (newChar == '0')
-    { newChar = getChar(source);   // ignore mantissa leading zeros     
-      getInt64new = 1;                  // but note any zero entered
+    { newChar = getChar(source);                    // ignore mantissa leading zeros     
+      getInt64new = 1;                              // but note any zero entered
     }
     
-  if (isdigit(newChar))    // get mantissa integer part
+  if (isdigit(newChar))                             // get mantissa integer part
   {
     while (isdigit(newChar))
     {
@@ -137,7 +139,7 @@ void getInt64(int64_t *result, int source)
       newChar = getChar(source);
     }
   }
-  else if (newChar == '.')          // No integer part; begin mantissa fractional part
+  else if (newChar == '.')                          // No integer part; begin mantissa fractional part
   { newChar = getChar(source);
     while (newChar == '0')
     {
@@ -146,9 +148,8 @@ void getInt64(int64_t *result, int source)
     }
   }
   
-    // newChar should be '.' or digit
-    if (newChar == '.') newChar = getChar(source);
-    while (isdigit(newChar))      // fractional part of mantissa
+    if (newChar == '.') newChar = getChar(source);  // newChar should be '.' or digit
+    while (isdigit(newChar))                        // fractional part of mantissa
     {
       getInt64new = 1;
       mantissa *= 10;
@@ -156,8 +157,7 @@ void getInt64(int64_t *result, int source)
       --exponent;
       newChar = getChar(source);
     }
-    // optional exponent
-    if ( (newChar == 'e') || (newChar == 'E') )
+    if ( (newChar == 'e') || (newChar == 'E') )     // optional exponent
     {
       newChar = getChar(source);
       if (newChar == '+') newChar = getChar(source);
@@ -166,7 +166,7 @@ void getInt64(int64_t *result, int source)
         exponentNegative = 1;
         newChar = getChar(source);
       }
-      while (newChar == '0') newChar = getChar(source);   // bypass exponent leading zeros
+      while (newChar == '0') newChar = getChar(source); // bypass exponent leading zeros
       while(isdigit(newChar))
       {
         exponentInteger *= 10;
@@ -212,7 +212,7 @@ void printHzAsMHz(int64_t x)
 void measurementMode(struct config_t *pConfigInfo)
 {
   int valid = 1;
-Serial.println("Set mode.  Valid single-letter commands are:"), Serial.println();
+  Serial.println("Set mode.  Valid single-letter commands are:"), Serial.println();
   Serial.println("   T     Timestamp mode");
   Serial.println("   P     Period mode");
   Serial.println("   I     time Interval A->B mode");
@@ -616,7 +616,8 @@ void print_MeasureMode(MeasureMode x) {
       Serial.println("Time Interval A->B");
       break;
     case timeLab:
-      Serial.println("TimeLab 3-channel");     
+      Serial.println("TimeLab 3-channel");
+      break;     
     case Debug:
       Serial.println("Debug");
   }  

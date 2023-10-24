@@ -1,0 +1,16 @@
+# top left
+SUBSYSTEM=="tty",  ENV{ID_PATH}=="platform-3f980000.usb-usb-0:1.1.2:1.0", \
+SYMLINK+="ttyTICC0"
+# bottom left
+SUBSYSTEM=="tty",  ENV{ID_PATH}=="platform-3f980000.usb-usb-0:1.1.3:1.0", \
+SYMLINK+="ttyTICC1"
+# top right
+SUBSYSTEM=="tty",  ENV{ID_PATH}=="platform-3f980000.usb-usb-0:1.3:1.0", \
+SYMLINK+="ttyTICC2"
+# bottom right
+SUBSYSTEM=="tty",  ENV{ID_PATH}=="platform-3f980000.usb-usb-0:1.2:1.0", \
+SYMLINK+="ttyTICC3"
+
+
+
+

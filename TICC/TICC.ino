@@ -2,17 +2,21 @@
 // TICC.ino - master sketch file
 // TICC Time interval Counter based on TICC Shield using TDC7200
 //
-// Copyright John Ackermann N8UR 2016-2020
+// Copyright John Ackermann N8UR 2016-2025
 // Portions Copyright George Byrkit K9TRV 2016
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
+// This will increment counters at a fast rate to test
+// overflow behavior.  It's not used in normal operation.
 // #define FAST_WRAP_TEST
 // #define FAST_WRAP_MULTIPLIER 1000000L
 
-extern const char SW_VERSION[17] = "20200412.1";    // 12 April 2020 - version 1
+// #define DETAIL_TIMING     // if enabled, prints execution time
 
-//#define DETAIL_TIMING     // if enabled, prints execution time
+extern const char SW_VERSION[17] = "20250902.1";    // 02 September 2025 - version 1
+
+
 
 #include <stdint.h>           // define unint16_t, uint32_t
 #include <SPI.h>              // SPI support
@@ -35,6 +39,41 @@ extern const char SW_VERSION[17] = "20200412.1";    // 12 April 2020 - version 1
   int32_t start_micros;
   int32_t end_micros;
 #endif
+
+/*
+ * Rationale: 64-bit signed vs unsigned and overflow/formatting
+ * ------------------------------------------------------------
+ * Types and math:
+ * - We use int64_t for PICcount, intermediate timestamp math, and printed values.
+ * - Timestamps are in picoseconds relative to power-on; intervals may be negative.
+ * - Calculations split coarse ticks into seconds and leftover picoseconds to avoid
+ *   intermediate overflow:  sec = PICstop / ticksPerSecond;
+ *                            remTicks = PICstop % ticksPerSecond;
+ *                            remPs = remTicks * PICTICK_PS;  // <= 1e12-PICTICK_PS
+ *   Then subtract fine terms (tof, prop_delay) with borrow by adding PS_PER_SEC and
+ *   decrementing sec when needed. This keeps remPs in [0, PS_PER_SEC).
+ * Why signed:
+ * - We frequently subtract (period = ts - last_ts; interval = tsB - tsA). Results can
+ *   be negative; signed avoids underflow surprises that unsigned would cause.
+ * - During borrow handling, transient negatives are conceptually possible; using
+ *   signed types keeps the logic simple and correct.
+ * When unsigned is acceptable:
+ * - A raw, strictly monotonic accumulator that is never subtracted could be uint64_t.
+ *   In this code, such values are later compared/subtracted, so we keep int64_t.
+ * Overflow behavior and wrap:
+ * - 64-bit signed range is about ±9.22e18. With 100 µs coarse ticks (PICTICK_PS=1e11),
+ *   PICcount would take ~2.9e11 years to overflow; ts in picoseconds would overflow
+ *   only if sec*PS_PER_SEC exceeds ~9.22e18, i.e., ~292 years if sec accumulates in
+ *   real seconds. Our computation maintains ts = sec*PS_PER_SEC + remPs with remPs
+ *   < 1e12, so ts remains within range for centuries of uptime.
+ * - Printing functions format seconds.fraction by splitting with division/modulo by
+ *   1e12, avoiding floating point and large intermediates. Negative values are printed
+ *   with an explicit leading '-' where appropriate.
+ * Formatting helpers:
+ * - print_signed_picos_as_seconds(int64_t, places) prints signed seconds with places
+ *   fractional digits (0..12). print_timestamp(int64_t, places, wrap) prints seconds
+ *   with optional integer wrap (padding/truncating the left side) for stable displays.
+ */
 
 volatile int64_t PICcount;
 int64_t tint;
@@ -234,7 +273,7 @@ void loop() {
   
     int i;
     static  int32_t last_micros = 0;                // Loop watchdog timestamp
-    static  int64_t last_PICcount = 0;              // Counter state memory; why not uint? 
+    static  int64_t last_PICcount = 0;              // Counter state memory
 
     // Ref Clock indicator:
     // Test every 2.5 coarse tick periods for PICcount changes,
@@ -259,28 +298,8 @@ void loop() {
          if (i == 0) {SET_LED_0;SET_EXT_LED_0;};
          if (i == 1) {SET_LED_1;SET_EXT_LED_1;};
 
-        /*  The basic measurement unit of the TICC is a timestamp that is generated
-         *  each time an input pulse appears on either channel A or channel B. 
-         *  The timestamp is the value of the PICcount variable (cumulative 100 uS 
-         *  ticks since power-on) *following* the input pulse, *minus* the time-of-flight 
-         *  value returned from the TDC-7200.  (i.e., the TDC is capturing the time
-         *  interval between the input pulse and the next tick of the 100 uS coarse clock.
-         *  
-         *  Fun facts:
-         *  Maximum size of a uint64 is 18 446 744 073 709 551 615 (20 digits)
-         *  If those are 100 microsecond ticks, a uint64 can represent:
-         *  -- 1 844 674 400 000 000 seconds or
-         *  -- 512 409 555 556 hours
-         *  -- 21 350 398 148.1 days or
-         *  -- ~58 454 204.3754 years
-         *
-         *  If those are picoseconds, a uint64 can represent:
-         *  -- 18 446 744 seconds or 
-         *  -- 5124 hours or
-         *  -- 213 days
-         * before rolling over
-         * 
-         */
+        /* See the top-of-file rationale block for details on timestamp math,
+         * signed 64-bit usage, overflow considerations, and formatting. */
 
          channels[i].last_tof = channels[i].tof;  // preserve last value
          channels[i].last_ts = channels[i].ts;    // preserve last value
@@ -318,84 +337,84 @@ void loop() {
          ( (!config.POLL_CHAR)  ||                   // if unset, output everything
            ( (Serial.available() > 0) && (Serial.read() == config.POLL_CHAR) ) ) ) {   
       
-         switch (config.MODE) {
-           case Timestamp:
-               print_timestamp(channels[i].ts, PLACES, WRAP);
-               Serial.print( " ch");Serial.println(channels[i].name);
-           break;
-       
-           case Interval:
-             if ( (channels[0].ts > 1) && (channels[1].ts > 1) ) { // need both channels to be sane
-               print_signed_picos_as_seconds(channels[1].ts - channels[0].ts, PLACES);
-               Serial.println(" TI(A->B)");
-               channels[0].ts = 0; // set to zero for test next time
-               channels[1].ts = 0; // set to zero for test next time
-             }
-           break;
-       
-           case Period:
-             print_signed_picos_as_seconds(channels[i].period, PLACES);
-             Serial.print( " ch");Serial.println(channels[i].name);
-           break;
-       
-           case timeLab:
-             if ( (channels[0].ts > 1) && (channels[1].ts > 1) ) { // need both channels to be sane
-               print_signed_picos_as_seconds(channels[0].ts, PLACES);
-               Serial.print(" ");Serial.println(channels[0].name);
-               print_signed_picos_as_seconds(channels[1].ts, PLACES);
-               Serial.print(" ");Serial.println(channels[1].name);
-          
-               // horrible hack that creates a fake timestamp for
-               // TimeLab -- it's actually tint(1-0) stuck onto the
-               // integer part of the channel 1 timestamp.
-               chC_diff = channels[1].ts - channels[0].ts; // give us the absolute difference for channel C
-               chC = (channels[1].ts_seconds * PS_PER_SEC) + chC_diff; 
-               
-               print_signed_picos_as_seconds(chC, PLACES);
-               Serial.print(" chC (");Serial.print(channels[1].name);Serial.print(" - ");
-                    Serial.print(channels[0].name);Serial.println(")"); 
-               channels[0].ts = 0; // set to zero for test next time
-               channels[1].ts = 0; // set to zero for test next time
-             } 
-           break;
-  
-           case Debug:
-             char tmpbuf[8];
-             sprintf(tmpbuf,"%06u ",channels[i].time1Result);Serial.print(tmpbuf);
-             sprintf(tmpbuf,"%06u ",channels[i].time2Result);Serial.print(tmpbuf);
-             sprintf(tmpbuf,"%06u ",channels[i].clock1Result);Serial.print(tmpbuf);
-             sprintf(tmpbuf,"%06u ",channels[i].cal1Result);Serial.print(tmpbuf);
-             sprintf(tmpbuf,"%06u ",channels[i].cal2Result);Serial.print(tmpbuf);
-             print_int64(channels[i].PICstop);Serial.print(" ");
-             print_signed_picos_as_seconds(channels[i].tof, PLACES);Serial.print(" ");
-             print_signed_picos_as_seconds(channels[i].ts, PLACES);
-             Serial.print( " ch");Serial.println(channels[i].name);    
-           break;
-
-         case Null:
-           break;
-    } // switch
-
-
- } // print result
-
-      // turn LED off
-      if (i == 0) {CLR_LED_0;CLR_EXT_LED_0;};
-      if (i == 1) {CLR_LED_1;CLR_EXT_LED_1;};
+        switch (config.MODE) {
+          case Timestamp:
+              print_timestamp(channels[i].ts, PLACES, WRAP);
+              Serial.print( " ch");Serial.println(channels[i].name);
+          break;
       
-     #ifdef DETAIL_TIMING
-       end_micros = micros() - start_micros;               
-       Serial.println(end_micros);
-     #endif
+          case Interval:
+            if ( (channels[0].ts > 1) && (channels[1].ts > 1) ) { // need both channels to be sane
+              print_signed_picos_as_seconds(channels[1].ts - channels[0].ts, PLACES);
+              Serial.println(" TI(A->B)");
+              channels[0].ts = 0; // set to zero for test next time
+              channels[1].ts = 0; // set to zero for test next time
+            }
+          break;
+      
+          case Period:
+            print_signed_picos_as_seconds(channels[i].period, PLACES);
+            Serial.print( " ch");Serial.println(channels[i].name);
+          break;
+      
+          case timeLab:
+            if ( (channels[0].ts > 1) && (channels[1].ts > 1) ) { // need both channels to be sane
+              print_signed_picos_as_seconds(channels[0].ts, PLACES);
+              Serial.print(" ");Serial.println(channels[0].name);
+              print_signed_picos_as_seconds(channels[1].ts, PLACES);
+              Serial.print(" ");Serial.println(channels[1].name);
+         
+              // horrible hack that creates a fake timestamp for
+              // TimeLab -- it's actually tint(1-0) stuck onto the
+              // integer part of the channel 1 timestamp.
+              chC_diff = channels[1].ts - channels[0].ts; // give us the absolute difference for channel C
+              chC = (channels[1].ts_seconds * PS_PER_SEC) + chC_diff; 
+              
+              print_signed_picos_as_seconds(chC, PLACES);
+              Serial.print(" chC (");Serial.print(channels[1].name);Serial.print(" - ");
+                   Serial.print(channels[0].name);Serial.println(")"); 
+              channels[0].ts = 0; // set to zero for test next time
+              channels[1].ts = 0; // set to zero for test next time
+            } 
+          break;
+ 
+          case Debug:
+            char tmpbuf[8];
+            sprintf(tmpbuf,"%06u ",channels[i].time1Result);Serial.print(tmpbuf);
+            sprintf(tmpbuf,"%06u ",channels[i].time2Result);Serial.print(tmpbuf);
+            sprintf(tmpbuf,"%06u ",channels[i].clock1Result);Serial.print(tmpbuf);
+            sprintf(tmpbuf,"%06u ",channels[i].cal1Result);Serial.print(tmpbuf);
+            sprintf(tmpbuf,"%06u ",channels[i].cal2Result);Serial.print(tmpbuf);
+            print_int64(channels[i].PICstop);Serial.print(" ");
+            print_signed_picos_as_seconds(channels[i].tof, PLACES);Serial.print(" ");
+            print_signed_picos_as_seconds(channels[i].ts, PLACES);
+            Serial.print( " ch");Serial.println(channels[i].name);    
+          break;
 
-     } // if INTB
-   } // for
- } // while (1) loop
+        case Null:
+          break;
+   } // switch
 
- Serial.println();
- Serial.println("Got break character... exiting loop");
- Serial.println();
- delay(100);
+
+} // print result
+
+     // turn LED off
+     if (i == 0) {CLR_LED_0;CLR_EXT_LED_0;};
+     if (i == 1) {CLR_LED_1;CLR_EXT_LED_1;};
+     
+    #ifdef DETAIL_TIMING
+      end_micros = micros() - start_micros;               
+      Serial.println(end_micros);
+    #endif
+
+    } // if INTB
+  } // for
+} // while (1) loop
+
+Serial.println();
+Serial.println("Got break character... exiting loop");
+Serial.println();
+delay(100);
 
 } // main loop()
 

@@ -38,6 +38,19 @@
  * 31 October 2022 -- that change has been made in all the print functions below
  */
 
+/*
+ * Printing rationale (summary):
+ * - Timestamps and intervals are represented as int64_t picoseconds elsewhere to safely
+ *   handle subtraction and potential negative values; these helpers accept signed values
+ *   where needed and format without floating point.
+ * - We split x into seconds and fractional picoseconds via division/modulo by 1e12 to
+ *   avoid large intermediates and rounding issues. The fractional component is then
+ *   split into two 6-digit fields for efficient zero-padded printing and truncated to
+ *   the requested number of places.
+ * - For unsigned inputs (purely non-negative values), use print_unsigned_picos_as_seconds;
+ *   for possibly negative values, use print_signed_picos_as_seconds or print_timestamp.
+ */
+
 void print_unsigned_picos_as_seconds (uint64_t x, int places) {
   uint64_t sec, frac, frach, fracl;    
    char str[24],str1[8],str2[8];

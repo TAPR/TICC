@@ -7,6 +7,9 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
+// #define FAST_WRAP_TEST
+// #define FAST_WRAP_MULTIPLIER 1000000L
+
 extern const char SW_VERSION[17] = "20200412.1";    // 12 April 2020 - version 1
 
 //#define DETAIL_TIMING     // if enabled, prints execution time
@@ -43,6 +46,7 @@ int64_t chC_diff;       // to hold ts[0] - tc[1] for TimeLab chC
 int64_t CLOCK_PERIOD;
 int16_t CAL_PERIODS;
 int16_t WRAP;
+int64_t ticksPerSecond; // number of coarse ticks per second
 
 config_t config;
 MeasureMode MODE, lastMODE;
@@ -122,6 +126,7 @@ void ticc_setup() {
   PICTICK_PS = config.PICTICK_PS;
   CAL_PERIODS = config.CAL_PERIODS;
   WRAP = config.WRAP;
+  ticksPerSecond = PS_PER_SEC / PICTICK_PS;
    
   for(i = 0; i < ARRAY_SIZE(channels); ++i) {
     // initialize the channels struct variables
@@ -198,6 +203,16 @@ void ticc_setup() {
       break;
   } // switch
   
+#ifdef FAST_WRAP_TEST
+  Serial.println("# FAST_WRAP_TEST ENABLED: accelerating PICcount increments");
+  Serial.print("# FAST_WRAP_MULTIPLIER: ");
+#ifdef FAST_WRAP_MULTIPLIER
+  Serial.println((int32_t)FAST_WRAP_MULTIPLIER);
+#else
+  Serial.println("(default 1)");
+#endif
+#endif
+  
 // turn the LEDs off
   CLR_LED_0;
   CLR_EXT_LED_0;
@@ -273,7 +288,6 @@ void loop() {
 
          // PICTICK_PS defaults to 100 000 000 (100 uS)
          // Avoid overflow by splitting coarse ticks into whole seconds and fractional ps
-         int64_t ticksPerSecond = PS_PER_SEC / PICTICK_PS;
          int64_t sec = channels[i].PICstop / ticksPerSecond;
          int64_t remTicks = channels[i].PICstop % ticksPerSecond;
          int64_t remPs = remTicks * PICTICK_PS;
@@ -391,16 +405,24 @@ void loop() {
  ****************************************************************/
  
 // ISR for timer. Capture PICcount on each channel's STOP 0->1 transition.
-void coarseTimer() {
+ void coarseTimer() {
+#ifdef FAST_WRAP_TEST
+#ifdef FAST_WRAP_MULTIPLIER
+  PICcount += FAST_WRAP_MULTIPLIER;
+#else
+  PICcount += 1;
+#endif
+#else
   PICcount++;
- }  
+#endif
+  }  
 
-void catch_stop0() {
+ void catch_stop0() {
   channels[0].PICstop = PICcount;
-}
+ }
 
-void catch_stop1() {
+ void catch_stop1() {
   channels[1].PICstop = PICcount;  
-}
+ }
 /****************************************************************/
        

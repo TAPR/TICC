@@ -67,6 +67,7 @@ public:
   int64_t totalize;
   int64_t ts_seconds;       // integer part of timestamp; used for TimeLab mode
   int64_t ts_frac_ps;       // fractional picoseconds part [0, 1e12)
+  volatile uint8_t new_ts_ready; // set when a fresh ts_* is available for pairing
   int64_t prop_delay;
   int64_t time_dilation;
   int64_t fixed_time2;

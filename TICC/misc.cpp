@@ -9,6 +9,7 @@
 
 #include <stdint.h>           // define unint16_t, uint32_t
 #include <SPI.h>              // SPI support
+#include <string.h>
 
 #include "misc.h"             // random functions
 #include "board.h"            // Arduino pin definitions
@@ -104,33 +105,51 @@ void print_timestamp(int64_t x, int places, int32_t wrap) {
 // wrap is the number of integer digits to output
   
   int64_t sec, frac, frach, fracl;   
-  char str[24],str1[24],str2[24],trunc_sec[24];
+  char str[24],str1[24],str2[24];
 
   // deal with sign and integer part (print sign before the decimal point)
-  if (x < 0) {
+  bool neg = (x < 0);
+  if (neg) {
     Serial.print("-");
   }
-  sec = abs(x / 1000000000000);   // print absolute value for integer part
+  sec = x / 1000000000000LL;
+  if (sec < 0) sec = -sec;
+
+  // convert sec to string manually for 64-bit safety
+  char ibuf[32];
+  char *p = &ibuf[31];
+  *p = '\0';
+  if (sec == 0) { *(--p) = '0'; }
+  while (sec > 0) { *(--p) = '0' + (char)(sec % 10); sec /= 10; }
+
+  int len = (int)strlen(p);
   if (wrap == 0) {
-    sprintf(str,"%ld.",sec);
-    Serial.print(str);
+    Serial.print(p);
+    Serial.print('.');
   } else {
-    sprintf(str,"%0.10ld.",sec);    // pad with zeros to 10 characters long
-    Serial.print(&str[10 - wrap]); // now print keeping only lowest order integer places
+    if (len < wrap) {
+      for (int i = 0; i < wrap - len; ++i) Serial.print('0');
+      Serial.print(p);
+      Serial.print('.');
+    } else {
+      Serial.print(p + (len - wrap));
+      Serial.print('.');
+    }
   }
  
   // now handle fractional part (always non-negative)
-  frac = abs(x % 1000000000000LL);
+  frac = x % 1000000000000LL;
+  if (frac < 0) frac = -frac;
   
   // break fractional into two 6 digit numbers 
   frach = frac / 1000000LL;
   fracl = frac % 1000000LL;
 
-  sprintf(str1, "%06ld", frach);
-  sprintf(str2, "%06ld", fracl);
+  sprintf(str1, "%06ld", (long)frach);
+  sprintf(str2, "%06ld", (long)fracl);
   sprintf(str, "%s%s", str1, str2);
   str[places] = '\0';  // chop off to PLACES resolution 
-  Serial.print(str);  ;
+  Serial.print(str);
 }
 
 void print_int64(int64_t num ) {
@@ -168,12 +187,26 @@ void print_timestamp_sec_frac(int64_t sec, int64_t frac_ps, int places, int32_t 
     sec = -sec;
   }
 
+  // convert sec to string manually for 64-bit safety
+  char ibuf[32];
+  char *p = &ibuf[31];
+  *p = '\0';
+  if (sec == 0) { *(--p) = '0'; }
+  while (sec > 0) { *(--p) = '0' + (char)(sec % 10); sec /= 10; }
+
+  int len = (int)strlen(p);
   if (wrap == 0) {
-    sprintf(str, "%ld.", sec);
-    Serial.print(str);
+    Serial.print(p);
+    Serial.print('.');
   } else {
-    sprintf(str, "%0.10ld.", sec);  // pad to 10 digits
-    Serial.print(&str[10 - wrap]);
+    if (len < wrap) {
+      for (int i = 0; i < wrap - len; ++i) Serial.print('0');
+      Serial.print(p);
+      Serial.print('.');
+    } else {
+      Serial.print(p + (len - wrap));
+      Serial.print('.');
+    }
   }
 
   int64_t frach = frac_ps / 1000000LL;   // upper 6 digits
@@ -190,12 +223,21 @@ void print_signed_sec_frac(int64_t sec, int64_t frac_ps, int places) {
   // sec may be negative; frac_ps must be in [0, 1e12)
   char str[24], str1[8], str2[8];
 
-  if (sec < 0) {
+  bool neg = (sec < 0);
+  if (neg) {
     Serial.print("-");
-    sec = -sec;
+    if (frac_ps > 0) {
+      // Convert from borrowed form (e.g., -1, PS-δ) to standard (-0, δ)
+      sec = -(sec + 1);           // e.g., -1 -> 0
+      frac_ps = PS_PER_SEC - frac_ps;
+    } else {
+      // Exact integer seconds negative
+      sec = -sec;
+    }
   }
 
-  sprintf(str, "%ld.", sec);
+  // integer part
+  sprintf(str, "%ld.", (long)sec);
   Serial.print(str);
 
   int64_t frach = frac_ps / 1000000LL;

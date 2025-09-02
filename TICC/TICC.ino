@@ -13,8 +13,8 @@ extern const char SW_VERSION[17] = "20250902.1";
 // DEBUG OPTIONS
 // Increment counters at a fast rate to test
 // overflow behavior.  It's not used in normal operation.
-#define FAST_WRAP_TEST
-#define FAST_WRAP_MULTIPLIER 1000000L
+//#define FAST_WRAP_TEST
+//#define FAST_WRAP_MULTIPLIER 1000000L
 
 // #define DETAIL_TIMING     // if enabled, prints execution time
 
@@ -357,6 +357,7 @@ void loop() {
          channels[i].ts_seconds = sec;
          channels[i].ts = (sec * PS_PER_SEC) + remPs;
          channels[i].ts_frac_ps = remPs;
+         channels[i].new_ts_ready = 1;
          
          channels[i].period = channels[i].ts - channels[i].last_ts;
          channels[i].totalize++;                  // increment number of events   
@@ -375,16 +376,7 @@ void loop() {
           break;
       
           case Interval:
-            if ( (channels[0].ts > 1) && (channels[1].ts > 1) ) { // need both channels to be sane
-              // signed difference B - A using split seconds and fraction
-              int64_t sec = channels[1].ts_seconds - channels[0].ts_seconds;
-              int64_t frac = channels[1].ts_frac_ps - channels[0].ts_frac_ps;
-              if (frac < 0) { frac += PS_PER_SEC; sec -= 1; }
-              print_signed_sec_frac(sec, frac, PLACES);
-              Serial.println(" TI(A->B)");
-              channels[0].ts = 0; // set to zero for test next time
-              channels[1].ts = 0; // set to zero for test next time
-            }
+            // handled after channel loop (pairing logic)
           break;
       
           case Period:
@@ -397,26 +389,7 @@ void loop() {
           break;
       
           case timeLab:
-            if ( (channels[0].ts > 1) && (channels[1].ts > 1) ) { // need both channels to be sane
-              print_timestamp_sec_frac(channels[0].ts_seconds, channels[0].ts_frac_ps, PLACES, WRAP);
-              Serial.print(" ");Serial.println(channels[0].name);
-              print_timestamp_sec_frac(channels[1].ts_seconds, channels[1].ts_frac_ps, PLACES, WRAP);
-              Serial.print(" ");Serial.println(channels[1].name);
-         
-              // horrible hack that creates a fake timestamp for
-              // TimeLab -- it's actually tint(1-0) stuck onto the
-              // integer part of the channel 1 timestamp.
-              int64_t secC = channels[1].ts_seconds - channels[0].ts_seconds;
-              int64_t fracC = channels[1].ts_frac_ps - channels[0].ts_frac_ps;
-              if (fracC < 0) { fracC += PS_PER_SEC; secC -= 1; }
-              chC = (channels[1].ts_seconds * PS_PER_SEC) + (secC * PS_PER_SEC + fracC);
-              
-              print_signed_sec_frac(secC, fracC, PLACES);
-              Serial.print(" chC (");Serial.print(channels[1].name);Serial.print(" - ");
-                   Serial.print(channels[0].name);Serial.println(")"); 
-              channels[0].ts = 0; // set to zero for test next time
-              channels[1].ts = 0; // set to zero for test next time
-            } 
+            // handled after channel loop (pairing logic)
           break;
  
           case Debug:
@@ -450,6 +423,47 @@ void loop() {
 
     } // if INTB
   } // for
+
+  // After processing both channels, pair and print once per matched sample for Interval and TimeLab
+  if ( (channels[0].new_ts_ready && channels[1].new_ts_ready) &&
+       (channels[0].totalize > 2) && (channels[1].totalize > 2) ) {
+    // Optional poll gating
+    bool ok = (!config.POLL_CHAR);
+    if (!ok) {
+      if ((Serial.available() > 0) && (Serial.read() == config.POLL_CHAR)) ok = true;
+    }
+    if (ok) {
+      switch (config.MODE) {
+        case Interval: {
+          int64_t sec = channels[1].ts_seconds - channels[0].ts_seconds;
+          int64_t frac = channels[1].ts_frac_ps - channels[0].ts_frac_ps;
+          if (frac < 0) { frac += PS_PER_SEC; sec -= 1; }
+          print_signed_sec_frac(sec, frac, PLACES);
+          Serial.println(" TI(A->B)");
+          channels[0].new_ts_ready = 0;
+          channels[1].new_ts_ready = 0;
+          break; }
+        case timeLab: {
+          print_timestamp_sec_frac(channels[0].ts_seconds, channels[0].ts_frac_ps, PLACES, WRAP);
+          Serial.print(" ");Serial.println(channels[0].name);
+          print_timestamp_sec_frac(channels[1].ts_seconds, channels[1].ts_frac_ps, PLACES, WRAP);
+          Serial.print(" ");Serial.println(channels[1].name);
+          int64_t secC = channels[1].ts_seconds - channels[0].ts_seconds;
+          int64_t fracC = channels[1].ts_frac_ps - channels[0].ts_frac_ps;
+          if (fracC < 0) { fracC += PS_PER_SEC; secC -= 1; }
+          // Synthesize timestamp: use B's seconds; use magnitude of interval as fractional
+          int64_t chC_sec = channels[1].ts_seconds;
+          int64_t chC_frac = (secC < 0) ? (fracC == 0 ? 0 : (PS_PER_SEC - fracC)) : fracC;
+          print_timestamp_sec_frac(chC_sec, chC_frac, PLACES, WRAP);
+          Serial.print(" chC (");Serial.print(channels[1].name);Serial.print(" - ");
+               Serial.print(channels[0].name);Serial.println(")"); 
+          channels[0].new_ts_ready = 0;
+          channels[1].new_ts_ready = 0;
+          break; }
+        default: break;
+      }
+    }
+  }
 } // while (1) loop
 
 Serial.println();

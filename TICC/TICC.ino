@@ -13,8 +13,8 @@ extern const char SW_VERSION[17] = "20250902.1";
 // DEBUG OPTIONS
 // Increment counters at a fast rate to test
 // overflow behavior.  It's not used in normal operation.
-// #define FAST_WRAP_TEST
-// #define FAST_WRAP_MULTIPLIER 1000000L
+#define FAST_WRAP_TEST
+#define FAST_WRAP_MULTIPLIER 1000000L
 
 // #define DETAIL_TIMING     // if enabled, prints execution time
 
@@ -356,6 +356,7 @@ void loop() {
          }
          channels[i].ts_seconds = sec;
          channels[i].ts = (sec * PS_PER_SEC) + remPs;
+         channels[i].ts_frac_ps = remPs;
          
          channels[i].period = channels[i].ts - channels[i].last_ts;
          channels[i].totalize++;                  // increment number of events   
@@ -369,7 +370,7 @@ void loop() {
       
         switch (config.MODE) {
           case Timestamp:
-              print_timestamp(channels[i].ts, PLACES, WRAP);
+              print_timestamp_sec_frac(channels[i].ts_seconds, channels[i].ts_frac_ps, PLACES, WRAP);
               Serial.print( " ch");Serial.println(channels[i].name);
           break;
       
@@ -417,7 +418,7 @@ void loop() {
             sprintf(tmpbuf,"%06u ",channels[i].cal2Result);Serial.print(tmpbuf);
             print_int64(channels[i].PICstop);Serial.print(" ");
             print_signed_picos_as_seconds(channels[i].tof, PLACES);Serial.print(" ");
-            print_signed_picos_as_seconds(channels[i].ts, PLACES);
+            print_timestamp_sec_frac(channels[i].ts_seconds, channels[i].ts_frac_ps, PLACES, WRAP);
             Serial.print( " ch");Serial.println(channels[i].name);    
           break;
 

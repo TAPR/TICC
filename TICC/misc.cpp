@@ -106,8 +106,11 @@ void print_timestamp(int64_t x, int places, int32_t wrap) {
   int64_t sec, frac, frach, fracl;   
   char str[24],str1[24],str2[24],trunc_sec[24];
 
-  // deal with integer part and wrap value if specified
-  sec = abs(x / 1000000000000);   // hopefully avoid double negative sign.  Thanks, Curt!
+  // deal with sign and integer part (print sign before the decimal point)
+  if (x < 0) {
+    Serial.print("-");
+  }
+  sec = abs(x / 1000000000000);   // print absolute value for integer part
   if (wrap == 0) {
     sprintf(str,"%ld.",sec);
     Serial.print(str);
@@ -116,17 +119,13 @@ void print_timestamp(int64_t x, int places, int32_t wrap) {
     Serial.print(&str[10 - wrap]); // now print keeping only lowest order integer places
   }
  
-  // now handle fractional part
+  // now handle fractional part (always non-negative)
   frac = abs(x % 1000000000000LL);
   
   // break fractional into two 6 digit numbers 
   frach = frac / 1000000LL;
   fracl = frac % 1000000LL;
 
-  if (x < 0) {
-    Serial.print("-");
-  }
-  
   sprintf(str1, "%06ld", frach);
   sprintf(str2, "%06ld", fracl);
   sprintf(str, "%s%s", str1, str2);
@@ -156,4 +155,33 @@ void print_int64(int64_t num ) {
 
     //print the whole string
     Serial.print(p);
+}
+
+void print_timestamp_sec_frac(int64_t sec, int64_t frac_ps, int places, int32_t wrap) {
+  // sec: whole seconds, frac_ps: [0, 1e12) picoseconds
+  // places: digits to the right of the decimal (0..12)
+  // wrap: integer digits to display (0 means no wrapping)
+  char str[24], str1[24], str2[24];
+
+  if (sec < 0) {
+    Serial.print("-");
+    sec = -sec;
+  }
+
+  if (wrap == 0) {
+    sprintf(str, "%ld.", sec);
+    Serial.print(str);
+  } else {
+    sprintf(str, "%0.10ld.", sec);  // pad to 10 digits
+    Serial.print(&str[10 - wrap]);
+  }
+
+  int64_t frach = frac_ps / 1000000LL;   // upper 6 digits
+  int64_t fracl = frac_ps % 1000000LL;   // lower 6 digits
+
+  sprintf(str1, "%06ld", (long)frach);
+  sprintf(str2, "%06ld", (long)fracl);
+  sprintf(str, "%s%s", str1, str2);
+  str[places] = '\0';
+  Serial.print(str);
 }

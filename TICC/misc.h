@@ -15,3 +15,6 @@ void print_signed_picos_as_seconds (int64_t x, int places);
 void print_timestamp(int64_t x, int places, int32_t wrap);
 
 void print_int64(int64_t x);
+
+// Print from split seconds and fractional picoseconds to avoid 64-bit ps overflow
+void print_timestamp_sec_frac(int64_t sec, int64_t frac_ps, int places, int32_t wrap);

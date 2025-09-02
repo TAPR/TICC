@@ -165,7 +165,7 @@ void ticc_setup() {
   // print banner -- all non-data output lines begin with "#" so they're seen as comments
   Serial.println();
   Serial.println("# TAPR TICC Timestamping Counter");
-  Serial.println("# Copyright 2016-2020 N8UR, K9TRV, NH6Z, WA8YWQ");
+  Serial.println("# Copyright 2016-2025 N8UR, K9TRV, NH6Z, WA8YWQ");
   Serial.println();
   Serial.println("#####################");
   Serial.println("# TICC Configuration: ");

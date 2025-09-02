@@ -616,9 +616,11 @@ void print_MeasureMode(MeasureMode x) {
       Serial.println("Time Interval A->B");
       break;
     case timeLab:
-      Serial.println("TimeLab 3-channel");     
+      Serial.println("TimeLab 3-channel");
+      break;
     case Debug:
       Serial.println("Debug");
+      break;
   }  
 }
 

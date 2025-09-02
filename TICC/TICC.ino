@@ -56,53 +56,40 @@ extern const char SW_VERSION[17] = "20250902.1";
  * ~292 years if sec accumulates in real seconds.  As noted below,
  * we treat integer and fractional seconds separately, which pushes
  * the overflow into the far future.
-
+ *
  * Rationale: 64-bit signed vs unsigned
  * ------------------------------------------------------------
  * Types and math:
- * - We use int64_t for PICcount, intermediate timestamp math,
- *   and printed values.
- * - Timestamps are in picoseconds relative to power-on; intervals
- *   may be negative.
- * - Calculations split coarse ticks into seconds and leftover
- *   picoseconds to avoid intermediate overflow:  
- *        sec = PICstop / ticksPerSecond;
- *        remTicks = PICstop % ticksPerSecond;
- *        remPs = remTicks * PICTICK_PS;  // <= 1e12-PICTICK_PS
- *   Then subtract fine terms (tof, prop_delay) with borrow by 
- *   adding PS_PER_SEC and decrementing sec when needed. This 
- *   keeps remPs in [0, PS_PER_SEC).
+ * - We use int64_t for PICcount and all arithmetic.
+ * - We store timestamps split as:
+ *     ts_seconds  := whole seconds (int64_t)
+ *     ts_frac_ps  := fractional part in picoseconds [0, 1e12)
+ *   This avoids ps-domain overflow and simplifies borrow handling.
+ * - Intervals and periods are computed in split form with explicit
+ *   borrow: if (fracB - fracA < 0) { frac += 1e12; sec -= 1; }.
  *
  * Why signed:
- * - We frequently subtract (period = ts - last_ts; 
- *   interval = tsB - tsA). Results can be negative; signed avoids 
- *   underflow surprises that unsigned would cause.
- * - During borrow handling, transient negatives are conceptually 
- *   possible; using signed types keeps the logic simple and correct.
- * When unsigned is acceptable:
- * - A raw, strictly monotonic accumulator that is never subtracted 
- *   could be uint64_t.  In this code, such values are later 
- *   compared/subtracted, so we keep int64_t.
- *   Our computation maintains ts = sec*PS_PER_SEC + remPs with remPs
- *   < 1e12, so ts remains within range for centuries of uptime.
+ * - We frequently subtract (period = ts - last_ts; interval = tsB - tsA).
+ *   Results can be negative; signed avoids underflow surprises from unsigned.
  *
- * Generating timestamps without overflow:
- * - Split coarse ticks into whole seconds and fractional
- *   picos, then subtract time of flight with borrow if needed.
- * - This gives us about 3 billion centuries, which ought to be enough.
+ * Pairing logic (two-channel modes):
+ * - Each channel sets new_ts_ready when a fresh timestamp is computed.
+ * - Interval and TimeLab modes print once per pair, only when both
+ *   channels have new_ts_ready set; the flags are then cleared.
+ *   This prevents mixing a new sample on one channel with an older
+ *   sample on the other, which can produce apparent ±1 s artifacts.
+ *
+ * TimeLab chC synthesis:
+ * - chA and chB are printed as timestamps (ts_seconds.ts_frac_ps).
+ * - chC represents (B - A) but is synthesized to look like a timestamp
+ *   by taking channel B's ts_seconds and using |B - A| as the fractional
+ *   picoseconds. This makes chC suitable for three-corner-hat analysis.
  *
  * Printing:
- * The Arduino printf() functions do not work with 64 bit variables,
- * and are slow as well.  To get around this, printing functions format
- * seconds.fraction by splitting with division/modulo by 1e12,
- * avoiding floating point and large intermediates. Negative values 
- * are printed with an explicit leading '-' where appropriate.
- * Formatting helpers:
- * - print_signed_picos_as_seconds(int64_t, places) prints signed 
- *   seconds with "places" fractional digits (0..12). 
- * - print_timestamp(int64_t, places, wrap) prints seconds with 
- *   optional integer wrap (padding/truncating the left side) for 
- *   stable displays.
+ * - Arduino printf() does not support 64-bit integers. Printing helpers
+ *   manually format the integer seconds and zero-pad fractional parts.
+ * - We avoid floating point and large intermediates by splitting values
+ *   with division/modulo by 1e12.
  */
 
 volatile int64_t PICcount;

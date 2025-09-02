@@ -37,6 +37,9 @@ volatile int64_t PICcount;
 int64_t tint;
 int64_t CLOCK_HZ;
 int64_t PICTICK_PS; 
+int64_t chC;            // to hold TimeLab mode chC
+int64_t chC_diff;       // to hold ts[0] - tc[1] for TimeLab chC       
+
 int64_t CLOCK_PERIOD;
 int16_t CAL_PERIODS;
 int16_t WRAP;
@@ -126,6 +129,7 @@ void ticc_setup() {
     channels[i].PICstop = 0;
     channels[i].tof = 0;
     channels[i].ts = 0;
+    channels[1].ts_seconds = 0;
     channels[i].name = config.NAME[i];
     channels[i].prop_delay = config.PROP_DELAY[i];
     channels[i].time_dilation = config.TIME_DILATION[i];
@@ -215,8 +219,8 @@ void loop() {
   
     int i;
     static  int32_t last_micros = 0;                // Loop watchdog timestamp
-    static  int64_t last_PICcount = 0;              // Counter state memory
- 
+    static  int64_t last_PICcount = 0;              // Counter state memory; why not uint? 
+
     // Ref Clock indicator:
     // Test every 2.5 coarse tick periods for PICcount changes,
     // and turn on EXT_LED_CLK if changes are detected
@@ -230,7 +234,7 @@ void loop() {
  
     for(i = 0; i < ARRAY_SIZE(channels); ++i) {
      
-      // Only need to do anything if INTB is low, otherwise no work to do.
+      // No work to do unless intb is low
        if(digitalRead(channels[i].INTB)==0) {
          #ifdef DETAIL_TIMING
            start_micros = micros();
@@ -240,11 +244,56 @@ void loop() {
          if (i == 0) {SET_LED_0;SET_EXT_LED_0;};
          if (i == 1) {SET_LED_1;SET_EXT_LED_1;};
 
+        /*  The basic measurement unit of the TICC is a timestamp that is generated
+         *  each time an input pulse appears on either channel A or channel B. 
+         *  The timestamp is the value of the PICcount variable (cumulative 100 uS 
+         *  ticks since power-on) *following* the input pulse, *minus* the time-of-flight 
+         *  value returned from the TDC-7200.  (i.e., the TDC is capturing the time
+         *  interval between the input pulse and the next tick of the 100 uS coarse clock.
+         *  
+         *  Fun facts:
+         *  Maximum size of a uint64 is 18 446 744 073 709 551 615 (20 digits)
+         *  If those are 100 microsecond ticks, a uint64 can represent:
+         *  -- 1 844 674 400 000 000 seconds or
+         *  -- 512 409 555 556 hours
+         *  -- 21 350 398 148.1 days or
+         *  -- ~58 454 204.3754 years
+         *
+         *  If those are picoseconds, a uint64 can represent:
+         *  -- 18 446 744 seconds or 
+         *  -- 5124 hours or
+         *  -- 213 days
+         * before rolling over
+         * 
+         */
+
          channels[i].last_tof = channels[i].tof;  // preserve last value
          channels[i].last_ts = channels[i].ts;    // preserve last value
          channels[i].tof = channels[i].read();    // get data from chip
-         channels[i].ts = (channels[i].PICstop * (int64_t)PICTICK_PS) - channels[i].tof;
-         channels[i].ts -= channels[i].prop_delay;     // subtract propagation delay
+
+         // PICTICK_PS defaults to 100 000 000 (100 uS)
+         // Avoid overflow by splitting coarse ticks into whole seconds and fractional ps
+         int64_t ticksPerSecond = PS_PER_SEC / PICTICK_PS;
+         int64_t sec = channels[i].PICstop / ticksPerSecond;
+         int64_t remTicks = channels[i].PICstop % ticksPerSecond;
+         int64_t remPs = remTicks * PICTICK_PS;
+         // Subtract fine time-of-flight with borrow if needed
+         if (remPs >= channels[i].tof) {
+           remPs -= channels[i].tof;
+         } else {
+           remPs = (remPs + PS_PER_SEC) - channels[i].tof;
+           sec -= 1;
+         }
+         // Subtract propagation delay similarly
+         if (remPs >= channels[i].prop_delay) {
+           remPs -= channels[i].prop_delay;
+         } else {
+           remPs = (remPs + PS_PER_SEC) - channels[i].prop_delay;
+           sec -= 1;
+         }
+         channels[i].ts_seconds = sec;
+         channels[i].ts = (sec * PS_PER_SEC) + remPs;
+         
          channels[i].period = channels[i].ts - channels[i].last_ts;
          channels[i].totalize++;                  // increment number of events   
          channels[i].ready_next();                // Re-arm for next measurement, clear TDC INTB
@@ -252,7 +301,7 @@ void loop() {
       // if poll character is not null, only output if we've received that character via serial
       // NOTE: this may provide random results if measuring timestamp from both channels!
       if ( (channels[i].totalize > 2) &&             // throw away first readings      
-         ( (!config.POLL_CHAR)  ||                 // if unset, output everything
+         ( (!config.POLL_CHAR)  ||                   // if unset, output everything
            ( (Serial.available() > 0) && (Serial.read() == config.POLL_CHAR) ) ) ) {   
       
          switch (config.MODE) {
@@ -281,13 +330,16 @@ void loop() {
                Serial.print(" ");Serial.println(channels[0].name);
                print_signed_picos_as_seconds(channels[1].ts, PLACES);
                Serial.print(" ");Serial.println(channels[1].name);
-           
+          
                // horrible hack that creates a fake timestamp for
                // TimeLab -- it's actually tint(1-0) stuck onto the
                // integer part of the channel 1 timestamp.
-               print_signed_picos_as_seconds( (channels[1].ts - channels[0].ts, PLACES) +
-                 ( (channels[1].totalize * (int64_t)PS_PER_SEC) - 1), PLACES );
-               Serial.print("chC (");Serial.print(channels[1].name);Serial.print("-");Serial.print(channels[0].name);Serial.println(")"); 
+               chC_diff = channels[1].ts - channels[0].ts; // give us the absolute difference for channel C
+               chC = (channels[1].ts_seconds * PS_PER_SEC) + chC_diff; 
+               
+               print_signed_picos_as_seconds(chC, PLACES);
+               Serial.print(" chC (");Serial.print(channels[1].name);Serial.print(" - ");
+                    Serial.print(channels[0].name);Serial.println(")"); 
                channels[0].ts = 0; // set to zero for test next time
                channels[1].ts = 0; // set to zero for test next time
              } 
@@ -300,7 +352,7 @@ void loop() {
              sprintf(tmpbuf,"%06u ",channels[i].clock1Result);Serial.print(tmpbuf);
              sprintf(tmpbuf,"%06u ",channels[i].cal1Result);Serial.print(tmpbuf);
              sprintf(tmpbuf,"%06u ",channels[i].cal2Result);Serial.print(tmpbuf);
-             Serial.print((int32_t)channels[i].PICstop);Serial.print(" ");
+             print_int64(channels[i].PICstop);Serial.print(" ");
              print_signed_picos_as_seconds(channels[i].tof, PLACES);Serial.print(" ");
              print_signed_picos_as_seconds(channels[i].ts, PLACES);
              Serial.print( " ch");Serial.println(channels[i].name);    
@@ -313,23 +365,23 @@ void loop() {
 
  } // print result
 
-       // turn LED off
-       if (i == 0) {CLR_LED_0;CLR_EXT_LED_0;};
-       if (i == 1) {CLR_LED_1;CLR_EXT_LED_1;};
-       
-      #ifdef DETAIL_TIMING
-        end_micros = micros() - start_micros;               
-        Serial.println(end_micros);
-      #endif
+      // turn LED off
+      if (i == 0) {CLR_LED_0;CLR_EXT_LED_0;};
+      if (i == 1) {CLR_LED_1;CLR_EXT_LED_1;};
+      
+     #ifdef DETAIL_TIMING
+       end_micros = micros() - start_micros;               
+       Serial.println(end_micros);
+     #endif
 
-      } // if INTB
-    } // for
-  } // while (1) loop
+     } // if INTB
+   } // for
+ } // while (1) loop
 
-  Serial.println();
-  Serial.println("Got break character... exiting loop");
-  Serial.println();
-  delay(100);
+ Serial.println();
+ Serial.println("Got break character... exiting loop");
+ Serial.println();
+ delay(100);
 
 } // main loop()
 

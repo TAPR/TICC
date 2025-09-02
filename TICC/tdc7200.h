@@ -65,6 +65,7 @@ public:
   int64_t last_ts; 
   int64_t period;
   int64_t totalize;
+  int64_t ts_seconds;       // integer part of timestamp; used for TimeLab mode
   int64_t prop_delay;
   int64_t time_dilation;
   int64_t fixed_time2;

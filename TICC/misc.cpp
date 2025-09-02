@@ -185,3 +185,25 @@ void print_timestamp_sec_frac(int64_t sec, int64_t frac_ps, int places, int32_t 
   str[places] = '\0';
   Serial.print(str);
 }
+
+void print_signed_sec_frac(int64_t sec, int64_t frac_ps, int places) {
+  // sec may be negative; frac_ps must be in [0, 1e12)
+  char str[24], str1[8], str2[8];
+
+  if (sec < 0) {
+    Serial.print("-");
+    sec = -sec;
+  }
+
+  sprintf(str, "%ld.", sec);
+  Serial.print(str);
+
+  int64_t frach = frac_ps / 1000000LL;
+  int64_t fracl = frac_ps % 1000000LL;
+
+  sprintf(str1, "%06ld", (long)frach);
+  sprintf(str2, "%06ld", (long)fracl);
+  sprintf(str, "%s%s", str1, str2);
+  str[places] = '\0';
+  Serial.print(str);
+}

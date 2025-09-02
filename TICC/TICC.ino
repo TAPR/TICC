@@ -376,7 +376,11 @@ void loop() {
       
           case Interval:
             if ( (channels[0].ts > 1) && (channels[1].ts > 1) ) { // need both channels to be sane
-              print_signed_picos_as_seconds(channels[1].ts - channels[0].ts, PLACES);
+              // signed difference B - A using split seconds and fraction
+              int64_t sec = channels[1].ts_seconds - channels[0].ts_seconds;
+              int64_t frac = channels[1].ts_frac_ps - channels[0].ts_frac_ps;
+              if (frac < 0) { frac += PS_PER_SEC; sec -= 1; }
+              print_signed_sec_frac(sec, frac, PLACES);
               Serial.println(" TI(A->B)");
               channels[0].ts = 0; // set to zero for test next time
               channels[1].ts = 0; // set to zero for test next time
@@ -384,24 +388,30 @@ void loop() {
           break;
       
           case Period:
-            print_signed_picos_as_seconds(channels[i].period, PLACES);
+            // period = current - last using split seconds and fraction
+            int64_t secp = channels[i].ts_seconds - (channels[i].last_ts / PS_PER_SEC);
+            int64_t fracp = channels[i].ts_frac_ps - (channels[i].last_ts % PS_PER_SEC);
+            if (fracp < 0) { fracp += PS_PER_SEC; secp -= 1; }
+            print_signed_sec_frac(secp, fracp, PLACES);
             Serial.print( " ch");Serial.println(channels[i].name);
           break;
       
           case timeLab:
             if ( (channels[0].ts > 1) && (channels[1].ts > 1) ) { // need both channels to be sane
-              print_signed_picos_as_seconds(channels[0].ts, PLACES);
+              print_timestamp_sec_frac(channels[0].ts_seconds, channels[0].ts_frac_ps, PLACES, WRAP);
               Serial.print(" ");Serial.println(channels[0].name);
-              print_signed_picos_as_seconds(channels[1].ts, PLACES);
+              print_timestamp_sec_frac(channels[1].ts_seconds, channels[1].ts_frac_ps, PLACES, WRAP);
               Serial.print(" ");Serial.println(channels[1].name);
          
               // horrible hack that creates a fake timestamp for
               // TimeLab -- it's actually tint(1-0) stuck onto the
               // integer part of the channel 1 timestamp.
-              chC_diff = channels[1].ts - channels[0].ts; // give us the absolute difference for channel C
-              chC = (channels[1].ts_seconds * PS_PER_SEC) + chC_diff; 
+              int64_t secC = channels[1].ts_seconds - channels[0].ts_seconds;
+              int64_t fracC = channels[1].ts_frac_ps - channels[0].ts_frac_ps;
+              if (fracC < 0) { fracC += PS_PER_SEC; secC -= 1; }
+              chC = (channels[1].ts_seconds * PS_PER_SEC) + (secC * PS_PER_SEC + fracC);
               
-              print_signed_picos_as_seconds(chC, PLACES);
+              print_signed_sec_frac(secC, fracC, PLACES);
               Serial.print(" chC (");Serial.print(channels[1].name);Serial.print(" - ");
                    Serial.print(channels[0].name);Serial.println(")"); 
               channels[0].ts = 0; // set to zero for test next time

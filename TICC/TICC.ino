@@ -97,7 +97,7 @@ int64_t tint;
 int64_t CLOCK_HZ;
 int64_t PICTICK_PS; 
 int64_t chC;            // to hold TimeLab mode chC
-int64_t chC_diff;       // to hold ts[0] - tc[1] for TimeLab chC       
+int64_t chC_diff;       // to hold ts[0] - ts[1] for TimeLab chC       
 
 int64_t CLOCK_PERIOD;
 int16_t CAL_PERIODS;
@@ -432,9 +432,9 @@ void loop() {
           break; }
         case timeLab: {
           print_timestamp_sec_frac(channels[0].ts_seconds, channels[0].ts_frac_ps, PLACES, WRAP);
-          Serial.print(" ");Serial.println(channels[0].name);
+          Serial.print(" ch");Serial.println(channels[0].name);
           print_timestamp_sec_frac(channels[1].ts_seconds, channels[1].ts_frac_ps, PLACES, WRAP);
-          Serial.print(" ");Serial.println(channels[1].name);
+          Serial.print(" ch");Serial.println(channels[1].name);
           int64_t secC = channels[1].ts_seconds - channels[0].ts_seconds;
           int64_t fracC = channels[1].ts_frac_ps - channels[0].ts_frac_ps;
           if (fracC < 0) { fracC += PS_PER_SEC; secC -= 1; }

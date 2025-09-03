@@ -292,23 +292,23 @@ void loop() {
     // Test every 2.5 coarse tick periods for PICcount changes,
     // and turn on EXT_LED_CLK if changes are detected
     int i;
-    static  int32_t last_micros = 0;                // Loop watchdog timestamp
+    static  uint32_t last_micros = 0;               // Loop watchdog timestamp
     static  int64_t last_PICcount = 0;              // Counter state memory
     static  uint8_t ext_clk_led_on = 0;             // LED state cache to avoid redundant writes
   
     {
       uint32_t now = micros();
-      if ( (uint32_t)(now - last_micros) > 250 ) {   // intentionally fixed at 250 us: low overhead, ample margin
+      if ( (now - last_micros) > 250 ) {              // 2.5 ticks at 100 uS/tick
         last_micros = now;                           // Update the watchdog timestamp
         int64_t pc_snapshot = PICcount;              // Snapshot volatile counter
         if (pc_snapshot != last_PICcount) {          // Has the counter changed since last sampled?
-          if (!ext_clk_led_on) {                    // turn on only if was off   
+          if (!ext_clk_led_on) {                     // turn on only if was off   
             SET_EXT_LED_CLK; 
             ext_clk_led_on = 1;
           } 
           last_PICcount = pc_snapshot;               // Save the current counter state
         } else {
-          if (ext_clk_led_on) {                     // turn off only if was on
+          if (ext_clk_led_on) {                      // turn off only if was on
             CLR_EXT_LED_CLK; 
             ext_clk_led_on = 0;
           }

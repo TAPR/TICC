@@ -87,6 +87,9 @@ public:
   byte readReg8(byte address);
   uint32_t readReg24(byte address);
   void write(byte address, byte value);
+
+private:
+  void tdc_ack_int();
 };
 
 #endif	/* TDC7200_H */

@@ -309,7 +309,8 @@ void loop() {
           last_PICcount = pc_snapshot;               // Save the current counter state
         } else {
           if (ext_clk_led_on) {                      // turn off only if was on
-            CLR_EXT_LED_CLK; 
+            CLR_EXT_LED_CLK;
+            Serial.println("10 MHZ Reference lost!")
             ext_clk_led_on = 0;
           }
         }

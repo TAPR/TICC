@@ -7,8 +7,8 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-// 02 September 2025 - version 1
-extern const char SW_VERSION[17] = "20250902.1";
+// 03 September 2025 - version 1
+extern const char SW_VERSION[17] = "20250903.1";
 
 // DEBUG OPTIONS
 // Increment counters at a fast rate to test
@@ -295,7 +295,8 @@ void loop() {
     // Ref Clock indicator:
     // Test every 2.5 coarse tick periods for PICcount changes,
     // and turn on EXT_LED_CLK if changes are detected
-    if( (micros() - last_micros) > 250 ) {  // hard coded to avoid fp math; breaks if PICTICK_PS changes 
+    if( (micros() - last_micros) > 250 ) {  // intentionally fixed at 250 us: very low overhead per loop,
+                                            // ample margin to catch PICcount increments across expected rates
       last_micros = micros();               // Update the watchdog timestamp
       if(PICcount != last_PICcount) {       // Has the counter changed since last sampled?
         SET_EXT_LED_CLK;                    // Yes: LED goes on
@@ -320,6 +321,7 @@ void loop() {
 
          channels[i].last_tof = channels[i].tof;  // preserve last value
          channels[i].last_ts = channels[i].ts;    // preserve last value
+         channels[i].last_ts_split = channels[i].ts_split;
          channels[i].tof = channels[i].read();    // get data from chip
 
          // PICTICK_PS defaults to 100 000 000 (100 uS)
@@ -345,6 +347,8 @@ void loop() {
          channels[i].ts = (sec * PS_PER_SEC) + remPs;
          channels[i].ts_frac_ps = remPs;
          channels[i].new_ts_ready = 1;
+         channels[i].ts_split.sec = sec;
+         channels[i].ts_split.frac_ps = remPs;
          
          channels[i].period = channels[i].ts - channels[i].last_ts;
          channels[i].totalize++;                  // increment number of events   
@@ -358,7 +362,7 @@ void loop() {
       
         switch (config.MODE) {
           case Timestamp:
-              print_timestamp_sec_frac(channels[i].ts_seconds, channels[i].ts_frac_ps, PLACES, WRAP);
+              printTimestampSplit(channels[i].ts_split, PLACES, WRAP);
               Serial.print( " ch");Serial.println(channels[i].name);
           break;
       
@@ -367,11 +371,9 @@ void loop() {
           break;
       
           case Period:
-            // period = current - last using split seconds and fraction
-            int64_t secp = channels[i].ts_seconds - (channels[i].last_ts / PS_PER_SEC);
-            int64_t fracp = channels[i].ts_frac_ps - (channels[i].last_ts % PS_PER_SEC);
-            if (fracp < 0) { fracp += PS_PER_SEC; secp -= 1; }
-            print_signed_sec_frac(secp, fracp, PLACES);
+            // period = current - last using SplitTime helpers
+            { SplitTime p = diffSplit(channels[i].ts_split, channels[i].last_ts_split);
+              printSignedSplit(p, PLACES); }
             Serial.print( " ch");Serial.println(channels[i].name);
           break;
       
@@ -387,8 +389,10 @@ void loop() {
             sprintf(tmpbuf,"%06u ",channels[i].cal1Result);Serial.print(tmpbuf);
             sprintf(tmpbuf,"%06u ",channels[i].cal2Result);Serial.print(tmpbuf);
             print_int64(channels[i].PICstop);Serial.print(" ");
-            print_signed_picos_as_seconds(channels[i].tof, PLACES);Serial.print(" ");
-            print_timestamp_sec_frac(channels[i].ts_seconds, channels[i].ts_frac_ps, PLACES, WRAP);
+            { SplitTime t = { 0, (channels[i].tof < 0 ? -channels[i].tof : channels[i].tof) };
+              printSignedSplit(t, PLACES); }
+            Serial.print(" ");
+            printTimestampSplit(channels[i].ts_split, PLACES, WRAP);
             Serial.print( " ch");Serial.println(channels[i].name);    
           break;
 
@@ -422,26 +426,20 @@ void loop() {
     if (ok) {
       switch (config.MODE) {
         case Interval: {
-          int64_t sec = channels[1].ts_seconds - channels[0].ts_seconds;
-          int64_t frac = channels[1].ts_frac_ps - channels[0].ts_frac_ps;
-          if (frac < 0) { frac += PS_PER_SEC; sec -= 1; }
-          print_signed_sec_frac(sec, frac, PLACES);
+          SplitTime d = diffSplit(channels[1].ts_split, channels[0].ts_split);
+          printSignedSplit(d, PLACES);
           Serial.println(" TI(A->B)");
           channels[0].new_ts_ready = 0;
           channels[1].new_ts_ready = 0;
           break; }
         case timeLab: {
-          print_timestamp_sec_frac(channels[0].ts_seconds, channels[0].ts_frac_ps, PLACES, WRAP);
+          printTimestampSplit(channels[0].ts_split, PLACES, WRAP);
           Serial.print(" ch");Serial.println(channels[0].name);
-          print_timestamp_sec_frac(channels[1].ts_seconds, channels[1].ts_frac_ps, PLACES, WRAP);
+          printTimestampSplit(channels[1].ts_split, PLACES, WRAP);
           Serial.print(" ch");Serial.println(channels[1].name);
-          int64_t secC = channels[1].ts_seconds - channels[0].ts_seconds;
-          int64_t fracC = channels[1].ts_frac_ps - channels[0].ts_frac_ps;
-          if (fracC < 0) { fracC += PS_PER_SEC; secC -= 1; }
-          // Synthesize timestamp: use B's seconds; use magnitude of interval as fractional
-          int64_t chC_sec = channels[1].ts_seconds;
-          int64_t chC_frac = (secC < 0) ? (fracC == 0 ? 0 : (PS_PER_SEC - fracC)) : fracC;
-          print_timestamp_sec_frac(chC_sec, chC_frac, PLACES, WRAP);
+          SplitTime delta = absDeltaSplit(channels[1].ts_split, channels[0].ts_split);
+          SplitTime c = { channels[1].ts_split.sec, delta.frac_ps };
+          printTimestampSplit(c, PLACES, WRAP);
           Serial.print(" chC (");Serial.print(channels[1].name);Serial.print(" - ");
                Serial.print(channels[0].name);Serial.println(")"); 
           channels[0].new_ts_ready = 0;

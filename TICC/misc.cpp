@@ -52,105 +52,7 @@
  *   for possibly negative values, use print_signed_picos_as_seconds or print_timestamp.
  */
 
-void print_unsigned_picos_as_seconds (uint64_t x, int places) {
-  uint64_t sec, frac, frach, fracl;    
-   char str[24],str1[8],str2[8];
-  
-  sec = abs(x / 1000000000000);
-  frac = abs(x % 1000000000000ULL);
-
-  // break fractional part of seconds into two 6 digit numbers
-
-  frach = frac / 1000000ULL;
-  fracl = frac % 1000000ULL;
-
-  sprintf(str,"%lu.",sec);
-  Serial.print(str);
-  sprintf(str1, "%06lu", frach);
-  sprintf(str2, "%06lu", fracl);
-  sprintf(str, "%s%s", str1, str2);
-  str[places] = '\0';  // chop off to PLACES resolution   
-  Serial.print(str);
-  
-} 
-
-void print_signed_picos_as_seconds (int64_t x, int places) {
-  int64_t sec, frac, frach, fracl;    
-  char str[24],str1[8],str2[8];
-  
-  sec = abs(x / 1000000000000);  // hopefully avoid double negative sign.  Thanks, Curt!
-  frac = abs(x % 1000000000000LL);
-  
-  // break fractional part of seconds into two 6 digit numbers
-
-  frach = frac / 1000000LL;
-  fracl = frac % 1000000LL;
-
-  if (x < 0) {
-    Serial.print("-");
-  }
-  
-  sprintf(str,"%ld.",sec);
-  Serial.print(str);
- 
-  sprintf(str1, "%06ld", frach);
-  sprintf(str2, "%06ld", fracl);
-  sprintf(str, "%s%s", str1, str2);
-  str[places] = '\0';  // chop off to PLACES resolution 
-  Serial.print(str);
-}
-
-void print_timestamp(int64_t x, int places, int32_t wrap) {
-// places is the number of places to the right of the decimal point
-// wrap is the number of integer digits to output
-  
-  int64_t sec, frac, frach, fracl;   
-  char str[24],str1[24],str2[24];
-
-  // deal with sign and integer part (print sign before the decimal point)
-  bool neg = (x < 0);
-  if (neg) {
-    Serial.print("-");
-  }
-  sec = x / 1000000000000LL;
-  if (sec < 0) sec = -sec;
-
-  // convert sec to string manually for 64-bit safety
-  char ibuf[32];
-  char *p = &ibuf[31];
-  *p = '\0';
-  if (sec == 0) { *(--p) = '0'; }
-  while (sec > 0) { *(--p) = '0' + (char)(sec % 10); sec /= 10; }
-
-  int len = (int)strlen(p);
-  if (wrap == 0) {
-    Serial.print(p);
-    Serial.print('.');
-  } else {
-    if (len < wrap) {
-      for (int i = 0; i < wrap - len; ++i) Serial.print('0');
-      Serial.print(p);
-      Serial.print('.');
-    } else {
-      Serial.print(p + (len - wrap));
-      Serial.print('.');
-    }
-  }
- 
-  // now handle fractional part (always non-negative)
-  frac = x % 1000000000000LL;
-  if (frac < 0) frac = -frac;
-  
-  // break fractional into two 6 digit numbers 
-  frach = frac / 1000000LL;
-  fracl = frac % 1000000LL;
-
-  sprintf(str1, "%06ld", (long)frach);
-  sprintf(str2, "%06ld", (long)fracl);
-  sprintf(str, "%s%s", str1, str2);
-  str[places] = '\0';  // chop off to PLACES resolution 
-  Serial.print(str);
-}
+// legacy printing helpers removed after migration to SplitTime printers
 
 void print_int64(int64_t num ) {
   const static char toAscii[] = "0123456789ABCDEF";
@@ -248,4 +150,51 @@ void print_signed_sec_frac(int64_t sec, int64_t frac_ps, int places) {
   sprintf(str, "%s%s", str1, str2);
   str[places] = '\0';
   Serial.print(str);
+}
+
+// SplitTime helpers
+
+void normalizeSplit(struct SplitTime *t) {
+  if (!t) return;
+  // bring frac_ps into [0, PS_PER_SEC)
+  if (t->frac_ps >= PS_PER_SEC) {
+    int64_t carry = t->frac_ps / PS_PER_SEC;
+    t->sec += carry;
+    t->frac_ps -= carry * PS_PER_SEC;
+  } else if (t->frac_ps < 0) {
+    int64_t borrow = (-t->frac_ps + PS_PER_SEC - 1) / PS_PER_SEC;
+    t->sec -= borrow;
+    t->frac_ps += borrow * PS_PER_SEC;
+  }
+}
+
+SplitTime diffSplit(const SplitTime &b, const SplitTime &a) {
+  SplitTime r;
+  r.sec = b.sec - a.sec;
+  r.frac_ps = b.frac_ps - a.frac_ps;
+  if (r.frac_ps < 0) { r.frac_ps += PS_PER_SEC; r.sec -= 1; }
+  return r;
+}
+
+SplitTime absDeltaSplit(const SplitTime &b, const SplitTime &a) {
+  SplitTime d = diffSplit(b, a);
+  if (d.sec < 0 || (d.sec == 0 && d.frac_ps < 0)) {
+    // Negate: convert signed split to magnitude
+    if (d.frac_ps > 0) {
+      d.frac_ps = PS_PER_SEC - d.frac_ps;
+      d.sec = -(d.sec + 1);
+    } else {
+      d.sec = -d.sec;
+    }
+  }
+  return d;
+}
+
+void printTimestampSplit(const SplitTime &t, int places, int32_t wrap) {
+  print_timestamp_sec_frac(t.sec, t.frac_ps, places, wrap);
+}
+
+void printSignedSplit(const SplitTime &t, int places) {
+  // Use sign of seconds and fractional handled inside print_signed_sec_frac
+  print_signed_sec_frac(t.sec, t.frac_ps, places);
 }

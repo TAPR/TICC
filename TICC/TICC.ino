@@ -284,24 +284,36 @@ void loop() {
   ticc_setup();                                     // initialize and optionally go to config
 
   while (1) {
-    if ( Serial.read() == '#') {        // test for break character
+    if ( (Serial.read() == '#') ) {        // test for break character
       break;
     }
-  
-    int i;
-    static  int32_t last_micros = 0;                // Loop watchdog timestamp
-    static  int64_t last_PICcount = 0;              // Counter state memory
-
+     
     // Ref Clock indicator:
     // Test every 2.5 coarse tick periods for PICcount changes,
     // and turn on EXT_LED_CLK if changes are detected
-    if( (micros() - last_micros) > 250 ) {  // intentionally fixed at 250 us: very low overhead per loop,
-                                            // ample margin to catch PICcount increments across expected rates
-      last_micros = micros();               // Update the watchdog timestamp
-      if(PICcount != last_PICcount) {       // Has the counter changed since last sampled?
-        SET_EXT_LED_CLK;                    // Yes: LED goes on
-        last_PICcount = PICcount;           // Save the current counter state
-      } else CLR_EXT_LED_CLK;               // No: LED goes off
+    int i;
+    static  int32_t last_micros = 0;                // Loop watchdog timestamp
+    static  int64_t last_PICcount = 0;              // Counter state memory
+    static  uint8_t ext_clk_led_on = 0;             // LED state cache to avoid redundant writes
+  
+    {
+      uint32_t now = micros();
+      if ( (uint32_t)(now - last_micros) > 250 ) {   // intentionally fixed at 250 us: low overhead, ample margin
+        last_micros = now;                           // Update the watchdog timestamp
+        int64_t pc_snapshot = PICcount;              // Snapshot volatile counter
+        if (pc_snapshot != last_PICcount) {          // Has the counter changed since last sampled?
+          if (!ext_clk_led_on) {                    // turn on only if was off   
+            SET_EXT_LED_CLK; 
+            ext_clk_led_on = 1;
+          } 
+          last_PICcount = pc_snapshot;               // Save the current counter state
+        } else {
+          if (ext_clk_led_on) {                     // turn off only if was on
+            CLR_EXT_LED_CLK; 
+            ext_clk_led_on = 0;
+          }
+        }
+      }
     }
  
     for(i = 0; i < ARRAY_SIZE(channels); ++i) {

@@ -20,7 +20,6 @@ extern int64_t CLOCK_HZ;
 extern int64_t PICTICK_PS; 
 extern int64_t CLOCK_PERIOD;
 extern int16_t CAL_PERIODS;
-extern 
 
 // Constructor
 tdc7200Channel::tdc7200Channel(char id, int enable, int intb, int csb, int stop, int led) :
@@ -34,6 +33,12 @@ tdc7200Channel::tdc7200Channel(char id, int enable, int intb, int csb, int stop,
 
 // TDC7200 configure
 void tdc7200Channel::tdc_setup() {
+#ifdef SIM_MODE
+  // In simulation, skip hardware configuration; initialize minimal state.
+  config_byte1 = 0;
+  config_byte2 = 0;
+  return;
+#endif
   byte CALIBRATION2_PERIODS, AVG_CYCLES, NUM_STOP;
    
   digitalWrite(ENABLE, LOW);
@@ -112,17 +117,62 @@ void tdc7200Channel::tdc_setup() {
 
 // Acknowledge interrupts
 void tdc7200Channel::tdc_ack_int() {
+#ifdef SIM_MODE
+  // nothing to do in simulation
+  return;
+#endif
   uint8_t intstat = readReg8(INT_STATUS);
   write(INT_STATUS, intstat);
 }
 
 // Enable next measurement cycle
 void tdc7200Channel::ready_next() {
+#ifdef SIM_MODE
+  // nothing to do in simulation
+  return;
+#endif
   write(CONFIG1, config_byte1);
   }
 
 // Read TDC
 int64_t tdc7200Channel::read() {
+#ifdef SIM_MODE
+  // Generate synthetic but consistent register values to exercise the math path
+  static uint32_t phase = 0;
+  phase += 37U;
+
+  // 24-bit safe synthetic values
+  // Make time1 slightly larger than time2 so ring_ticks is small positive (or vary with phase)
+  time1Result = 500000U + (phase % 200U);        // ~0.5e6
+  time2Result = time1Result - 80U;               // ring ~ +80
+  clock1Result = 0U;                             // keep coarse term small
+  cal1Result = 1000000U;                         // 1,000,000
+  cal2Result = cal1Result + (uint32_t)(CAL_PERIODS - 1) * 1000000U; // ensures calCount = 1,000,000
+
+  int64_t normLSB;
+  int64_t calCount;
+  int64_t ring_ticks;
+  int64_t ring_ps;
+  int64_t tof; 
+
+  tof = (int64_t)(clock1Result * CLOCK_PERIOD);
+  tof -= (int64_t)fudge;
+
+  calCount = ((int64_t)(cal2Result - cal1Result) * (int64_t)(1000000 - time_dilation) ) / (int64_t)(CAL_PERIODS - 1);
+
+  if (fixed_time2) {
+    time2Result = (int64_t)fixed_time2;
+  }
+
+  normLSB = ( (int64_t)CLOCK_PERIOD * (int64_t)1000000000000 ) / (int64_t)calCount;
+
+  ring_ticks = (int64_t)time1Result - (int64_t)time2Result;
+  ring_ps = ((int64_t)normLSB * (int64_t)ring_ticks) / (int64_t)1000000;
+  
+  tof += (int64_t)ring_ps;
+
+  return (int64_t)tof;
+#else
   int64_t normLSB;
   int64_t calCount;
   int64_t ring_ticks;
@@ -186,6 +236,7 @@ int64_t tdc7200Channel::read() {
   tdc_ack_int();
 
   return (int64_t)tof;
+#endif
 }
 
 
@@ -215,7 +266,7 @@ byte tdc7200Channel::readReg8(byte address) {
 }
 
 uint32_t tdc7200Channel::readReg24(byte address) {
-  uint32_t long value = 0;
+  uint32_t value = 0;
 
   // CSB needs to be toggled between 24-bit register reads
   SPI.beginTransaction(SPISettings(SPI_SPEED, MSBFIRST, SPI_MODE0));

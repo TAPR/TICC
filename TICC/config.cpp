@@ -363,8 +363,10 @@ void triggerEdge(struct config_t *pConfigInfo)
   Serial.println("Enter R for rising or F for falling edge for each channel with space between (e.g., 'R F').  Default is R R");
   
   getLine();
-  char* e0 = toupper(strtok(inputLine,delim)[1]);
-  char* e1 = toupper(strtok(NULL,delim)[0]);
+  char* token0 = strtok(inputLine,delim);
+  char* token1 = strtok(NULL,delim);
+  char e0 = token0 ? toupper(token0[0]) : '\0';
+  char e1 = token1 ? toupper(token1[0]) : '\0';
 
   if ( (e0 == 'R') || (e0 == 'F') ) pConfigInfo->START_EDGE[0] = e0;
   if ( (e1 == 'R') || (e1 == 'F') ) pConfigInfo->START_EDGE[1] = e1;

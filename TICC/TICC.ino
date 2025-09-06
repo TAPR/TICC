@@ -224,7 +224,7 @@ void ticc_setup() {
     channels[i].PICstop = 0;
     channels[i].tof = 0;
     channels[i].ts = 0;
-    channels[1].ts_seconds = 0;
+
     channels[i].name = config.NAME[i];
     channels[i].prop_delay = config.PROP_DELAY[i];
     channels[i].time_dilation = config.TIME_DILATION[i];

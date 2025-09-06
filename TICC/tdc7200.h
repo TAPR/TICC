@@ -62,7 +62,6 @@ public:
   int64_t tof;
   int64_t last_tof;
   int64_t totalize;
-  int64_t ts_seconds;       // integer part of timestamp; used for TimeLab mode
   // removed ts_frac_ps; represented via SplitTime chunks
   volatile uint8_t new_ts_ready; // set when a fresh ts_* is available for pairing
   SplitTime ts_split;       // unified split timestamp (sec, frac_hi, frac_lo)

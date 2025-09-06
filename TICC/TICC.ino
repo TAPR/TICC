@@ -66,6 +66,10 @@ static uint32_t sim_pairs = 0;
 static uint32_t sim_last = 0;
 #endif
 
+#ifndef TS_PAIR_TIMEOUT_US
+#define TS_PAIR_TIMEOUT_US 500000UL  // 0.5 s: force pair with self if the other channel doesn't arrive
+#endif
+
 /*
  * NOTES FOR FUTURE GENERATIONS
  * 
@@ -326,7 +330,6 @@ void loop() {
     // Ref Clock indicator:
     // Test every 2.5 coarse tick periods for PICcount changes,
     // and turn on EXT_LED_CLK if changes are detected
-    int i;
     static  uint32_t last_micros = 0;               // Loop watchdog timestamp
     static  int64_t last_PICcount = 0;              // Counter state memory
     static  uint8_t ext_clk_led_on = 0;             // LED state cache to avoid redundant writes
@@ -440,16 +443,7 @@ void loop() {
      
         switch (config.MODE) {
           case Timestamp:
-              {
-                char line[64]; size_t n = 0;
-                n = formatTimestampSplitTo(line, sizeof(line), channels[i].ts_split, PLACES, WRAP);
-                if (n < sizeof(line)) { line[n++] = ' '; }
-                if (n < sizeof(line)) { line[n++] = 'c'; }
-                if (n < sizeof(line)) { line[n++] = 'h'; }
-                if (n < sizeof(line)) { line[n++] = (char)channels[i].name; }
-                if (n < sizeof(line)) { line[n++] = '\n'; }
-                Serial.write((const uint8_t*)line, n);
-              }
+              // Defer Timestamp printing to the post-loop pairing block to enforce ordering
           break;
      
           case Interval:
@@ -508,6 +502,65 @@ void loop() {
 
     } // if INTB
   } // for
+
+  // Timestamp mode: assemble and print pairs without timeout
+  if (config.MODE == Timestamp) {
+    // Two-slot buffer; accumulate two successive samples (across either channel)
+    // then emit exactly two lines per pair in fixed order: if both channels are
+    // present print chA then chB; if both are the same channel, print that
+    // channel twice.
+    struct PairSlot { SplitTime t; uint8_t ch; };
+    static PairSlot ts_pair[2];
+    static uint8_t ts_pair_count = 0;
+
+    // Ingest any fresh samples into the pair buffer
+    for (int ci = 0; ci < 2; ++ci) {
+      if (channels[ci].new_ts_ready && (channels[ci].totalize > 2)) {
+        if (ts_pair_count < 2) {
+          ts_pair[ts_pair_count].t = channels[ci].ts_split;
+          ts_pair[ts_pair_count].ch = (uint8_t)ci;
+          ts_pair_count++;
+        }
+        channels[ci].new_ts_ready = 0; // consume
+      }
+    }
+
+    // If we have a complete pair, emit in fixed order with poll gating
+    if (ts_pair_count == 2) {
+      bool ok = (!config.POLL_CHAR);
+      if (!ok) {
+        if ((Serial.available() > 0) && (Serial.read() == config.POLL_CHAR)) ok = true;
+      }
+      if (ok) {
+        // Determine composition and enforce chA then chB order when both present
+        uint8_t a_first = 0; uint8_t b_second = 1;
+        if ((ts_pair[0].ch == 0 && ts_pair[1].ch == 1) || (ts_pair[0].ch == 1 && ts_pair[1].ch == 0)) {
+          // Mixed channels: find A then B
+          const PairSlot *A = (ts_pair[0].ch == 0) ? &ts_pair[0] : &ts_pair[1];
+          const PairSlot *B = (ts_pair[0].ch == 1) ? &ts_pair[0] : &ts_pair[1];
+          {
+            char line[64]; size_t n = formatTimestampSplitTo(line, sizeof(line), A->t, PLACES, WRAP);
+            if (n < sizeof(line)) { line[n++]=' '; if (n<sizeof(line)) line[n++]='c'; if (n<sizeof(line)) line[n++]='h'; if (n<sizeof(line)) line[n++] = (char)channels[0].name; if (n<sizeof(line)) line[n++]='\n'; }
+            Serial.write((const uint8_t*)line, n);
+          }
+          {
+            char line[64]; size_t n = formatTimestampSplitTo(line, sizeof(line), B->t, PLACES, WRAP);
+            if (n < sizeof(line)) { line[n++]=' '; if (n<sizeof(line)) line[n++]='c'; if (n<sizeof(line)) line[n++]='h'; if (n<sizeof(line)) line[n++] = (char)channels[1].name; if (n<sizeof(line)) line[n++]='\n'; }
+            Serial.write((const uint8_t*)line, n);
+          }
+        } else {
+          // Same channel twice: print both with that channel's name
+          uint8_t ci = ts_pair[0].ch; char cname = channels[ci].name;
+          for (int k = 0; k < 2; ++k) {
+            char line[64]; size_t n = formatTimestampSplitTo(line, sizeof(line), ts_pair[k].t, PLACES, WRAP);
+            if (n < sizeof(line)) { line[n++]=' '; if (n<sizeof(line)) line[n++]='c'; if (n<sizeof(line)) line[n++]='h'; if (n<sizeof(line)) line[n++] = cname; if (n<sizeof(line)) line[n++]='\n'; }
+            Serial.write((const uint8_t*)line, n);
+          }
+        }
+        ts_pair_count = 0; // clear pair buffer after printing
+      }
+    }
+  }
 
   // After processing both channels, pair and print once per matched sample for Interval and TimeLab
 #if 1

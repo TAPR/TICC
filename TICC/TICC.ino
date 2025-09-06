@@ -7,16 +7,34 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-// 03 September 2025 - version 1
-extern const char SW_VERSION[17] = "20250903.1";
+// 05 September 2025 - version 1
+extern const char SW_VERSION[17] = "20250905.1";
 
 // DEBUG OPTIONS
-// Increment counters at a fast rate to test
+
+// FAST_WRAP_TEST:Increment counters at a fast rate to test
 // overflow behavior.  It's not used in normal operation.
 //#define FAST_WRAP_TEST
 //#define FAST_WRAP_MULTIPLIER 1000000L
 
-// #define DETAIL_TIMING     // if enabled, prints execution time
+// SIM_MODE: software simulation harness (default off)
+// - Synthesizes INTB and PICstop so the core read→math→pairing paths run
+//   without TDC hardware attached. SPI access is short-circuited.
+// - Uses buffered single-write printing (same text format) and periodically
+//   reports pairs/sec over a timed window to estimate throughput.
+// - SIM_BAUD controls the serial speed used during SIM; set it to a value
+//   your terminal supports. Normal builds still use 115200.
+// - To use: uncomment the define below; to return to hardware operation, keep
+//   it commented.
+//#define SIM_MODE
+
+// DETAIL_TIMING: per-hit processing time (default off)
+// - When enabled, measures time spent handling a single event (from the start
+//   of channel processing to completion) using micros(), and prints the elapsed
+//   microseconds as a bare number for each processed hit.
+// - This produces one extra numeric line per hit and will significantly impact
+//   throughput; enable only for profiling/troubleshooting.
+// #define DETAIL_TIMING
 
 #include <stdint.h>           // define unint16_t, uint32_t
 #include <SPI.h>              // SPI support
@@ -38,6 +56,18 @@ extern const char SW_VERSION[17] = "20250903.1";
 #ifdef DETAIL_TIMING
   int32_t start_micros;
   int32_t end_micros;
+#endif
+
+#ifdef SIM_MODE
+#ifndef SIM_BAUD
+#define SIM_BAUD 115200
+#endif
+static uint32_t sim_pairs = 0;
+static uint32_t sim_last = 0;
+#endif
+
+#ifndef TS_PAIR_TIMEOUT_US
+#define TS_PAIR_TIMEOUT_US 500000UL  // 0.5 s: force pair with self if the other channel doesn't arrive
 #endif
 
 /*
@@ -141,7 +171,11 @@ void ticc_setup() {
    
   // start the serial library
   Serial.end();               // first close in case we've come here from a break
+#ifdef SIM_MODE
+  Serial.begin(SIM_BAUD);
+#else
   Serial.begin(115200);
+#endif
   // start the SPI library:
   SPI.end();                  // first close in case we've come here from a break
   SPI.begin();
@@ -197,6 +231,10 @@ void ticc_setup() {
     channels[i].fixed_time2 = config.FIXED_TIME2[i];
     // For user convenience, we allow two settings that additively determine delay
     channels[i].fudge = config.PROP_DELAY[i] + config.FUDGE0[i];
+    // Initialize coarse-time cache (always enabled)
+    channels[i].last_picstop = 0;
+    channels[i].cached_sec = 0;
+    channels[i].cached_rem_ticks = 0;
 
     // set up the chips
     channels[i].tdc_setup();
@@ -288,10 +326,10 @@ void loop() {
       break;
     }
      
+#ifndef SIM_MODE
     // Ref Clock indicator:
     // Test every 2.5 coarse tick periods for PICcount changes,
     // and turn on EXT_LED_CLK if changes are detected
-    int i;
     static  uint32_t last_micros = 0;               // Loop watchdog timestamp
     static  int64_t last_PICcount = 0;              // Counter state memory
     static  uint8_t ext_clk_led_on = 0;             // LED state cache to avoid redundant writes
@@ -316,18 +354,32 @@ void loop() {
         }
       }
     }
+#endif
  
+#ifdef SIM_MODE
+    // Synthesize INTB low and PICstop increments for both channels
+    PICcount += 1; // advance coarse count artificially
+#endif
+
+    int i;
     for(i = 0; i < ARRAY_SIZE(channels); ++i) {
      
       // No work to do unless intb is low
+#ifndef SIM_MODE
        if(digitalRead(channels[i].INTB)==0) {
+#else
+       if (true) {
+         channels[i].PICstop = PICcount;
+#endif
          #ifdef DETAIL_TIMING
            start_micros = micros();
          #endif
        
          // turn LED on -- use board.h macro for speed
+#ifndef SIM_MODE
          if (i == 0) {SET_LED_0;SET_EXT_LED_0;};
          if (i == 1) {SET_LED_1;SET_EXT_LED_1;};
+#endif
 
         /* See the top-of-file rationale block for details on timestamp math,
          * signed 64-bit usage, overflow considerations, and formatting. */
@@ -337,11 +389,26 @@ void loop() {
          channels[i].last_ts_split = channels[i].ts_split;
          channels[i].tof = channels[i].read();    // get data from chip
 
-         // PICTICK_PS defaults to 100 000 000 (100 uS)
-         // Avoid overflow by splitting coarse ticks into whole seconds and fractional ps
-         int64_t sec = channels[i].PICstop / ticksPerSecond;
-         int64_t remTicks = channels[i].PICstop % ticksPerSecond;
-         int64_t remPs = remTicks * PICTICK_PS;
+         // Derive coarse seconds and remainder ticks using incremental method
+         int64_t sec;
+         int32_t remTicks32;
+         // Incremental coarse-time decomposition to avoid 64-bit div/mod per hit
+         int64_t delta = channels[i].PICstop - channels[i].last_picstop;
+         channels[i].last_picstop = channels[i].PICstop;
+         if (delta >= 0 && delta < ticksPerSecond) {
+           int32_t rem = channels[i].cached_rem_ticks + (int32_t)delta;
+           if (rem >= (int32_t)ticksPerSecond) { rem -= (int32_t)ticksPerSecond; channels[i].cached_sec++; }
+           channels[i].cached_rem_ticks = rem;
+         } else {
+           // Fallback for startup/large jumps
+           channels[i].cached_sec = (int32_t)(channels[i].PICstop / ticksPerSecond);
+           channels[i].cached_rem_ticks = (int32_t)(channels[i].PICstop % ticksPerSecond);
+         }
+         sec = channels[i].cached_sec;
+         remTicks32 = channels[i].cached_rem_ticks;
+
+         // Original ps-path: compute remPs and subtract in ps
+         int64_t remPs = (int64_t)remTicks32 * PICTICK_PS;
          // Subtract fine time-of-flight with borrow if needed
          if (remPs >= channels[i].tof) {
            remPs -= channels[i].tof;
@@ -358,55 +425,60 @@ void loop() {
          }
          channels[i].ts_seconds = sec;
          channels[i].ts = (sec * PS_PER_SEC) + remPs;
-         channels[i].ts_frac_ps = remPs;
+         channels[i].ts_split.sec = (int32_t)sec;
+         channels[i].ts_split.frac_hi = (uint32_t)(remPs / 1000000LL);
+         channels[i].ts_split.frac_lo = (uint32_t)(remPs % 1000000LL);
          channels[i].new_ts_ready = 1;
-         channels[i].ts_split.sec = sec;
-         channels[i].ts_split.frac_ps = remPs;
          
          channels[i].period = channels[i].ts - channels[i].last_ts;
          channels[i].totalize++;                  // increment number of events   
          channels[i].ready_next();                // Re-arm for next measurement, clear TDC INTB
        
+#if 1
       // if poll character is not null, only output if we've received that character via serial
       // NOTE: this may provide random results if measuring timestamp from both channels!
       if ( (channels[i].totalize > 2) &&             // throw away first readings      
          ( (!config.POLL_CHAR)  ||                   // if unset, output everything
            ( (Serial.available() > 0) && (Serial.read() == config.POLL_CHAR) ) ) ) {   
-      
+     
         switch (config.MODE) {
           case Timestamp:
-              printTimestampSplit(channels[i].ts_split, PLACES, WRAP);
-              Serial.print( " ch");Serial.println(channels[i].name);
+              // Defer Timestamp printing to the post-loop pairing block to enforce ordering
           break;
-      
+     
           case Interval:
             // handled after channel loop (pairing logic)
           break;
-      
+     
           case Period:
-            // period = current - last using SplitTime helpers
-            { SplitTime p = diffSplit(channels[i].ts_split, channels[i].last_ts_split);
-              printSignedSplit(p, PLACES); }
-            Serial.print( " ch");Serial.println(channels[i].name);
+            {
+              SplitTime p = diffSplit(channels[i].ts_split, channels[i].last_ts_split);
+              char line[64]; size_t n = 0;
+              n = formatSignedSplitTo(line, sizeof(line), p, PLACES);
+              if (n < sizeof(line)) { line[n++] = ' '; }
+              if (n < sizeof(line)) { line[n++] = 'c'; }
+              if (n < sizeof(line)) { line[n++] = 'h'; }
+              if (n < sizeof(line)) { line[n++] = (char)channels[i].name; }
+              if (n < sizeof(line)) { line[n++] = '\n'; }
+              Serial.write((const uint8_t*)line, n);
+            }
           break;
-      
+     
           case timeLab:
             // handled after channel loop (pairing logic)
           break;
  
           case Debug:
-            char tmpbuf[8];
-            sprintf(tmpbuf,"%06u ",channels[i].time1Result);Serial.print(tmpbuf);
-            sprintf(tmpbuf,"%06u ",channels[i].time2Result);Serial.print(tmpbuf);
-            sprintf(tmpbuf,"%06u ",channels[i].clock1Result);Serial.print(tmpbuf);
-            sprintf(tmpbuf,"%06u ",channels[i].cal1Result);Serial.print(tmpbuf);
-            sprintf(tmpbuf,"%06u ",channels[i].cal2Result);Serial.print(tmpbuf);
-            print_int64(channels[i].PICstop);Serial.print(" ");
-            { SplitTime t = { 0, (channels[i].tof < 0 ? -channels[i].tof : channels[i].tof) };
-              printSignedSplit(t, PLACES); }
-            Serial.print(" ");
-            printTimestampSplit(channels[i].ts_split, PLACES, WRAP);
-            Serial.print( " ch");Serial.println(channels[i].name);    
+            {
+              char line[96]; size_t n = 0;
+              n = formatTimestampSplitTo(line, sizeof(line), channels[i].ts_split, PLACES, WRAP);
+              if (n < sizeof(line)) { line[n++] = ' '; }
+              if (n < sizeof(line)) { line[n++] = 'c'; }
+              if (n < sizeof(line)) { line[n++] = 'h'; }
+              if (n < sizeof(line)) { line[n++] = (char)channels[i].name; }
+              if (n < sizeof(line)) { line[n++] = '\n'; }
+              Serial.write((const uint8_t*)line, n);
+            }
           break;
 
         case Null:
@@ -415,10 +487,13 @@ void loop() {
 
 
 } // print result
+#endif
 
+#ifndef SIM_MODE
      // turn LED off
      if (i == 0) {CLR_LED_0;CLR_EXT_LED_0;};
      if (i == 1) {CLR_LED_1;CLR_EXT_LED_1;};
+#endif
      
     #ifdef DETAIL_TIMING
       end_micros = micros() - start_micros;               
@@ -428,7 +503,67 @@ void loop() {
     } // if INTB
   } // for
 
+  // Timestamp mode: assemble and print pairs without timeout
+  if (config.MODE == Timestamp) {
+    // Two-slot buffer; accumulate two successive samples (across either channel)
+    // then emit exactly two lines per pair in fixed order: if both channels are
+    // present print chA then chB; if both are the same channel, print that
+    // channel twice.
+    struct PairSlot { SplitTime t; uint8_t ch; };
+    static PairSlot ts_pair[2];
+    static uint8_t ts_pair_count = 0;
+
+    // Ingest any fresh samples into the pair buffer
+    for (int ci = 0; ci < 2; ++ci) {
+      if (channels[ci].new_ts_ready && (channels[ci].totalize > 2)) {
+        if (ts_pair_count < 2) {
+          ts_pair[ts_pair_count].t = channels[ci].ts_split;
+          ts_pair[ts_pair_count].ch = (uint8_t)ci;
+          ts_pair_count++;
+        }
+        channels[ci].new_ts_ready = 0; // consume
+      }
+    }
+
+    // If we have a complete pair, emit in fixed order with poll gating
+    if (ts_pair_count == 2) {
+      bool ok = (!config.POLL_CHAR);
+      if (!ok) {
+        if ((Serial.available() > 0) && (Serial.read() == config.POLL_CHAR)) ok = true;
+      }
+      if (ok) {
+        // Determine composition and enforce chA then chB order when both present
+        uint8_t a_first = 0; uint8_t b_second = 1;
+        if ((ts_pair[0].ch == 0 && ts_pair[1].ch == 1) || (ts_pair[0].ch == 1 && ts_pair[1].ch == 0)) {
+          // Mixed channels: find A then B
+          const PairSlot *A = (ts_pair[0].ch == 0) ? &ts_pair[0] : &ts_pair[1];
+          const PairSlot *B = (ts_pair[0].ch == 1) ? &ts_pair[0] : &ts_pair[1];
+          {
+            char line[64]; size_t n = formatTimestampSplitTo(line, sizeof(line), A->t, PLACES, WRAP);
+            if (n < sizeof(line)) { line[n++]=' '; if (n<sizeof(line)) line[n++]='c'; if (n<sizeof(line)) line[n++]='h'; if (n<sizeof(line)) line[n++] = (char)channels[0].name; if (n<sizeof(line)) line[n++]='\n'; }
+            Serial.write((const uint8_t*)line, n);
+          }
+          {
+            char line[64]; size_t n = formatTimestampSplitTo(line, sizeof(line), B->t, PLACES, WRAP);
+            if (n < sizeof(line)) { line[n++]=' '; if (n<sizeof(line)) line[n++]='c'; if (n<sizeof(line)) line[n++]='h'; if (n<sizeof(line)) line[n++] = (char)channels[1].name; if (n<sizeof(line)) line[n++]='\n'; }
+            Serial.write((const uint8_t*)line, n);
+          }
+        } else {
+          // Same channel twice: print both with that channel's name
+          uint8_t ci = ts_pair[0].ch; char cname = channels[ci].name;
+          for (int k = 0; k < 2; ++k) {
+            char line[64]; size_t n = formatTimestampSplitTo(line, sizeof(line), ts_pair[k].t, PLACES, WRAP);
+            if (n < sizeof(line)) { line[n++]=' '; if (n<sizeof(line)) line[n++]='c'; if (n<sizeof(line)) line[n++]='h'; if (n<sizeof(line)) line[n++] = cname; if (n<sizeof(line)) line[n++]='\n'; }
+            Serial.write((const uint8_t*)line, n);
+          }
+        }
+        ts_pair_count = 0; // clear pair buffer after printing
+      }
+    }
+  }
+
   // After processing both channels, pair and print once per matched sample for Interval and TimeLab
+#if 1
   if ( (channels[0].new_ts_ready && channels[1].new_ts_ready) &&
        (channels[0].totalize > 2) && (channels[1].totalize > 2) ) {
     // Optional poll gating
@@ -437,24 +572,57 @@ void loop() {
       if ((Serial.available() > 0) && (Serial.read() == config.POLL_CHAR)) ok = true;
     }
     if (ok) {
+#ifdef SIM_MODE
+      // Count pairs for rate reporting even in Timestamp mode
+      if (config.MODE == Timestamp) { sim_pairs++; }
+      // Report every 10 seconds; exclude the 2s pause from the timing window
+      uint32_t now = micros();
+      if ((now - sim_last) >= 10000000UL) {
+        uint32_t elapsed = now - sim_last; // microseconds over the last window
+        Serial.print("\n# pairs: "); Serial.println(sim_pairs);
+        Serial.print("# avg pairs/sec: "); Serial.println((uint32_t)((uint64_t)sim_pairs * 1000000UL / elapsed));
+        delay(2000);
+        sim_pairs = 0;
+        sim_last = micros(); // restart window after the pause so delay is excluded
+      }
+#endif
       switch (config.MODE) {
         case Interval: {
           SplitTime d = diffSplit(channels[1].ts_split, channels[0].ts_split);
-          printSignedSplit(d, PLACES);
-          Serial.println(" TI(A->B)");
+          {
+            char line[64]; size_t n = formatSignedSplitTo(line, sizeof(line), d, PLACES);
+            if (n < sizeof(line)) { line[n++]=' '; }
+            const char suffix[] = "TI(A->B)\n"; const char *s=suffix; while(*s && n<sizeof(line)) line[n++]=*s++;
+            Serial.write((const uint8_t*)line, n);
+          }
+#ifdef SIM_MODE
+          sim_pairs++;
+#endif
           channels[0].new_ts_ready = 0;
           channels[1].new_ts_ready = 0;
           break; }
         case timeLab: {
-          printTimestampSplit(channels[0].ts_split, PLACES, WRAP);
-          Serial.print(" ch");Serial.println(channels[0].name);
-          printTimestampSplit(channels[1].ts_split, PLACES, WRAP);
-          Serial.print(" ch");Serial.println(channels[1].name);
-          SplitTime delta = absDeltaSplit(channels[1].ts_split, channels[0].ts_split);
-          SplitTime c = { channels[1].ts_split.sec, delta.frac_ps };
-          printTimestampSplit(c, PLACES, WRAP);
-          Serial.print(" chC (");Serial.print(channels[1].name);Serial.print(" - ");
-               Serial.print(channels[0].name);Serial.println(")"); 
+          {
+            char line[80]; size_t n;
+            // chA
+            n = formatTimestampSplitTo(line, sizeof(line), channels[0].ts_split, PLACES, WRAP);
+            if (n < sizeof(line)) { line[n++] = ' '; if (n < sizeof(line)) line[n++]='c'; if (n < sizeof(line)) line[n++]='h'; if (n < sizeof(line)) line[n++]=(char)channels[0].name; if (n < sizeof(line)) line[n++]='\n'; }
+            Serial.write((const uint8_t*)line, n);
+            // chB
+            n = formatTimestampSplitTo(line, sizeof(line), channels[1].ts_split, PLACES, WRAP);
+            if (n < sizeof(line)) { line[n++] = ' '; if (n < sizeof(line)) line[n++]='c'; if (n < sizeof(line)) line[n++]='h'; if (n < sizeof(line)) line[n++]=(char)channels[1].name; if (n < sizeof(line)) line[n++]='\n'; }
+            Serial.write((const uint8_t*)line, n);
+            // chC synthesized (B - A)
+            SplitTime d = diffSplit(channels[1].ts_split, channels[0].ts_split);
+            SplitTime c = { (int32_t)(channels[1].ts_split.sec + d.sec), d.frac_hi, d.frac_lo };
+            n = formatTimestampSplitTo(line, sizeof(line), c, PLACES, WRAP);
+            if (n < sizeof(line)) { line[n++] = ' '; if (n < sizeof(line)) line[n++]='c'; if (n < sizeof(line)) line[n++]='h'; if (n < sizeof(line)) line[n++]='C'; if (n < sizeof(line)) line[n++]=' '; }
+            const char suffix[] = "(B - A)\n"; const char *s = suffix; while (*s && n < sizeof(line)) line[n++] = *s++;
+            Serial.write((const uint8_t*)line, n);
+          }
+#ifdef SIM_MODE
+          sim_pairs++;
+#endif
           channels[0].new_ts_ready = 0;
           channels[1].new_ts_ready = 0;
           break; }
@@ -462,12 +630,29 @@ void loop() {
       }
     }
   }
+#else
+  // SIM_MODE: pair and count without per-sample prints
+  if ( (channels[0].new_ts_ready && channels[1].new_ts_ready) &&
+       (channels[0].totalize > 2) && (channels[1].totalize > 2) ) {
+    sim_pairs++;
+    channels[0].new_ts_ready = 0;
+    channels[1].new_ts_ready = 0;
+  }
+  uint32_t now = micros();
+  if ((now - sim_last) >= 1000000UL) { // 1 second window
+    Serial.print("# pairs/sec: "); Serial.println(sim_pairs);
+    sim_pairs = 0;
+    sim_last = now;
+  }
+#endif
 } // while (1) loop
 
+#ifndef SIM_MODE
 Serial.println();
 Serial.println("Got break character... exiting loop");
 Serial.println();
 delay(100);
+#endif
 
 } // main loop()
 

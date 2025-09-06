@@ -2,7 +2,7 @@
 
 // TICC Time interval Counter based on TICC Shield using TDC7200
 //
-// Copyright John Ackermann N8UR 2016-2020
+// Copyright John Ackermann N8UR 2016-2025
 // Portions Copyright George Byrkit K9TRV 2016
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
@@ -41,15 +41,10 @@
 
 /*
  * Printing rationale (summary):
- * - Timestamps and intervals are represented as int64_t picoseconds elsewhere to safely
- *   handle subtraction and potential negative values; these helpers accept signed values
- *   where needed and format without floating point.
- * - We split x into seconds and fractional picoseconds via division/modulo by 1e12 to
- *   avoid large intermediates and rounding issues. The fractional component is then
- *   split into two 6-digit fields for efficient zero-padded printing and truncated to
- *   the requested number of places.
- * - For unsigned inputs (purely non-negative values), use print_unsigned_picos_as_seconds;
- *   for possibly negative values, use print_signed_picos_as_seconds or print_timestamp.
+ * - Timestamps and intervals are represented as SplitTime: 32-bit seconds and
+ *   fractional picoseconds split into two 6-digit fields (frac_hi, frac_lo).
+ *   This avoids 64-bit operations in formatting and simple math.
+ * - We only assemble 64-bit ps values when legacy interfaces require it.
  */
 
 // legacy printing helpers removed after migration to SplitTime printers
@@ -78,111 +73,230 @@ void print_int64(int64_t num ) {
     Serial.print(p);
 }
 
-void print_timestamp_sec_frac(int64_t sec, int64_t frac_ps, int places, int32_t wrap) {
-  // sec: whole seconds, frac_ps: [0, 1e12) picoseconds
-  // places: digits to the right of the decimal (0..12)
-  // wrap: integer digits to display (0 means no wrapping)
-  char str[24], str1[24], str2[24];
+// ------------------------------------------------------------
+// Lightweight 32-bit printing helpers (no sprintf/printf)
+// ------------------------------------------------------------
+static const uint32_t POW10[10] = {
+  1UL, 10UL, 100UL, 1000UL, 10000UL,
+  100000UL, 1000000UL, 10000000UL, 100000000UL, 1000000000UL
+};
 
-  if (sec < 0) {
-    Serial.print("-");
-    sec = -sec;
-  }
-
-  // convert sec to string manually for 64-bit safety
-  char ibuf[32];
-  char *p = &ibuf[31];
-  *p = '\0';
-  if (sec == 0) { *(--p) = '0'; }
-  while (sec > 0) { *(--p) = '0' + (char)(sec % 10); sec /= 10; }
-
-  int len = (int)strlen(p);
-  if (wrap == 0) {
-    Serial.print(p);
-    Serial.print('.');
-  } else {
-    if (len < wrap) {
-      for (int i = 0; i < wrap - len; ++i) Serial.print('0');
-      Serial.print(p);
-      Serial.print('.');
-    } else {
-      Serial.print(p + (len - wrap));
-      Serial.print('.');
-    }
-  }
-
-  int64_t frach = frac_ps / 1000000LL;   // upper 6 digits
-  int64_t fracl = frac_ps % 1000000LL;   // lower 6 digits
-
-  sprintf(str1, "%06ld", (long)frach);
-  sprintf(str2, "%06ld", (long)fracl);
-  sprintf(str, "%s%s", str1, str2);
-  str[places] = '\0';
-  Serial.print(str);
+static inline uint8_t numDigitsU32(uint32_t v) {
+  if (v >= 1000000000UL) return 10;
+  if (v >= 100000000UL) return 9;
+  if (v >= 10000000UL) return 8;
+  if (v >= 1000000UL) return 7;
+  if (v >= 100000UL) return 6;
+  if (v >= 10000UL) return 5;
+  if (v >= 1000UL) return 4;
+  if (v >= 100UL) return 3;
+  if (v >= 10UL) return 2;
+  return 1;
 }
 
-void print_signed_sec_frac(int64_t sec, int64_t frac_ps, int places) {
-  // sec may be negative; frac_ps must be in [0, 1e12)
-  char str[24], str1[8], str2[8];
+static inline void serialPrintU32Padded(uint32_t v, uint8_t width) {
+  uint8_t d = numDigitsU32(v);
+  for (uint8_t i = d; i < width; ++i) Serial.write('0');
+  Serial.print(v);
+}
 
+// Print leftmost 'digits' of a zero-padded 6-digit number (n in [0,999999])
+static inline void serialPrintFirstDigitsOf6(uint32_t n, uint8_t digits) {
+  if (digits == 0) return;
+  uint32_t divisor = POW10[6 - digits];
+  uint32_t m = n / divisor;               // keep upper 'digits'
+  serialPrintU32Padded(m, digits);
+}
+
+static inline void serialPrintFrac(uint32_t frac_hi, uint32_t frac_lo, uint8_t places) {
+  if (places <= 6) {
+    serialPrintFirstDigitsOf6(frac_hi, places);
+  } else {
+    serialPrintFirstDigitsOf6(frac_hi, 6);
+    serialPrintFirstDigitsOf6(frac_lo, (uint8_t)(places - 6));
+  }
+}
+
+static inline void serialPrintSecondsWrapped(int32_t sec, int32_t wrap) {
+  if (wrap <= 0) {
+    Serial.print(sec);
+    return;
+  }
   bool neg = (sec < 0);
-  if (neg) {
-    Serial.print("-");
-    if (frac_ps > 0) {
-      // Convert from borrowed form (e.g., -1, PS-δ) to standard (-0, δ)
-      sec = -(sec + 1);           // e.g., -1 -> 0
-      frac_ps = PS_PER_SEC - frac_ps;
+  uint32_t s = (uint32_t)(neg ? -sec : sec);
+  uint32_t mod = POW10[(uint8_t)wrap];
+  uint32_t tail = s % mod;
+  if (neg) Serial.write('-');
+  serialPrintU32Padded(tail, (uint8_t)wrap);
+}
+
+static inline char * bufAppendChar(char *p, const char *end, char c) {
+  if (p < end) *p++ = c;
+  return p;
+}
+static inline char * bufAppendU32Padded(char *p, const char *end, uint32_t v, uint8_t width) {
+  uint8_t d = numDigitsU32(v);
+  for (uint8_t i = d; i < width; ++i) { if (p < end) *p++ = '0'; }
+  // print value
+  char tmp[10];
+  uint8_t n = 0;
+  do { tmp[n++] = (char)('0' + (v % 10)); v /= 10; } while (v);
+  while (n--) { if (p < end) *p++ = tmp[n]; }
+  return p;
+}
+static inline char * bufAppendSecondsWrapped(char *p, const char *end, int32_t sec, int32_t wrap) {
+  if (wrap <= 0) {
+    // simple itoa
+    if (sec < 0) { if (p < end) *p++ = '-'; sec = -sec; }
+    char tmp[12]; uint8_t n=0; uint32_t s=(uint32_t)sec; do { tmp[n++] = (char)('0'+(s%10)); s/=10; } while (s);
+    while (n--) { if (p < end) *p++ = tmp[n]; }
+    return p;
+  }
+  bool neg = (sec < 0);
+  uint32_t s = (uint32_t)(neg ? -sec : sec);
+  uint32_t mod = POW10[(uint8_t)wrap];
+  uint32_t tail = s % mod;
+  if (neg) { if (p < end) *p++ = '-'; }
+  return bufAppendU32Padded(p, end, tail, (uint8_t)wrap);
+}
+static inline char * bufAppendFirstDigitsOf6(char *p, const char *end, uint32_t n, uint8_t digits) {
+  if (digits == 0) return p;
+  uint32_t divisor = POW10[6 - digits];
+  uint32_t m = n / divisor;
+  return bufAppendU32Padded(p, end, m, digits);
+}
+static inline char * bufAppendFrac(char *p, const char *end, uint32_t frac_hi, uint32_t frac_lo, uint8_t places) {
+  if (places <= 6) {
+    return bufAppendFirstDigitsOf6(p, end, frac_hi, places);
+  } else {
+    p = bufAppendFirstDigitsOf6(p, end, frac_hi, 6);
+    return bufAppendFirstDigitsOf6(p, end, frac_lo, (uint8_t)(places - 6));
+  }
+}
+size_t formatTimestampSplitTo(char *buf, size_t cap, const SplitTime &t, int places, int32_t wrap) {
+  char *p = buf; const char *end = buf + cap;
+  int32_t sec = t.sec;
+  p = bufAppendSecondsWrapped(p, end, sec, wrap);
+  p = bufAppendChar(p, end, '.');
+  p = bufAppendFrac(p, end, t.frac_hi, t.frac_lo, (uint8_t)places);
+  if (p < end) *p = '\0';
+  return (size_t)(p - buf);
+}
+size_t formatSignedSplitTo(char *buf, size_t cap, const SplitTime &t, int places) {
+  char *p = buf; const char *end = buf + cap;
+  int32_t sec = t.sec;
+  uint32_t hi = t.frac_hi, lo = t.frac_lo;
+  if (sec < 0) {
+    if (p < end) *p++ = '-';
+    if (hi != 0 || lo != 0) {
+      sec = -(sec + 1);
+      if (lo == 0) { lo = 0; hi = 1000000UL - hi; }
+      else { lo = 1000000UL - lo; hi = (hi == 0) ? 999999UL : (1000000UL - hi); }
     } else {
-      // Exact integer seconds negative
       sec = -sec;
     }
   }
+  // seconds
+  {
+    char tmp[12]; uint8_t n=0; uint32_t s=(uint32_t)sec; do { tmp[n++] = (char)('0'+(s%10)); s/=10; } while (s);
+    while (n--) { if (p < end) *p++ = tmp[n]; }
+  }
+  p = bufAppendChar(p, end, '.');
+  p = bufAppendFrac(p, end, hi, lo, (uint8_t)places);
+  if (p < end) *p = '\0';
+  return (size_t)(p - buf);
+}
 
-  // integer part
-  sprintf(str, "%ld.", (long)sec);
-  Serial.print(str);
 
-  int64_t frach = frac_ps / 1000000LL;
-  int64_t fracl = frac_ps % 1000000LL;
+void print_timestamp_sec_frac(int64_t sec, int64_t frac_ps, int places, int32_t wrap) {
+  bool neg = (sec < 0);
+  if (neg) {
+    Serial.write('-');
+    sec = -sec;
+  }
+  // Integer seconds (optionally wrapped)
+  serialPrintSecondsWrapped((int32_t)sec, wrap);
+  Serial.write('.');
+  // Convert frac_ps to two chunks
+  uint32_t frac_hi = (uint32_t)(frac_ps / 1000000LL);
+  uint32_t frac_lo = (uint32_t)(frac_ps % 1000000LL);
+  serialPrintFrac(frac_hi, frac_lo, (uint8_t)places);
+}
 
-  sprintf(str1, "%06ld", (long)frach);
-  sprintf(str2, "%06ld", (long)fracl);
-  sprintf(str, "%s%s", str1, str2);
-  str[places] = '\0';
-  Serial.print(str);
+void print_signed_sec_frac(int64_t sec, int64_t frac_ps, int places) {
+  // Signed formatting with borrow handling
+  bool neg = (sec < 0);
+  if (neg) {
+    Serial.write('-');
+    if (frac_ps > 0) {
+      sec = -(sec + 1);
+      frac_ps = PS_PER_SEC - frac_ps;
+    } else {
+      sec = -sec;
+    }
+  }
+  Serial.print((int32_t)sec);
+  Serial.write('.');
+  uint32_t frac_hi = (uint32_t)(frac_ps / 1000000LL);
+  uint32_t frac_lo = (uint32_t)(frac_ps % 1000000LL);
+  serialPrintFrac(frac_hi, frac_lo, (uint8_t)places);
 }
 
 // SplitTime helpers
 
 void normalizeSplit(struct SplitTime *t) {
   if (!t) return;
-  // bring frac_ps into [0, PS_PER_SEC)
-  if (t->frac_ps >= PS_PER_SEC) {
-    int64_t carry = t->frac_ps / PS_PER_SEC;
-    t->sec += carry;
-    t->frac_ps -= carry * PS_PER_SEC;
-  } else if (t->frac_ps < 0) {
-    int64_t borrow = (-t->frac_ps + PS_PER_SEC - 1) / PS_PER_SEC;
-    t->sec -= borrow;
-    t->frac_ps += borrow * PS_PER_SEC;
+  // Bring frac_lo, frac_hi into range [0, 1e6)
+  if ((int32_t)t->frac_lo < 0) {
+    // Borrow from frac_hi
+    uint32_t borrow = ((uint32_t)(-(int32_t)t->frac_lo) + 999999UL) / 1000000UL;
+    if (borrow == 0) borrow = 1;
+    if (t->frac_hi >= borrow) {
+      t->frac_hi -= borrow;
+      t->frac_lo += borrow * 1000000UL;
+    } else {
+      uint32_t need = borrow - t->frac_hi;
+      t->frac_hi = 1000000UL - need; // after borrowing 1 second
+      t->sec -= 1;
+      t->frac_lo += borrow * 1000000UL;
+    }
+  } else if (t->frac_lo >= 1000000UL) {
+    uint32_t carry = t->frac_lo / 1000000UL;
+    t->frac_lo -= carry * 1000000UL;
+    t->frac_hi += carry;
+  }
+
+  if ((int32_t)t->frac_hi < 0) {
+    // borrow from seconds
+    t->frac_hi += 1000000UL;
+    t->sec -= 1;
+  } else if (t->frac_hi >= 1000000UL) {
+    uint32_t carry = t->frac_hi / 1000000UL;
+    t->frac_hi -= carry * 1000000UL;
+    t->sec += (int32_t)carry;
   }
 }
 
 SplitTime diffSplit(const SplitTime &b, const SplitTime &a) {
   SplitTime r;
-  r.sec = b.sec - a.sec;
-  r.frac_ps = b.frac_ps - a.frac_ps;
-  if (r.frac_ps < 0) { r.frac_ps += PS_PER_SEC; r.sec -= 1; }
+  r.sec = (int32_t)(b.sec - a.sec);
+  int32_t lo = (int32_t)b.frac_lo - (int32_t)a.frac_lo;
+  int32_t hi = (int32_t)b.frac_hi - (int32_t)a.frac_hi;
+  if (lo < 0) { lo += 1000000; hi -= 1; }
+  if (hi < 0) { hi += 1000000; r.sec -= 1; }
+  r.frac_lo = (uint32_t)lo;
+  r.frac_hi = (uint32_t)hi;
   return r;
 }
 
 SplitTime absDeltaSplit(const SplitTime &b, const SplitTime &a) {
   SplitTime d = diffSplit(b, a);
-  if (d.sec < 0 || (d.sec == 0 && d.frac_ps < 0)) {
-    // Negate: convert signed split to magnitude
-    if (d.frac_ps > 0) {
-      d.frac_ps = PS_PER_SEC - d.frac_ps;
+  // If negative, convert to magnitude
+  if (d.sec < 0) {
+    if (d.frac_hi != 0 || d.frac_lo != 0) {
       d.sec = -(d.sec + 1);
+      d.frac_hi = 1000000UL - d.frac_hi - (d.frac_lo ? 1UL : 0UL);
+      d.frac_lo = (d.frac_lo ? 1000000UL - d.frac_lo : 0UL);
     } else {
       d.sec = -d.sec;
     }
@@ -191,10 +305,41 @@ SplitTime absDeltaSplit(const SplitTime &b, const SplitTime &a) {
 }
 
 void printTimestampSplit(const SplitTime &t, int places, int32_t wrap) {
-  print_timestamp_sec_frac(t.sec, t.frac_ps, places, wrap);
+  // integer seconds
+  int32_t sec = t.sec;
+  bool neg = (sec < 0);
+  if (neg) sec = -sec;
+
+  if (neg) Serial.write('-');
+  serialPrintSecondsWrapped(sec, wrap);
+  Serial.write('.');
+
+  // fractional
+  serialPrintFrac(t.frac_hi, t.frac_lo, (uint8_t)places);
 }
 
 void printSignedSplit(const SplitTime &t, int places) {
-  // Use sign of seconds and fractional handled inside print_signed_sec_frac
-  print_signed_sec_frac(t.sec, t.frac_ps, places);
+  int32_t sec = t.sec;
+  uint32_t hi = t.frac_hi;
+  uint32_t lo = t.frac_lo;
+
+  if (sec < 0) {
+    Serial.write('-');
+    if (hi != 0 || lo != 0) {
+      sec = -(sec + 1);
+      if (lo == 0) {
+        lo = 0;
+        hi = 1000000UL - hi;
+      } else {
+        lo = 1000000UL - lo;
+        hi = (hi == 0) ? 999999UL : (1000000UL - hi);
+      }
+    } else {
+      sec = -sec;
+    }
+  }
+
+  Serial.print(sec);
+  Serial.write('.');
+  serialPrintFrac(hi, lo, (uint8_t)places);
 }

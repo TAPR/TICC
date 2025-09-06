@@ -3,7 +3,7 @@
 
 // TICC Time interval Counter based on TICC Shield using TDC7200
 //
-// Copyright John Ackermann N8UR 2016-2020
+// Copyright John Ackermann N8UR 2016-2025
 // Portions Copyright George Byrkit K9TRV 2016
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
@@ -13,30 +13,30 @@
 #define SPI_SPEED         (int32_t)  20000000 // 20MHz maximum
 
 // TDC7200 register addresses
-const int CONFIG1 =		0x00;           // default 0x00
-const int CONFIG2 =		0x01;           // default 0x40
-const int INT_STATUS =		0x02;           // default 0x00
-const int INT_MASK =		0x03;           // default 0x07
-const int COARSE_CNTR_OVF_H =	0x04;       	// default 0xff
-const int COARSE_CNTR_OVF_L =	0x05;       	// default 0xff
-const int CLOCK_CNTR_OVF_H =	0x06;        	// default 0xff
-const int CLOCK_CNTR_OVF_L =	0x07;        	// default 0xff
-const int CLOCK_CNTR_STOP_MASK_H = 0x08;	// default 0x00
-const int CLOCK_CNTR_STOP_MASK_L = 0x09;	// default 0x00
+const int CONFIG1 =        0x00;           // default 0x00
+const int CONFIG2 =        0x01;           // default 0x40
+const int INT_STATUS =        0x02;           // default 0x00
+const int INT_MASK =        0x03;           // default 0x07
+const int COARSE_CNTR_OVF_H =    0x04;           // default 0xff
+const int COARSE_CNTR_OVF_L =    0x05;           // default 0xff
+const int CLOCK_CNTR_OVF_H =    0x06;            // default 0xff
+const int CLOCK_CNTR_OVF_L =    0x07;            // default 0xff
+const int CLOCK_CNTR_STOP_MASK_H = 0x08; // default 0x00
+const int CLOCK_CNTR_STOP_MASK_L = 0x09; // default 0x00
 // gap from 0x0A thru 0x0F...
-const int TIME1 =		0x10;           // default 0x00_0000
-const int CLOCK_COUNT1 =	0x11;           // default 0x00_0000
-const int TIME2	=		0x12;           // default 0x00_0000
-const int CLOCK_COUNT2 =	0x13;           // default 0x00_0000
-const int TIME3	=		0x14;           // default 0x00_0000
-const int CLOCK_COUNT3 =	0x15;           // default 0x00_0000
-const int TIME4	=		0x16;           // default 0x00_0000
-const int CLOCK_COUNT4 =	0x17;           // default 0x00_0000
-const int TIME5	=		0x18;           // default 0x00_0000
-const int CLOCK_COUNT5 =	0x19;           // default 0x00_0000
-const int TIME6	=		0x1A;           // default 0x00_0000
-const int CALIBRATION1 =	0x1B;           // default 0x00_0000
-const int CALIBRATION2 =	0x1C;           // default 0x00_0000
+const int TIME1 =        0x10;           // default 0x00_0000
+const int CLOCK_COUNT1 =    0x11;           // default 0x00_0000
+const int TIME2    =        0x12;           // default 0x00_0000
+const int CLOCK_COUNT2 =    0x13;           // default 0x00_0000
+const int TIME3    =        0x14;           // default 0x00_0000
+const int CLOCK_COUNT3 =    0x15;           // default 0x00_0000
+const int TIME4    =        0x16;           // default 0x00_0000
+const int CLOCK_COUNT4 =    0x17;           // default 0x00_0000
+const int TIME5    =        0x18;           // default 0x00_0000
+const int CLOCK_COUNT5 =    0x19;           // default 0x00_0000
+const int TIME6    =        0x1A;           // default 0x00_0000
+const int CALIBRATION1 =    0x1B;           // default 0x00_0000
+const int CALIBRATION2 =    0x1C;           // default 0x00_0000
 
 // Channel structure type representing one TDC7200 Channel
 class tdc7200Channel {
@@ -66,14 +66,19 @@ public:
   int64_t period;
   int64_t totalize;
   int64_t ts_seconds;       // integer part of timestamp; used for TimeLab mode
-  int64_t ts_frac_ps;       // fractional picoseconds part [0, 1e12)
+  // removed ts_frac_ps; represented via SplitTime chunks
   volatile uint8_t new_ts_ready; // set when a fresh ts_* is available for pairing
-  SplitTime ts_split;       // unified split timestamp (sec, frac_ps)
+  SplitTime ts_split;       // unified split timestamp (sec, frac_hi, frac_lo)
   SplitTime last_ts_split;  // previous split timestamp
   int64_t prop_delay;
   int64_t time_dilation;
   int64_t fixed_time2;
   int64_t fudge;
+
+  // Incremental coarse-time decomposition cache (optional optimization)
+  int64_t  last_picstop;
+  int32_t  cached_sec;
+  int32_t  cached_rem_ticks;
 
   char      name; // channel name
 
@@ -92,4 +97,4 @@ private:
   void tdc_ack_int();
 };
 
-#endif	/* TDC7200_H */
+#endif /* TDC7200_H */

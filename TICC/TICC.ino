@@ -21,23 +21,24 @@ extern const char SW_VERSION[17] = "20250906.1";
  *
  * Math and ranges:
  * - Core state (PICcount, ts in ps) uses 64-bit signed integers to keep
- *   subtraction simple and avoid underflow surprises. 64-bit range (±9.22e18)
- *   is ample: with 100 µs ticks, PICcount would take ~2.9e11 years to overflow.
+ *   subtraction simple and avoid underflow surprises. 64-bit range 
+ *   (±9.22e18) is ample: with 100 µs ticks, PICcount would take 
+ *   ~2.9e11 years to overflow.
  * - We store and print timestamps in split form for efficiency:
- *     SplitTime { sec (int32_t, whole seconds), frac_hi/frac_lo (two uint32_t
- *     6‑digit chunks, 0..999999) }
- *   This avoids 64‑bit formatting and large intermediates; borrow/carry is
- *   handled explicitly across frac_lo → frac_hi → seconds.  The int32_t seconds
- *   element allows about 68 years of timestamps before overflow.
- * -
+ *   SplitTime { sec (int32_t, whole seconds), frac_hi/frac_lo
+ *   (two uint32_t 6‑digit chunks, 0..999999) }
+ *   This avoids 64‑bit formatting and large intermediates; 
+ *   borrow/carry is handled explicitly across
+ *   frac_lo → frac_hi → seconds.  The int32_t seconds element 
+ *   allows about 68 years of timestamps before overflow.
  *
  * Performance notes:
- * - Coarse time (seconds + remainder ticks) is derived incrementally per hit,
- *   avoiding per-event 64‑bit division/modulo. A fallback recomputes directly
- *   if a large jump is detected (startup or resync).
- * - Printing is buffered: each output line is assembled into a stack buffer and
- *   emitted with a single Serial.write(), reducing per-line I/O overhead while
- *   preserving the exact text format.
+ * - Coarse time (seconds + remainder ticks) is derived incrementally
+ *   per hit, avoiding per-event 64‑bit division/modulo. A fallback 
+ *   recomputes directly if a large jump is detected (startup or resync).
+ * - Printing is buffered: each output line is assembled into a stack 
+ *   buffer and emitted with a single Serial.write(), reducing per-line 
+ *   I/O overhead while preserving the exact text format.
  *
  * Pairing logic (two‑channel modes):
  * - Each channel sets new_ts_ready when a fresh timestamp is computed.
@@ -45,25 +46,28 @@ extern const char SW_VERSION[17] = "20250906.1";
  *   (A→B order), then clear both flags. This prevents mixing new and old
  *   samples, which can appear as ±1 s artifacts.
  * - Timestamp mode prints in ordered pairs with one-sample latency: two
- *   successive samples (across either channel) form a pair. If both channels
- *   are present the order is chA then chB; if both are from the same channel,
- *   that channel is printed twice. Single-channel and mismatched-rate cases are
- *   handled without timeouts or configuration.
+ *   successive samples (across either channel) form a pair. If both 
+ *   channels are present the order is chA then chB; if both are from 
+ *   the same channel, that channel is printed twice. Single-channel and 
+ *   mismatched-rate cases are handled without timeouts or configuration.
  *
  * TimeLab chC synthesis:
- * - chA and chB are printed as timestamps. chC represents (B − A) but is
- *   synthesized to look like a timestamp by taking channel B's seconds and
- *   using the signed delta (diffSplit) fractional. This avoids discontinuities
- *   at crossings and preserves three‑corner‑hat compatibility.
+ * - chA and chB are printed as timestamps. chC represents (B − A) but 
+ *   is synthesized to look like a timestamp by taking channel B's 
+ *   seconds and using the signed delta (diffSplit) fractional. This 
+ *   avoids discontinuities at crossings and preserves three‑corner‑hat 
+ *   compatibility.
  *
  * Printing:
- * - Arduino printf lacks 64‑bit; we avoid floating point. We format integer
- *   seconds and zero‑padded fractional parts using 32‑bit helpers. Each line is
- *   buffered then emitted with a single Serial.write() for lower overhead.
+ * - Arduino printf lacks 64‑bit; we avoid floating point. We format 
+ *   integer seconds and zero‑padded fractional parts using 32‑bit 
+ *   helpers. Each line is buffered then emitted with a single 
+ *   Serial.write() for lower overhead.
  *
  * Why signed:
- * - We frequently subtract (period = ts − last_ts; interval = B − A). Results
- *   can be negative; signed avoids underflow and special‑case handling.
+ * - We frequently subtract (period = ts − last_ts; interval = B − A). 
+ *   Results can be negative; signed avoids underflow and special‑case 
+ *   handling.
  */
 
 #include <stdint.h>           // define unint16_t, uint32_t
@@ -81,36 +85,25 @@ extern const char SW_VERSION[17] = "20250906.1";
 #include "board.h"            // Arduino pin definitions
 #include "tdc7200.h"          // TDC registers and structures
 
-// DEBUG OPTIONS
+/* DEBUG OPTIONS */
 
 // FAST_WRAP_TEST:Increment counters at a fast rate to test
 // overflow behavior.  It's not used in normal operation.
+// Multiplier is how many ticks to increment per interrupt.
 //#define FAST_WRAP_TEST
 //#define FAST_WRAP_MULTIPLIER 1000000L
 
 // SIM_MODE: software simulation harness (default off)
-// - Synthesizes INTB and PICstop so the core read→math→pairing paths run
-//   without TDC hardware attached. SPI access is short-circuited.
-// - Uses buffered single-write printing (same text format) and periodically
-//   reports pairs/sec over a timed window to estimate throughput.
+// - Synthesizes INTB and PICstop so the core read→math→pairing pathsi
+//   run without TDC hardware attached. SPI access is short-circuited.
+// - Uses buffered single-write printing (same text format) and 
+//   periodically reports pairs/sec over a timed window to estimate 
+//   throughput.
 // - SIM_BAUD controls the serial speed used during SIM; set it to a value
 //   your terminal supports. Normal builds still use 115200.
-// - To use: uncomment the define below; to return to hardware operation, keep
-//   it commented.
+// - To use: uncomment the define below; to return to hardware operation, 
+//   keep it commented.
 //#define SIM_MODE
-
-// DETAIL_TIMING: per-hit processing time (default off)
-// - When enabled, measures time spent handling a single event (from the start
-//   of channel processing to completion) using micros(), and prints the elapsed
-//   microseconds as a bare number for each processed hit.
-// - This produces one extra numeric line per hit and will significantly impact
-//   throughput; enable only for profiling/troubleshooting.
-//#define DETAIL_TIMING
-
-#ifdef DETAIL_TIMING
-  int32_t start_micros;
-  int32_t end_micros;
-#endif
 
 #ifdef SIM_MODE
 #ifndef SIM_BAUD
@@ -120,15 +113,23 @@ static uint32_t sim_pairs = 0;
 static uint32_t sim_last = 0;
 #endif
 
+// DETAIL_TIMING: per-hit processing time (default off)
+// - When enabled, measures time spent handling a single event (from 
+//   the start of channel processing to completion) using micros(), and 
+//   prints the elapsed microseconds as a bare number for each processed 
+//   hit.
+// - This produces one extra numeric line per hit and will significantly 
+//   impact throughput; enable only for profiling/troubleshooting.
+//#define DETAIL_TIMING
 
+#ifdef DETAIL_TIMING
+  int32_t start_micros;
+  int32_t end_micros;
+#endif
 
 volatile int64_t PICcount;
-int64_t tint;
 int64_t CLOCK_HZ;
 int64_t PICTICK_PS; 
-int64_t chC;            // to hold TimeLab mode chC
-int64_t chC_diff;       // to hold ts[0] - ts[1] for TimeLab chC       
-
 int64_t CLOCK_PERIOD;
 int16_t CAL_PERIODS;
 int16_t WRAP;
@@ -434,8 +435,7 @@ void loop() {
          channels[i].totalize++;                  // increment number of events   
          channels[i].ready_next();                // Re-arm for next measurement, clear TDC INTB
        
-#if 1
-      // if poll character is not null, only output if we've received that character via serial
+// if poll character is not null, only output if we've received that character via serial
       // NOTE: this may provide random results if measuring timestamp from both channels!
       if ( (channels[i].totalize > 2) &&             // throw away first readings      
          ( (!config.POLL_CHAR)  ||                   // if unset, output everything
@@ -563,7 +563,6 @@ void loop() {
   }
 
   // After processing both channels, pair and print once per matched sample for Interval and TimeLab
-#if 1
   if ( (channels[0].new_ts_ready && channels[1].new_ts_ready) &&
        (channels[0].totalize > 2) && (channels[1].totalize > 2) ) {
     // Optional poll gating

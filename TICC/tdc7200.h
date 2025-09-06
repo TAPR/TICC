@@ -61,9 +61,6 @@ public:
   
   int64_t tof;
   int64_t last_tof;
-  int64_t ts;
-  int64_t last_ts; 
-  int64_t period;
   int64_t totalize;
   int64_t ts_seconds;       // integer part of timestamp; used for TimeLab mode
   // removed ts_frac_ps; represented via SplitTime chunks

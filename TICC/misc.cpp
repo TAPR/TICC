@@ -16,29 +16,6 @@
 #include "config.h"           // config and eeprom
 #include "tdc7200.h"          // TDC registers and structures
 
-/* in issue 28 (https://github.com/TAPR/TICC/issues/28)
- * robots suggests the following change because the original
- * can procude incorrect results in some cases
- *
- * sec =  ABS(x / 100 000 000 000 0);
- * frac = ABS(x % 100 000 000 000 0);
- * // break fractional part of seconds into two 6 digit numbers 
- * frach = frac / 100 000 0;
- * fracl = frac % 100 000 0;
- *
- * to replace:
- * 
- * sec = abs(x / 100 000 000 000 0);
- * secx = sec * 1000 000 000 000;
- * frac = x - secx;
- * // break fractional part of seconds into two 6 digit numbers
- * frach = frac / 100 000 0;
- * fracx = frach * 100 000 0;
- * fracl = frac - fracx;
- * 
- * 31 October 2022 -- that change has been made in all the print functions below
- */
-
 /*
  * Printing rationale (summary):
  * - Timestamps and intervals are represented as SplitTime: 32-bit seconds and
@@ -47,7 +24,6 @@
  * - We only assemble 64-bit ps values when legacy interfaces require it.
  */
 
-// legacy printing helpers removed after migration to SplitTime printers
 
 void print_int64(int64_t num ) {
   const static char toAscii[] = "0123456789ABCDEF";

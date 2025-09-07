@@ -8,7 +8,7 @@
 // Licensed under BSD 2-clause license
 
 // 06 September 2025 - version 1
-extern const char SW_VERSION[17] = "20250906.1";
+extern const char SW_VERSION[17] = "20250907.1";
 
 /*
  * NOTES FOR FUTURE GENERATIONS
@@ -224,7 +224,6 @@ void ticc_setup() {
     channels[i].totalize = 0;
     channels[i].PICstop = 0;
     channels[i].tof = 0;
-    channels[i].ts = 0;
 
     channels[i].name = config.NAME[i];
     channels[i].prop_delay = config.PROP_DELAY[i];
@@ -273,7 +272,7 @@ void ticc_setup() {
   PICcount = 0;                                      // initialize counter
   enableInterrupt(COARSEint, coarseTimer, FALLING);  // enable counter interrupt
   enableInterrupt(STOP_0, catch_stop0, RISING);      // enable interrupt to catch channel A
-  enableInterrupt(STOP_1, catch_stop1, RISING);      // enable interrupt to catch channel 1
+  enableInterrupt(STOP_1, catch_stop1, RISING);      // enable interrupt to catch channel B
   digitalWrite(CLIENT_SYNC, LOW);                    // unassert -- results in ~22uS sync pulse
   pinMode(CLIENT_SYNC, INPUT);                       // set back to input just to be neat
   
@@ -487,7 +486,6 @@ void loop() {
 
 
 } // print result
-#endif
 
 #ifndef SIM_MODE
      // turn LED off
@@ -629,21 +627,7 @@ void loop() {
       }
     }
   }
-#else
-  // SIM_MODE: pair and count without per-sample prints
-  if ( (channels[0].new_ts_ready && channels[1].new_ts_ready) &&
-       (channels[0].totalize > 2) && (channels[1].totalize > 2) ) {
-    sim_pairs++;
-    channels[0].new_ts_ready = 0;
-    channels[1].new_ts_ready = 0;
-  }
-  uint32_t now = micros();
-  if ((now - sim_last) >= 1000000UL) { // 1 second window
-    Serial.print("# pairs/sec: "); Serial.println(sim_pairs);
-    sim_pairs = 0;
-    sim_last = now;
-  }
-#endif
+
 } // while (1) loop
 
 #ifndef SIM_MODE

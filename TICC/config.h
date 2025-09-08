@@ -76,6 +76,7 @@ struct config_t {
 /*****************************************************************/
 // exposed function prototypes
 void UserConfig(struct config_t *config);
+void doSetupMenu(struct config_t *config);
 void print_MeasureMode(MeasureMode x);
 void printHzAsMHz(int64_t x);
 void get_serial_number();

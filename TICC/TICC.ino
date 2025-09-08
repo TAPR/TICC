@@ -63,6 +63,11 @@ extern const char SW_VERSION[17] = "20250907.1";
  *   integer seconds and zero‑padded fractional parts using 32‑bit 
  *   helpers. Each line is buffered then emitted with a single 
  *   Serial.write() for lower overhead.
+ * - We use writeln64() (in misc.cpp)to write lines to the serial port.
+ *   This function is a wrapper around Serial.write() that ensures
+ *   the line is terminated with a newline character.  NOTE: This
+ *   wrapper is limited to 64 characters, which is more than sufficient
+ *   for all TICC data output formats.
  *
  * Why signed:
  * - We frequently subtract (period = ts − last_ts; interval = B − A). 

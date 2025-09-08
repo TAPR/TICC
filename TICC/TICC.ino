@@ -327,28 +327,10 @@ void loop() {
   ticc_setup();                                     // initialize and optionally go to config
 
   while (1) {
-    if ( (Serial.read() == '#') ) {        // direct entry to config menu without restart
+    if ( (Serial.read() == '#') ) {        // direct entry to config menu; restart after exit
       doSetupMenu(&config);
-      // Re-apply runtime parameters that depend on config
-      MODE = config.MODE;
-      CLOCK_HZ = config.CLOCK_HZ;
-      CLOCK_PERIOD = (PS_PER_SEC/CLOCK_HZ);
-      PICTICK_PS = config.PICTICK_PS;
-      CAL_PERIODS = config.CAL_PERIODS;
-      WRAP = config.WRAP;
-      ticksPerSecond = PS_PER_SEC / PICTICK_PS;
-      // Update channel derived settings and re-arm TDCs
-      for (int i = 0; i < ARRAY_SIZE(channels); ++i) {
-        channels[i].name = config.NAME[i];
-        channels[i].prop_delay = config.PROP_DELAY[i];
-        channels[i].time_dilation = config.TIME_DILATION[i];
-        channels[i].fixed_time2 = config.FIXED_TIME2[i];
-        channels[i].fudge = config.PROP_DELAY[i] + config.FUDGE0[i];
-        // leave last_picstop/cached values as-is; they'll naturally realign
-        channels[i].ready_next();
-      }
-      // Continue running without restarting
-      continue;
+      while (Serial.available()) (void)Serial.read();
+      return; // reinitialize via ticc_setup() on next loop entry
     }
      
 #ifndef SIM_MODE

@@ -354,7 +354,12 @@ void loop() {
           if (ext_clk_led_on) {                      // turn off only if was on
             CLR_EXT_LED_CLK;
             Serial.println("10 MHZ Reference lost!");
+            Serial.println("Press any key to restart after reference is restored.");
             ext_clk_led_on = 0;
+            // Wait for a key press, then restart (reinitialize on next loop entry)
+            while (Serial.available() == 0) { delay(10); }
+            (void)Serial.read();
+            return;
           }
         }
       }

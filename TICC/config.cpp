@@ -22,6 +22,146 @@
 extern const char SW_VERSION[17]; // set in TICC.ino
 char SER_NUM[17];          // set by get_ser_num();
 
+// --- New robust serial helpers ---
+static void serialPrintImmediate(const char *s) {
+  Serial.print(s);
+  Serial.flush();
+}
+
+static void serialWriteImmediate(char c) {
+  Serial.write(c);
+  Serial.flush();
+}
+
+// Read a line into buf (cap includes terminator). Returns length (excludes terminator).
+// Handles echo, backspace, CR/LF termination. Produces a NUL-terminated string without CR/LF.
+static size_t readLine(char *buf, size_t cap) {
+  if (cap == 0) return 0;
+  size_t n = 0;
+  for (;;) {
+    while (!Serial.available()) { /* busy wait */ }
+    int ch = Serial.read();
+    if (ch == '\r' || ch == '\n') {
+      serialWriteImmediate('\r'); serialWriteImmediate('\n');
+      buf[n] = '\0';
+      return n;
+    }
+    if (ch == 0x08 || ch == 0x7F) { // backspace/delete
+      if (n > 0) { n--; serialWriteImmediate('\b'); serialWriteImmediate(' '); serialWriteImmediate('\b'); }
+      continue;
+    }
+    if (n + 1 < cap) {
+      buf[n++] = (char)ch;
+      serialWriteImmediate((char)ch);
+    }
+  }
+}
+
+// Trim leading/trailing spaces in place; returns start pointer inside buf.
+static char* trimInPlace(char *s) {
+  while (*s == ' ' || *s == '\t') s++;
+  char *end = s + strlen(s);
+  while (end > s && (end[-1] == ' ' || end[-1] == '\t')) { --end; }
+  *end = '\0';
+  return s;
+}
+
+// Simple int64 parser: accepts optional +/-, digits only; returns true on success
+static bool parseInt64Simple(const char *s, int64_t *out) {
+  if (!s || !*s) return false;
+  bool neg = false; if (*s == '+' || *s == '-') { neg = (*s == '-'); s++; }
+  if (!*s) return false;
+  int64_t v = 0;
+  while (*s) {
+    if (*s < '0' || *s > '9') return false;
+    int d = *s - '0';
+    v = v * 10 + d;
+    s++;
+  }
+  *out = neg ? -v : v;
+  return true;
+}
+
+// Parse decimal like 10.5 into integer scaled by scale (e.g., 1e6). Returns true on success.
+static bool parseDecimalScaled(const char *s, int64_t scale, int64_t *out) {
+  if (!s || !*s) return false;
+  bool neg = false; if (*s == '+' || *s == '-') { neg = (*s == '-'); s++; }
+  if (!*s) return false;
+  int64_t intPart = 0;
+  while (*s && *s != '.') {
+    if (*s < '0' || *s > '9') return false;
+    intPart = intPart * 10 + (*s - '0');
+    s++;
+  }
+  int64_t fracPart = 0; int64_t fracScale = 1;
+  if (*s == '.') {
+    s++;
+    while (*s && fracScale < scale) {
+      if (*s < '0' || *s > '9') return false;
+      fracPart = fracPart * 10 + (*s - '0');
+      fracScale *= 10;
+      s++;
+    }
+    while (*s) { if (*s < '0' || *s > '9') return false; s++; }
+  }
+  // scale fractional to match target scale
+  while (fracScale < scale) { fracPart *= 10; fracScale *= 10; }
+  int64_t total = intPart * scale + fracPart;
+  *out = neg ? -total : total;
+  return true;
+}
+
+// Parse pair syntax "A/B" where either side may be empty.
+// Returns which sides are set, and their parsed int64 values.
+static bool parseInt64Pair(const char *s, bool *set0, int64_t *v0, bool *set1, int64_t *v1) {
+  if (!s) return false;
+  const char *slash = strchr(s, '/');
+  char tmp[64];
+  if (!slash) { // single value => apply to both
+    size_t len = strlcpy(tmp, s, sizeof(tmp)); (void)len;
+    char *t = trimInPlace(tmp);
+    int64_t v; if (!parseInt64Simple(t, &v)) return false;
+    *set0 = *set1 = true; *v0 = *v1 = v; return true;
+  }
+  bool ok;
+  if (slash != s) {
+    size_t l = (size_t)(slash - s); if (l >= sizeof(tmp)) l = sizeof(tmp) - 1;
+    memcpy(tmp, s, l); tmp[l] = '\0';
+    char *t = trimInPlace(tmp);
+    ok = parseInt64Simple(t, v0); if (!ok) return false; *set0 = true;
+  } else { *set0 = false; }
+  if (*(slash+1)) {
+    size_t l = strlcpy(tmp, slash+1, sizeof(tmp)); (void)l;
+    char *t = trimInPlace(tmp);
+    ok = parseInt64Simple(t, v1); if (!ok) return false; *set1 = true;
+  } else { *set1 = false; }
+  return true;
+}
+
+// Specialized pair parser for decimal scaled values (e.g., us->ps or MHz->Hz)
+static bool parseDecimalScaledPair(const char *s, int64_t scale, bool *set0, int64_t *v0, bool *set1, int64_t *v1) {
+  const char *slash = strchr(s, '/');
+  char tmp[64];
+  if (!slash) {
+    size_t l = strlcpy(tmp, s, sizeof(tmp)); (void)l;
+    char *t = trimInPlace(tmp);
+    int64_t v; if (!parseDecimalScaled(t, scale, &v)) return false; *set0 = *set1 = true; *v0 = *v1 = v; return true;
+  }
+  bool ok;
+  if (slash != s) {
+    size_t l = (size_t)(slash - s); if (l >= sizeof(tmp)) l = sizeof(tmp) - 1;
+    memcpy(tmp, s, l); tmp[l] = '\0';
+    char *t = trimInPlace(tmp);
+    ok = parseDecimalScaled(t, scale, v0); if (!ok) return false; *set0 = true;
+  } else { *set0 = false; }
+  if (*(slash+1)) {
+    size_t l = strlcpy(tmp, slash+1, sizeof(tmp)); (void)l;
+    char *t = trimInPlace(tmp);
+    ok = parseDecimalScaled(t, scale, v1); if (!ok) return false; *set1 = true;
+  } else { *set1 = false; }
+  return true;
+}
+
 #define inputLineIndexMax 125
 char inputLine[128];    // The above define is less than the declared size to ensure against overflow
 int inputLineIndex = 0;
@@ -475,114 +615,107 @@ void initializeConfig(struct config_t *x)
   *x = defaultConfig();
 }
 
-void doSetupMenu(struct config_t *pConfigInfo)      // also display the default values ----------------
+void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust serial menu
 {
-  char response;
-  for ( ; ; )
-  {
-  Serial.println(), Serial.println();
-  Serial.print("A   measurement mode (default T)                "); Serial.println( modeToChar(pConfigInfo->MODE));  // enum MeasureMode, default Timestamp
-  Serial.print("B   poll character (default unset)              "); 
-          if (pConfigInfo->POLL_CHAR) {
-            Serial.println(pConfigInfo->POLL_CHAR); // normally unset
-          } else {
-            Serial.println("unset");
-          }
-  Serial.print("C   clock speed in MHz (default 10)             "); printHzAsMHz(pConfigInfo->CLOCK_HZ), Serial.println();       // int_64
+  char buf[96];
+  for (;;) {
+    serialPrintImmediate("\r\n== TICC Configuration ==\r\n");
+    serialPrintImmediate("T/P/I/L/D/N  - Set Mode\r\n");
+    serialPrintImmediate("O            - Set Poll Character (space to clear)\r\n");
+    serialPrintImmediate("H            - Set Clock Speed (MHz, e.g., 10 or 10.0)\r\n");
+    serialPrintImmediate("U            - Set Coarse Tick (us, e.g., 100 or 100.0)\r\n");
+    serialPrintImmediate("R            - Set Timestamp Wrap digits (0=no wrap)\r\n");
+    serialPrintImmediate("S            - Master/Client (M/C)\r\n");
+    serialPrintImmediate("N            - Channel Names (e.g., A/B)\r\n");
+    serialPrintImmediate("G            - Propagation Delay (ps) pair A/B\r\n");
+    serialPrintImmediate("E            - Trigger Edge pair (R/F) A/B\r\n");
+    serialPrintImmediate("D            - Time Dilation (int) pair A/B\r\n");
+    serialPrintImmediate("F            - fixedTime2 (int ps) pair A/B\r\n");
+    serialPrintImmediate("Z            - FUDGE0 (int ps) pair A/B\r\n");
+    serialPrintImmediate("W            - Write config to EEPROM and exit\r\n");
+    serialPrintImmediate("Q            - Exit without writing\r\n> ");
 
-  Serial.print("D   coarse clock rate in us) (default 100)      "); printHzAsMHz(pConfigInfo->PICTICK_PS), Serial.println();   // int_64
-  
-  Serial.print("E   calibration periods (default 20)            "); Serial.println((int32_t)pConfigInfo->CAL_PERIODS);  // int_16, choices are 2, 10, 20, 40
-  
-  Serial.print("F   timeout (default 0x05)                      ");       // int16 
-    char str[8];sprintf(str, "0x%02X", (int32_t)pConfigInfo->TIMEOUT);Serial.println(str);
+    size_t n = readLine(buf, sizeof(buf));
+    char *line = trimInPlace(buf);
+    if (n == 0) continue;
+    char cmd = toupper(line[0]);
 
-  Serial.print("G   ts wrap (default 0 = none)                  "); Serial.print(pConfigInfo->WRAP); Serial.println(); // int16_t
-  
-  Serial.print("H   sync:  master / client (default M)          "); Serial.print(pConfigInfo->SYNC_MODE); Serial.println();  // M (default) or S
-  
-  Serial.print("I   channel name (default A/B)                  ");  
-    Serial.print(pConfigInfo->NAME[0]);Serial.print('/');Serial.println(pConfigInfo->NAME[1]);        
-  
-  Serial.print("J   prop delay (default 0)                      ");       // int_64, default 0
-    Serial.print((int32_t)pConfigInfo->PROP_DELAY[0]);Serial.print(' ');Serial.println((int32_t)pConfigInfo->PROP_DELAY[1]);
-    	
-  Serial.print("K   trigger edge (default R R)                  ");     // R(ising) or F(alling)
-    Serial.print(pConfigInfo->START_EDGE[0]);Serial.print(' ');Serial.println(pConfigInfo->START_EDGE[1]);
-          
-  Serial.print("L   time dilation (default 2500)                ");       // int_64, default 2500
-    Serial.print((int32_t)pConfigInfo->TIME_DILATION[0]);Serial.print(' ');Serial.println((int32_t)pConfigInfo->TIME_DILATION[1]);
-    	  
-  Serial.print("M   fixed time2 (default 0)                     ");   // int_64, default 0
-    Serial.print((int32_t)pConfigInfo->FIXED_TIME2[0]);Serial.print(' ');Serial.println((int32_t)pConfigInfo->FIXED_TIME2[1]);
-     
-  Serial.print("N   fudge0 (default 0)                          ");   // int_64, default 0
-    Serial.print((int32_t)pConfigInfo->FUDGE0[0]);Serial.print(' ');Serial.println((int32_t)pConfigInfo->FUDGE0[1]);
-    	
-  Serial.println();
-  Serial.println("1   Reset all to default values");
-  Serial.println("2   Write changes");
-  Serial.println("3   Discard changes and exit setup");
-  Serial.println("choose one: ");
-    
-  response = toupper(getChar());    // wait for a character
-  Serial.println();
-  
-    switch(response)   
-    {
-      case 'A':  measurementMode(pConfigInfo);
-    		break;
-      case 'B':  pollChar(pConfigInfo);
-        break;
-      case 'C':  clockSpeed(pConfigInfo);
-    		break;
-      case 'D':	 coarseClockRate(pConfigInfo);
-    		break;
-      case 'E':  calibrationPeriods(pConfigInfo);
-    		break;
-      case 'F':  timeout(pConfigInfo);
-    		break;
-      case 'G':  ts_wrap(pConfigInfo);
-        break;
-      case 'H':  masterClient(pConfigInfo); // (sync mode)
-    		break;
-      case 'I':  channel_name(pConfigInfo);
-    		break;
-      case 'J':  prop_delay(pConfigInfo);
-        break;
-      case 'K':  triggerEdge(pConfigInfo);
-    		break;
-      case 'L':  timeDilation(pConfigInfo);
-    		break;
-      case 'M':  fixedTime2(pConfigInfo);
-    		break;
-      case 'N':  fudge0(pConfigInfo);
-    		break;
-      case '1': initializeConfig(pConfigInfo);
-        break;
-      case '2':  // write changes and exit
-        Serial.println("Writing changes to eeprom...");
-        EEPROM_writeAnything(CONFIG_START, *pConfigInfo); // save change to config
-        Serial.println("Finished.  Please Restart!");
-        return;
-    	  break; 
-      case '3':	// discard changes and exit
-        return;
-    	  break;
-      
-      // this doesn't show up in the menu -- reset entire eeprom to 0xFF (factory
-      // default).  Restart the board to write new serial number and defaults.
-      case '4':
-        Serial.println("");
-        Serial.println("Setting EEPROM to factory status.  Stand by...");
-        eeprom_clear();
-        Serial.println("Finished.");
-        return;
-        break;      
-      default:  Serial.println("???");  // 'bad selection'
-    		break;
-    }   // switch
-  }   // for 
+    if (strchr("TPILDN", cmd)) {
+      switch (cmd) {
+        case 'T': pConfigInfo->MODE = Timestamp; break;
+        case 'P': pConfigInfo->MODE = Period; break;
+        case 'I': pConfigInfo->MODE = Interval; break;
+        case 'L': pConfigInfo->MODE = timeLab; break;
+        case 'D': pConfigInfo->MODE = Debug; break;
+        case 'N': pConfigInfo->MODE = Null; break;
+      }
+      serialPrintImmediate("OK\r\n");
+      continue;
+    }
+
+    if (cmd == 'O') {
+      serialPrintImmediate("Enter poll character (space to clear): ");
+      n = readLine(buf, sizeof(buf)); line = trimInPlace(buf);
+      pConfigInfo->POLL_CHAR = (line[0] == '\0' || line[0] == ' ') ? 0x00 : line[0];
+      serialPrintImmediate("OK\r\n");
+      continue;
+    }
+
+    if (cmd == 'H') { // Clock speed MHz -> Hz
+      serialPrintImmediate("Clock MHz: "); n = readLine(buf, sizeof(buf)); line = trimInPlace(buf);
+      int64_t hz; if (parseDecimalScaled(line, 1000000LL, &hz) && hz > 0) { pConfigInfo->CLOCK_HZ = hz; serialPrintImmediate("OK\r\n"); } else serialPrintImmediate("Invalid\r\n");
+      continue;
+    }
+    if (cmd == 'U') { // Coarse tick us -> ps
+      serialPrintImmediate("Coarse tick (us): "); n = readLine(buf, sizeof(buf)); line = trimInPlace(buf);
+      int64_t ps; if (parseDecimalScaled(line, 1000000LL, &ps) && ps > 0) { pConfigInfo->PICTICK_PS = ps; serialPrintImmediate("OK\r\n"); } else serialPrintImmediate("Invalid\r\n");
+      continue;
+    }
+    if (cmd == 'R') { // wrap digits
+      serialPrintImmediate("Wrap digits (0..10): "); n = readLine(buf, sizeof(buf)); line = trimInPlace(buf);
+      int64_t wrap; if (parseInt64Simple(line, &wrap) && wrap >= 0 && wrap <= 10) { pConfigInfo->WRAP = (int16_t)wrap; serialPrintImmediate("OK\r\n"); } else serialPrintImmediate("Invalid\r\n");
+      continue;
+    }
+    if (cmd == 'S') { // sync mode
+      serialPrintImmediate("Enter M or C: "); n = readLine(buf, sizeof(buf)); line = trimInPlace(buf);
+      char v = toupper(line[0]); if (v == 'M' || v == 'C') { pConfigInfo->SYNC_MODE = v; serialPrintImmediate("OK\r\n"); } else serialPrintImmediate("Invalid\r\n");
+      continue;
+    }
+    if (cmd == 'N') { // names A/B
+      serialPrintImmediate("Enter names A/B: "); n = readLine(buf, sizeof(buf)); line = trimInPlace(buf);
+      const char *slash = strchr(line, '/'); if (slash && slash != line && slash[1]) { pConfigInfo->NAME[0] = line[0]; pConfigInfo->NAME[1] = slash[1]; serialPrintImmediate("OK\r\n"); } else serialPrintImmediate("Invalid\r\n");
+      continue;
+    }
+    if (cmd == 'G' || cmd == 'D' || cmd == 'F' || cmd == 'Z' || cmd == 'E') {
+      // Pair handlers
+      serialPrintImmediate("Enter pair A/B: "); n = readLine(buf, sizeof(buf)); line = trimInPlace(buf);
+      if (cmd == 'E') {
+        // edges
+        const char *slash = strchr(line, '/');
+        char e0 = (slash == NULL) ? toupper(line[0]) : (slash == line ? '\0' : toupper(line[0]));
+        char e1 = (slash == NULL) ? toupper(line[0]) : (slash[1] ? toupper(slash[1]) : '\0');
+        if (e0 == 'R' || e0 == 'F') pConfigInfo->START_EDGE[0] = e0;
+        if (e1 == 'R' || e1 == 'F') pConfigInfo->START_EDGE[1] = e1;
+        serialPrintImmediate("OK\r\n");
+        continue;
+      }
+      bool s0=false, s1=false; int64_t v0=0, v1=0;
+      if (!parseInt64Pair(line, &s0, &v0, &s1, &v1)) { serialPrintImmediate("Invalid\r\n"); continue; }
+      if (cmd == 'G') { if (s0) pConfigInfo->PROP_DELAY[0]=v0; if (s1) pConfigInfo->PROP_DELAY[1]=v1; serialPrintImmediate("OK\r\n"); continue; }
+      if (cmd == 'D') { if (s0) pConfigInfo->TIME_DILATION[0]=v0; if (s1) pConfigInfo->TIME_DILATION[1]=v1; serialPrintImmediate("OK\r\n"); continue; }
+      if (cmd == 'F') { if (s0) pConfigInfo->FIXED_TIME2[0]=v0; if (s1) pConfigInfo->FIXED_TIME2[1]=v1; serialPrintImmediate("OK\r\n"); continue; }
+      if (cmd == 'Z') { if (s0) pConfigInfo->FUDGE0[0]=v0; if (s1) pConfigInfo->FUDGE0[1]=v1; serialPrintImmediate("OK\r\n"); continue; }
+      continue;
+    }
+
+    if (cmd == 'W') {
+      EEPROM_writeAnything(CONFIG_START, *pConfigInfo);
+      serialPrintImmediate("Saved.\r\n");
+      return;
+    }
+    if (cmd == 'Q') { return; }
+    serialPrintImmediate("? Unknown command\r\n");
+  }
 }
 
 
@@ -591,15 +724,14 @@ void UserConfig(struct config_t *pConfigInfo)
     char c;
     while ( ! Serial )   /* wait until Serial port is open */ ;
 
-    Serial.println("# Type any character for config menu");  // leading hash so logging programs can ignore
-    Serial.print("# ");
+    serialPrintImmediate("# Type any key for config menu\r\n# ");
     bool configRequested = 0;
     for (int i = 6; i >= 0; --i)  // wait ~6 sec so user can type something
     { 
-      delay(250);   Serial.print('.');      if (Serial.available())       { configRequested = 1;        break;      }
-      delay(250);   Serial.print('.');      if (Serial.available())       { configRequested = 1;        break;      }
-      delay(250);   Serial.print('.');      if (Serial.available())       { configRequested = 1;        break;      }
-      delay(250);   Serial.print('.');      if (Serial.available())       { configRequested = 1;        break;      }
+      delay(250);   serialWriteImmediate('.'); if (Serial.available()) { configRequested = 1; break; }
+      delay(250);   serialWriteImmediate('.'); if (Serial.available()) { configRequested = 1; break; }
+      delay(250);   serialWriteImmediate('.'); if (Serial.available()) { configRequested = 1; break; }
+      delay(250);   serialWriteImmediate('.'); if (Serial.available()) { configRequested = 1; break; }
     }
     while (Serial.available()) c = Serial.read();   // eat any characters entered before we start  doSetupMenu()
     if (configRequested) doSetupMenu(pConfigInfo); 

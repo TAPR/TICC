@@ -319,3 +319,13 @@ void printSignedSplit(const SplitTime &t, int places) {
   Serial.write('.');
   serialPrintFrac(hi, lo, (uint8_t)places);
 }
+
+// Append CRLF and write out buffer in a single Serial.write().
+// Assumes buf has at least 64 bytes capacity; caps total length at 64.
+void writeln64(char *buf, size_t n) {
+  if (!buf) return;
+  if (n > 62) n = 62; // leave space for CRLF
+  buf[n++] = '\r';
+  buf[n++] = '\n';
+  Serial.write((const uint8_t*)buf, n);
+}

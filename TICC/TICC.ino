@@ -454,12 +454,11 @@ void loop() {
               SplitTime p = diffSplit(channels[i].ts_split, channels[i].last_ts_split);
               char line[64]; size_t n = 0;
               n = formatSignedSplitTo(line, sizeof(line), p, PLACES);
-              if (n < sizeof(line)) { line[n++] = ' '; }
-              if (n < sizeof(line)) { line[n++] = 'c'; }
-              if (n < sizeof(line)) { line[n++] = 'h'; }
-              if (n < sizeof(line)) { line[n++] = (char)channels[i].name; }
-              if (n < sizeof(line)) { line[n++] = '\n'; }
-              Serial.write((const uint8_t*)line, n);
+              line[n++] = ' ';
+              line[n++] = 'c';
+              line[n++] = 'h';
+              line[n++] = (char)channels[i].name;
+              writeln64(line, n);
             }
           break;
      
@@ -469,14 +468,13 @@ void loop() {
  
           case Debug:
             {
-              char line[96]; size_t n = 0;
+              char line[64]; size_t n = 0;
               n = formatTimestampSplitTo(line, sizeof(line), channels[i].ts_split, PLACES, WRAP);
-              if (n < sizeof(line)) { line[n++] = ' '; }
-              if (n < sizeof(line)) { line[n++] = 'c'; }
-              if (n < sizeof(line)) { line[n++] = 'h'; }
-              if (n < sizeof(line)) { line[n++] = (char)channels[i].name; }
-              if (n < sizeof(line)) { line[n++] = '\n'; }
-              Serial.write((const uint8_t*)line, n);
+              line[n++] = ' ';
+              line[n++] = 'c';
+              line[n++] = 'h';
+              line[n++] = (char)channels[i].name;
+              writeln64(line, n);
             }
           break;
 
@@ -538,21 +536,21 @@ void loop() {
           const PairSlot *B = (ts_pair[0].ch == 1) ? &ts_pair[0] : &ts_pair[1];
           {
             char line[64]; size_t n = formatTimestampSplitTo(line, sizeof(line), A->t, PLACES, WRAP);
-            if (n < sizeof(line)) { line[n++]=' '; if (n<sizeof(line)) line[n++]='c'; if (n<sizeof(line)) line[n++]='h'; if (n<sizeof(line)) line[n++] = (char)channels[0].name; if (n<sizeof(line)) line[n++]='\n'; }
-            Serial.write((const uint8_t*)line, n);
+            line[n++]=' '; line[n++]='c'; line[n++]='h'; line[n++] = (char)channels[0].name;
+            writeln64(line, n);
           }
           {
             char line[64]; size_t n = formatTimestampSplitTo(line, sizeof(line), B->t, PLACES, WRAP);
-            if (n < sizeof(line)) { line[n++]=' '; if (n<sizeof(line)) line[n++]='c'; if (n<sizeof(line)) line[n++]='h'; if (n<sizeof(line)) line[n++] = (char)channels[1].name; if (n<sizeof(line)) line[n++]='\n'; }
-            Serial.write((const uint8_t*)line, n);
+            line[n++]=' '; line[n++]='c'; line[n++]='h'; line[n++] = (char)channels[1].name;
+            writeln64(line, n);
           }
         } else {
           // Same channel twice: print both with that channel's name
           uint8_t ci = ts_pair[0].ch; char cname = channels[ci].name;
           for (int k = 0; k < 2; ++k) {
             char line[64]; size_t n = formatTimestampSplitTo(line, sizeof(line), ts_pair[k].t, PLACES, WRAP);
-            if (n < sizeof(line)) { line[n++]=' '; if (n<sizeof(line)) line[n++]='c'; if (n<sizeof(line)) line[n++]='h'; if (n<sizeof(line)) line[n++] = cname; if (n<sizeof(line)) line[n++]='\n'; }
-            Serial.write((const uint8_t*)line, n);
+            line[n++]=' '; line[n++]='c'; line[n++]='h'; line[n++] = cname;
+            writeln64(line, n);
           }
         }
         ts_pair_count = 0; // clear pair buffer after printing
@@ -588,9 +586,9 @@ void loop() {
           SplitTime d = diffSplit(channels[1].ts_split, channels[0].ts_split);
           {
             char line[64]; size_t n = formatSignedSplitTo(line, sizeof(line), d, PLACES);
-            if (n < sizeof(line)) { line[n++]=' '; }
-            const char suffix[] = "TI(A->B)\n"; const char *s=suffix; while(*s && n<sizeof(line)) line[n++]=*s++;
-            Serial.write((const uint8_t*)line, n);
+            line[n++]=' ';
+            const char suffix[] = "TI(A->B)"; const char *s=suffix; while(*s && n<sizeof(line)) line[n++]=*s++;
+            writeln64(line, n);
           }
 #ifdef SIM_MODE
           sim_pairs++;
@@ -600,22 +598,22 @@ void loop() {
           break; }
         case timeLab: {
           {
-            char line[80]; size_t n;
+            char line[64]; size_t n;
             // chA
             n = formatTimestampSplitTo(line, sizeof(line), channels[0].ts_split, PLACES, WRAP);
-            if (n < sizeof(line)) { line[n++] = ' '; if (n < sizeof(line)) line[n++]='c'; if (n < sizeof(line)) line[n++]='h'; if (n < sizeof(line)) line[n++]=(char)channels[0].name; if (n < sizeof(line)) line[n++]='\n'; }
-            Serial.write((const uint8_t*)line, n);
+            line[n++] = ' '; line[n++]='c'; line[n++]='h'; line[n++]=(char)channels[0].name;
+            writeln64(line, n);
             // chB
             n = formatTimestampSplitTo(line, sizeof(line), channels[1].ts_split, PLACES, WRAP);
-            if (n < sizeof(line)) { line[n++] = ' '; if (n < sizeof(line)) line[n++]='c'; if (n < sizeof(line)) line[n++]='h'; if (n < sizeof(line)) line[n++]=(char)channels[1].name; if (n < sizeof(line)) line[n++]='\n'; }
-            Serial.write((const uint8_t*)line, n);
+            line[n++] = ' '; line[n++]='c'; line[n++]='h'; line[n++]=(char)channels[1].name;
+            writeln64(line, n);
             // chC synthesized (B - A)
             SplitTime d = diffSplit(channels[1].ts_split, channels[0].ts_split);
             SplitTime c = { (int32_t)(channels[1].ts_split.sec + d.sec), d.frac_hi, d.frac_lo };
             n = formatTimestampSplitTo(line, sizeof(line), c, PLACES, WRAP);
-            if (n < sizeof(line)) { line[n++] = ' '; if (n < sizeof(line)) line[n++]='c'; if (n < sizeof(line)) line[n++]='h'; if (n < sizeof(line)) line[n++]='C'; if (n < sizeof(line)) line[n++]=' '; }
-            const char suffix[] = "(B - A)\n"; const char *s = suffix; while (*s && n < sizeof(line)) line[n++] = *s++;
-            Serial.write((const uint8_t*)line, n);
+            line[n++] = ' '; line[n++]='c'; line[n++]='h'; line[n++]='C'; line[n++]=' ';
+            const char suffix[] = "(B - A)"; const char *s = suffix; while (*s && n < sizeof(line)) line[n++] = *s++;
+            writeln64(line, n);
           }
 #ifdef SIM_MODE
           sim_pairs++;

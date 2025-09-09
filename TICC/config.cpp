@@ -632,22 +632,27 @@ void initializeConfig(struct config_t *x)
 void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust serial menu
 {
   char buf[96];
+  bool showMenu = true;
   for (;;) {
-    serialPrintImmediate("\r\n== TICC Configuration ==\r\n");
-    serialPrintImmediate("T/P/I/L/D/N  - Set Mode\r\n");
-    serialPrintImmediate("O            - Set Poll Character (space to clear)\r\n");
-    serialPrintImmediate("H            - Set Clock Speed (MHz, e.g., 10 or 10.0)\r\n");
-    serialPrintImmediate("U            - Set Coarse Tick (us, e.g., 100 or 100.0)\r\n");
-    serialPrintImmediate("R            - Set Timestamp Wrap digits (0=no wrap)\r\n");
-    serialPrintImmediate("S            - Master/Client (M/C)\r\n");
-    serialPrintImmediate("N            - Channel Names (e.g., A/B)\r\n");
-    serialPrintImmediate("G            - Propagation Delay (ps) pair A/B\r\n");
-    serialPrintImmediate("E            - Trigger Edge pair (R/F) A/B\r\n");
-    serialPrintImmediate("D            - Time Dilation (int) pair A/B\r\n");
-    serialPrintImmediate("F            - fixedTime2 (int ps) pair A/B\r\n");
-    serialPrintImmediate("Z            - FUDGE0 (int ps) pair A/B\r\n");
-    serialPrintImmediate("W            - Write config to EEPROM and exit\r\n");
-    serialPrintImmediate("Q            - Exit without writing\r\n> ");
+    if (showMenu) {
+      serialPrintImmediate("\r\n== TICC Configuration ==\r\n");
+      serialPrintImmediate("T/P/I/L/D/N  - Set Mode\r\n");
+      serialPrintImmediate("O            - Set Poll Character (space to clear)\r\n");
+      serialPrintImmediate("H            - Set Clock Speed (MHz, e.g., 10 or 10.0)\r\n");
+      serialPrintImmediate("U            - Set Coarse Tick (us, e.g., 100 or 100.0)\r\n");
+      serialPrintImmediate("R            - Set Timestamp Wrap digits (0=no wrap)\r\n");
+      serialPrintImmediate("S            - Master/Client (M/C)\r\n");
+      serialPrintImmediate("N            - Channel Names (e.g., A/B)\r\n");
+      serialPrintImmediate("G            - Propagation Delay (ps) pair A/B\r\n");
+      serialPrintImmediate("E            - Trigger Edge pair (R/F) A/B\r\n");
+      serialPrintImmediate("D            - Time Dilation (int) pair A/B\r\n");
+      serialPrintImmediate("F            - fixedTime2 (int ps) pair A/B\r\n");
+      serialPrintImmediate("Z            - FUDGE0 (int ps) pair A/B\r\n");
+      serialPrintImmediate("W            - Write config to EEPROM and exit\r\n");
+      serialPrintImmediate("Q            - Exit without writing\r\n");
+      showMenu = false;
+    }
+    serialPrintImmediate("> ");
     // Force immediate rendering on some terminals by emitting a space then backspace
     serialWriteImmediate(' ');
     serialWriteImmediate('\b');
@@ -670,6 +675,7 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
       serialPrintImmediate("OK\r\n");
       continue;
     }
+    if (cmd == '?' || cmd == 'M') { showMenu = true; serialPrintImmediate("\r\n"); continue; }
 
     if (cmd == 'O') {
       serialPrintImmediate("Enter poll character (space to clear): ");

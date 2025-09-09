@@ -765,13 +765,22 @@ void UserConfig(struct config_t *pConfigInfo)
     Serial.print("# ");
     Serial.flush();
     bool configRequested = 0;
+    int dots = 0;
     for (int i = 6; i >= 0; --i)  // wait ~6 sec so user can type something
-    { 
-      delay(250);   Serial.println("# ."); Serial.flush(); if (Serial.available()) { configRequested = 1; break; }
-      delay(250);   Serial.println("# ."); Serial.flush(); if (Serial.available()) { configRequested = 1; break; }
-      delay(250);   Serial.println("# ."); Serial.flush(); if (Serial.available()) { configRequested = 1; break; }
-      delay(250);   Serial.println("# ."); Serial.flush(); if (Serial.available()) { configRequested = 1; break; }
+    {
+      for (int k = 0; k < 4; ++k) {
+        delay(250);
+        ++dots;
+        Serial.print('\r');
+        Serial.print("# ");
+        for (int j = 0; j < dots; ++j) Serial.print('.');
+        Serial.flush();
+        if (Serial.available()) { configRequested = 1; break; }
+      }
+      if (configRequested) break;
     }
+    Serial.println();
+    Serial.flush();
     while (Serial.available()) c = Serial.read();   // eat any characters entered before we start  doSetupMenu()
     if (configRequested) doSetupMenu(pConfigInfo); 
 }

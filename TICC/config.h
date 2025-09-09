@@ -82,9 +82,6 @@ void printHzAsMHz(int64_t x);
 void get_serial_number();
 void eeprom_clear();
 
-// Request that the main loop restart setup on next iteration
-extern volatile uint8_t request_restart;
-
 /*****************************************************************/
 // These allow us to read/write struct in eeprom
 template <class T> int EEPROM_writeAnything(int ee, const T& value)

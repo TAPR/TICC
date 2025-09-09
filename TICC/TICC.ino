@@ -83,7 +83,6 @@ extern const char SW_VERSION[17] = "20250909.1";
 // or download from https://github.com/GreyGnome/EnableInterrupt
 // use "Sketch/Include Library/Add .ZIP Library" to install
 #include <EnableInterrupt.h>  // use faster interrupt library
-#include <avr/wdt.h>
 
 #include "board.h"            // LED macros#include "board.h"            // LED macros
 #include "config.h"           // config and eeprom
@@ -164,8 +163,6 @@ void ticc_setup() {
 
   int i;
   boolean last_pin;
-  // Ensure watchdog is disabled after a watchdog-triggered restart
-  wdt_disable();
 
   pinMode(COARSEint, INPUT);
   pinMode(OUT1, OUTPUT);
@@ -347,7 +344,6 @@ void loop() {
   ticc_setup();  // initialize and optionally go to config
 
   while (1) {
-    if (request_restart) { return; }
     if ( (Serial.read() == '#') ) {        // direct entry to config menu; restart after exit
       doSetupMenu(&config);
       while (Serial.available()) (void)Serial.read();

@@ -712,8 +712,9 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
         char tmp[64]; sprintf(tmp, "Z            - FUDGE0 ps A/B (currently: %ld/%ld)\r\n", (int32_t)pConfigInfo->FUDGE0[0], (int32_t)pConfigInfo->FUDGE0[1]);
         serialPrintImmediate(tmp);
       }
-      serialPrintImmediate("W            - Write config to EEPROM and exit\r\n");
-      serialPrintImmediate("Q            - Exit without writing\r\n");
+      serialPrintImmediate("1            - Discard changes and exit\r\n");
+      serialPrintImmediate("2            - Write changes to EEPROM and restart\r\n");
+      serialPrintImmediate("3            - Reset all to defaults and restart\r\n");
       showMenu = false;
     }
     Serial.print("> ");
@@ -728,6 +729,7 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
     if (n == 0) continue;
     char cmd = toupper(line[0]);
 
+    // Mode quick-set letters for now (will move to submenu later)
     if (strchr("TPILDN", cmd)) {
       switch (cmd) {
         case 'T': pConfigInfo->MODE = Timestamp; break;
@@ -805,13 +807,21 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
       continue;
     }
 
-    if (cmd == 'W') {
-      EEPROM_writeAnything(CONFIG_START, *pConfigInfo);
-      serialPrintImmediate("Saved.\r\n");
-      Serial.flush();
+    // Numbered exits: 1 discard, 2 write+restart, 3 defaults+restart
+    if (cmd == '1') { // discard
+      serialPrintImmediate("Discarded changes.\r\n");
       return;
     }
-    if (cmd == 'Q') { return; }
+    if (cmd == '2') { // write and restart (caller will reinit)
+      EEPROM_writeAnything(CONFIG_START, *pConfigInfo);
+      serialPrintImmediate("Saved. Restarting...\r\n");
+      return;
+    }
+    if (cmd == '3') { // defaults and restart
+      eeprom_write_config_default(CONFIG_START);
+      serialPrintImmediate("Defaults written. Restarting...\r\n");
+      return;
+    }
     serialPrintImmediate("? Unknown command\r\n");
     Serial.flush();
   }

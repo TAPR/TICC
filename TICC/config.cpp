@@ -34,7 +34,8 @@ static void serialWriteRaw(const char *s, size_t len) {
 }
 
 static void serialPrintImmediate(const char *s) {
-  serialWriteRaw(s, strlen(s));
+  Serial.print(s);
+  Serial.flush();
 }
 
 static void serialWriteImmediate(char c) {
@@ -748,17 +749,15 @@ void UserConfig(struct config_t *pConfigInfo)
     char c;
     while ( ! Serial )   /* wait until Serial port is open */ ;
 
-    serialPrintImmediate("# Type any key for config menu\r\n# ");
-    serialWriteImmediate(' ');
-    serialWriteImmediate('\b');
-    serialDrain();
+    Serial.println("# Type any character for config menu");
+    Serial.print("# ");
     bool configRequested = 0;
     for (int i = 6; i >= 0; --i)  // wait ~6 sec so user can type something
     { 
-      delay(250);   serialWriteImmediate('.'); if (Serial.available()) { configRequested = 1; break; }
-      delay(250);   serialWriteImmediate('.'); if (Serial.available()) { configRequested = 1; break; }
-      delay(250);   serialWriteImmediate('.'); if (Serial.available()) { configRequested = 1; break; }
-      delay(250);   serialWriteImmediate('.'); if (Serial.available()) { configRequested = 1; break; }
+      delay(250);   Serial.print('.'); if (Serial.available()) { configRequested = 1; break; }
+      delay(250);   Serial.print('.'); if (Serial.available()) { configRequested = 1; break; }
+      delay(250);   Serial.print('.'); if (Serial.available()) { configRequested = 1; break; }
+      delay(250);   Serial.print('.'); if (Serial.available()) { configRequested = 1; break; }
     }
     while (Serial.available()) c = Serial.read();   // eat any characters entered before we start  doSetupMenu()
     if (configRequested) doSetupMenu(pConfigInfo); 

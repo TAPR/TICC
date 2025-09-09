@@ -23,9 +23,18 @@ extern const char SW_VERSION[17]; // set in TICC.ino
 char SER_NUM[17];          // set by get_ser_num();
 
 // --- New robust serial helpers ---
-static void serialPrintImmediate(const char *s) {
-  Serial.print(s);
+static void serialWriteRaw(const char *s, size_t len) {
+  while (len) {
+    // Wait until there is buffer space to avoid internal buffering delaying output
+    while (Serial.availableForWrite() == 0) { /* yield */ }
+    size_t n = Serial.write((const uint8_t*)s, len);
+    s += n; len -= n;
+  }
   Serial.flush();
+}
+
+static void serialPrintImmediate(const char *s) {
+  serialWriteRaw(s, strlen(s));
 }
 
 static void serialWriteImmediate(char c) {
@@ -639,6 +648,9 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
     serialPrintImmediate("Z            - FUDGE0 (int ps) pair A/B\r\n");
     serialPrintImmediate("W            - Write config to EEPROM and exit\r\n");
     serialPrintImmediate("Q            - Exit without writing\r\n> ");
+    // Force immediate rendering on some terminals by emitting a space then backspace
+    serialWriteImmediate(' ');
+    serialWriteImmediate('\b');
     serialDrain();
 
     size_t n = readLine(buf, sizeof(buf));
@@ -731,6 +743,9 @@ void UserConfig(struct config_t *pConfigInfo)
     while ( ! Serial )   /* wait until Serial port is open */ ;
 
     serialPrintImmediate("# Type any key for config menu\r\n# ");
+    serialWriteImmediate(' ');
+    serialWriteImmediate('\b');
+    serialDrain();
     bool configRequested = 0;
     for (int i = 6; i >= 0; --i)  // wait ~6 sec so user can type something
     { 

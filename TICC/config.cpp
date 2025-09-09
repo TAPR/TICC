@@ -833,13 +833,11 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
     if (cmd == '2') { // write and restart (caller will reinit)
       EEPROM_writeAnything(CONFIG_START, *pConfigInfo);
       serialPrintImmediate("Saved. Restarting...\r\n");
-      ticc_setup();
       return;
     }
     if (cmd == '3') { // defaults and restart
       eeprom_write_config_default(CONFIG_START);
       serialPrintImmediate("Defaults written. Restarting...\r\n");
-      ticc_setup();
       return;
     }
     serialPrintImmediate("? Unknown command\r\n");

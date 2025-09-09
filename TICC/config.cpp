@@ -758,7 +758,7 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
 void UserConfig(struct config_t *pConfigInfo) 
 {
     char c;
-    while ( ! Serial )   /* wait until Serial port is open */ ;
+    // Do not block on Serial readiness; setup() already delays after begin
 
     Serial.println("# Type any character for config menu");
     Serial.flush();

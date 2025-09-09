@@ -183,8 +183,8 @@ void ticc_setup() {
 #else
   Serial.begin(115200);
 #endif
-  // Give the host a brief moment to open and render before printing the splash
-  for (int t = 0; t < 40; ++t) { if (Serial) break; delay(5); }
+  // Allow host CDC/TTY stack to settle to avoid buffered prompts on reconnect
+  delay(1500);
   Serial.flush();
   // start the SPI library:
   SPI.end();                  // first close in case we've come here from a break

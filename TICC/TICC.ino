@@ -75,14 +75,15 @@ extern const char SW_VERSION[17] = "20250909.1";
  *   handling.
  */
 
-#include <stdint.h>           // define unint16_t, uint32_t
-#include <SPI.h>              // SPI support
-#include <EEPROM.h>           // eeprom library
+#include <stdint.h>  // define unint16_t, uint32_t
+#include <SPI.h>     // SPI support
+#include <EEPROM.h>  // eeprom library
 
 // install EnableInterrupt from the .zip file in the main TICC folder
 // or download from https://github.com/GreyGnome/EnableInterrupt
 // use "Sketch/Include Library/Add .ZIP Library" to install
 #include <EnableInterrupt.h>  // use faster interrupt library
+#include <avr/wdt.h>
 
 #include "board.h"            // LED macros#include "board.h"            // LED macros
 #include "config.h"           // config and eeprom
@@ -101,12 +102,12 @@ extern const char SW_VERSION[17] = "20250909.1";
 // SIM_MODE: software simulation harness (default off)
 // - Synthesizes INTB and PICstop so the core read→math→pairing pathsi
 //   run without TDC hardware attached. SPI access is short-circuited.
-// - Uses buffered single-write printing (same text format) and 
-//   periodically reports pairs/sec over a timed window to estimate 
+// - Uses buffered single-write printing (same text format) and
+//   periodically reports pairs/sec over a timed window to estimate
 //   throughput.
 // - SIM_BAUD controls the serial speed used during SIM; set it to a value
 //   your terminal supports. Normal builds still use 115200.
-// - To use: uncomment the define below; to return to hardware operation, 
+// - To use: uncomment the define below; to return to hardware operation,
 //   keep it commented.
 //#define SIM_MODE
 
@@ -119,65 +120,68 @@ static uint32_t sim_last = 0;
 #endif
 
 // DETAIL_TIMING: per-hit processing time (default off)
-// - When enabled, measures time spent handling a single event (from 
-//   the start of channel processing to completion) using micros(), and 
-//   prints the elapsed microseconds as a bare number for each processed 
+// - When enabled, measures time spent handling a single event (from
+//   the start of channel processing to completion) using micros(), and
+//   prints the elapsed microseconds as a bare number for each processed
 //   hit.
-// - This produces one extra numeric line per hit and will significantly 
+// - This produces one extra numeric line per hit and will significantly
 //   impact throughput; enable only for profiling/troubleshooting.
 //#define DETAIL_TIMING
 
 #ifdef DETAIL_TIMING
-  int32_t start_micros;
-  int32_t end_micros;
+int32_t start_micros;
+int32_t end_micros;
 #endif
 
 volatile int64_t PICcount;
 int64_t CLOCK_HZ;
-int64_t PICTICK_PS; 
+int64_t PICTICK_PS;
 int64_t CLOCK_PERIOD;
 int16_t CAL_PERIODS;
 int16_t WRAP;
-int64_t ticksPerSecond; // number of coarse ticks per second
+int64_t ticksPerSecond;  // number of coarse ticks per second
 
 config_t config;
 MeasureMode MODE, lastMODE;
 static uint8_t skip_config_prompt_once = 0;
+volatile uint8_t request_restart = 0;
 
 static tdc7200Channel channels[] = {
-        tdc7200Channel('0', ENABLE_0, INTB_0, CSB_0, STOP_0,LED_0),
-        tdc7200Channel('1', ENABLE_1, INTB_1, CSB_1, STOP_1,LED_1),
+  tdc7200Channel('0', ENABLE_0, INTB_0, CSB_0, STOP_0, LED_0),
+  tdc7200Channel('1', ENABLE_1, INTB_1, CSB_1, STOP_1, LED_1),
 };
 
 /****************************************************************
 We don't use the default setup() routine -- see
 ticc_setup() below
 ****************************************************************/
-void setup() { }
+void setup() {}
 
 /****************************************************************
 Here is where setup really happensw
 ****************************************************************/
 void ticc_setup() {
-   
+
   int i;
   boolean last_pin;
-  
+  // Ensure watchdog is disabled after a watchdog-triggered restart
+  wdt_disable();
+
   pinMode(COARSEint, INPUT);
   pinMode(OUT1, OUTPUT);
   pinMode(OUT2, OUTPUT);
   pinMode(EXT_LED_0, OUTPUT);  // need to set these here; on-board LEDs are set up in TDC7200::setup
   pinMode(EXT_LED_1, OUTPUT);
-  pinMode(EXT_LED_CLK,OUTPUT);
-  
+  pinMode(EXT_LED_CLK, OUTPUT);
+
   // turn on the LEDs to show we're alive -- use macros from board.h
   SET_LED_0;
   SET_EXT_LED_0;
   SET_LED_1;
   SET_EXT_LED_1;
-   
+
   // start the serial library
-  Serial.end();               // first close in case we've come here from a break
+  Serial.end();  // first close in case we've come here from a break
 #ifdef SIM_MODE
   Serial.begin(SIM_BAUD);
 #else
@@ -187,25 +191,25 @@ void ticc_setup() {
   delay(1500);
   Serial.flush();
   // start the SPI library:
-  SPI.end();                  // first close in case we've come here from a break
+  SPI.end();  // first close in case we've come here from a break
   SPI.begin();
-  
+
   /*******************************************
    * Configuration read/change/store
   *******************************************/
   // check or assign serial number
   get_serial_number();
-  
-  // if no config stored, or wrong version, restore from default 
-  if ( EEPROM.read(CONFIG_START) != EEPROM_VERSION) { 
+
+  // if no config stored, or wrong version, restore from default
+  if (EEPROM.read(CONFIG_START) != EEPROM_VERSION) {
     Serial.println("No config found.  Writing default...");
-    eeprom_write_config_default(CONFIG_START);  
-    }
+    eeprom_write_config_default(CONFIG_START);
+  }
 
   // read config and set global vars
-  EEPROM_readAnything(CONFIG_START, config); 
+  EEPROM_readAnything(CONFIG_START, config);
   lastMODE = config.MODE;
-  
+
   // print banner -- all non-data output lines begin with "#" so they're seen as comments
   Serial.println();
   Serial.println("# TAPR TICC Timestamping Counter");
@@ -216,7 +220,7 @@ void ticc_setup() {
   print_config(config);
   Serial.println("#####################");
   Serial.println();
-  
+
   // get and save config change (skip once after exiting config menu via '#')
   if (!skip_config_prompt_once) {
     UserConfig(&config);
@@ -224,15 +228,15 @@ void ticc_setup() {
     skip_config_prompt_once = 0;
   }
   MODE = config.MODE;
-  
+
   CLOCK_HZ = config.CLOCK_HZ;
-  CLOCK_PERIOD = (PS_PER_SEC/CLOCK_HZ);
+  CLOCK_PERIOD = (PS_PER_SEC / CLOCK_HZ);
   PICTICK_PS = config.PICTICK_PS;
   CAL_PERIODS = config.CAL_PERIODS;
   WRAP = config.WRAP;
   ticksPerSecond = PS_PER_SEC / PICTICK_PS;
-   
-  for(i = 0; i < ARRAY_SIZE(channels); ++i) {
+
+  for (i = 0; i < ARRAY_SIZE(channels); ++i) {
     // initialize the channels struct variables
     channels[i].totalize = 0;
     channels[i].PICstop = 0;
@@ -253,34 +257,34 @@ void ticc_setup() {
     channels[i].tdc_setup();
     channels[i].ready_next();
   }
-  
+
   /*******************************************
    * Synchronize multiple TICCs sharing common 10 MHz and 10 kHz clocks.
-  *******************************************/ 
-  if (config.SYNC_MODE == 'M') {                     // if we are master, send sync by sending CLIENT_SYNC (A8) high
-    delay(2000);                                     // but first sleep to allow client boards to get ready
-    pinMode(CLIENT_SYNC, OUTPUT);                    // set CLIENT_SYNC as output (defaults to input)
-    digitalWrite(CLIENT_SYNC, LOW);                  // make sure it's low
-    delay(1000);                                     // wait a bit in case other boards need to catch up
-    last_pin = digitalRead(COARSEint);               // get current state of COARSE_CLOCK
-    while (digitalRead(COARSEint) == last_pin) {     // loop until COARSE_CLOCK changes
-      delayMicroseconds(5);                          // wait a bit
-      if (i <= 50) {                                 // should never get above 20 (100us)
+  *******************************************/
+  if (config.SYNC_MODE == 'M') {                  // if we are master, send sync by sending CLIENT_SYNC (A8) high
+    delay(2000);                                  // but first sleep to allow client boards to get ready
+    pinMode(CLIENT_SYNC, OUTPUT);                 // set CLIENT_SYNC as output (defaults to input)
+    digitalWrite(CLIENT_SYNC, LOW);               // make sure it's low
+    delay(1000);                                  // wait a bit in case other boards need to catch up
+    last_pin = digitalRead(COARSEint);            // get current state of COARSE_CLOCK
+    while (digitalRead(COARSEint) == last_pin) {  // loop until COARSE_CLOCK changes
+      delayMicroseconds(5);                       // wait a bit
+      if (i <= 50) {                              // should never get above 20 (100us)
         i++;
-        if (i == 50) {                               // something's probably wrong
+        if (i == 50) {  // something's probably wrong
           Serial.println("");
           Serial.println("");
           Serial.println("# No COARSE_CLOCK... is 10 MHz connected?");
         }
       }
     }
-    digitalWrite(CLIENT_SYNC, HIGH);                  // send sync pulse
+    digitalWrite(CLIENT_SYNC, HIGH);  // send sync pulse
   } else {
     Serial.println("");
     Serial.println("");
     Serial.println("# In client mode and waiting for sync...");
   }
-  
+
   while (!digitalRead(CLIENT_SYNC)) {}               // whether master or client, spin until CLIENT_SYNC asserts
   PICcount = 0;                                      // initialize counter
   enableInterrupt(COARSEint, coarseTimer, FALLING);  // enable counter interrupt
@@ -288,28 +292,36 @@ void ticc_setup() {
   enableInterrupt(STOP_1, catch_stop1, RISING);      // enable interrupt to catch channel B
   digitalWrite(CLIENT_SYNC, LOW);                    // unassert -- results in ~22uS sync pulse
   pinMode(CLIENT_SYNC, INPUT);                       // set back to input just to be neat
-  
+
   // print header to stdout
   Serial.println("");
   Serial.println("");
   switch (config.MODE) {
     case Timestamp:
-      Serial.print("# timestamp (seconds with ");Serial.print(PLACES);Serial.println(" decimal places)");
+      Serial.print("# timestamp (seconds with ");
+      Serial.print(PLACES);
+      Serial.println(" decimal places)");
       break;
     case Interval:
-      Serial.print("# time interval A->B (seconds with ");Serial.print(PLACES);Serial.println(" decimal places)");
+      Serial.print("# time interval A->B (seconds with ");
+      Serial.print(PLACES);
+      Serial.println(" decimal places)");
       break;
     case Period:
-      Serial.print("# period (seconds with ");Serial.print(PLACES);Serial.println(" decimal places)");
+      Serial.print("# period (seconds with ");
+      Serial.print(PLACES);
+      Serial.println(" decimal places)");
       break;
     case timeLab:
-      Serial.print("# timestamp chA, chB; interval chA->B (seconds with ");Serial.print(PLACES);Serial.println(" decimal places)");
+      Serial.print("# timestamp chA, chB; interval chA->B (seconds with ");
+      Serial.print(PLACES);
+      Serial.println(" decimal places)");
       break;
     case Debug:
       Serial.println("# time1 time2 clock1 cal1 cal2 PICstop tof timestamp");
       break;
-  } // switch
-  
+  }  // switch
+
 #ifdef FAST_WRAP_TEST
   Serial.println("# FAST_WRAP_TEST ENABLED: accelerating PICcount increments");
   Serial.print("# FAST_WRAP_MULTIPLIER: ");
@@ -319,50 +331,51 @@ void ticc_setup() {
   Serial.println("(default 1)");
 #endif
 #endif
-  
-// turn the LEDs off
+
+  // turn the LEDs off
   CLR_LED_0;
   CLR_EXT_LED_0;
   CLR_LED_1;
   CLR_EXT_LED_1;
   CLR_EXT_LED_CLK;
-   
-} // ticc_setup  
+
+}  // ticc_setup
 
 /****************************************************************/
 void loop() {
 
-  ticc_setup();                                     // initialize and optionally go to config
+  ticc_setup();  // initialize and optionally go to config
 
   while (1) {
+    if (request_restart) { return; }
     if ( (Serial.read() == '#') ) {        // direct entry to config menu; restart after exit
       doSetupMenu(&config);
       while (Serial.available()) (void)Serial.read();
       skip_config_prompt_once = 1;
       return; // reinitialize via ticc_setup() on next loop entry
     }
-     
+
 #ifndef SIM_MODE
     // Ref Clock indicator:
     // Test every 2.5 coarse tick periods for PICcount changes,
     // and turn on EXT_LED_CLK if changes are detected
-    static  uint32_t last_micros = 0;               // Loop watchdog timestamp
-    static  int64_t last_PICcount = 0;              // Counter state memory
-    static  uint8_t ext_clk_led_on = 0;             // LED state cache to avoid redundant writes
-  
+    static uint32_t last_micros = 0;    // Loop watchdog timestamp
+    static int64_t last_PICcount = 0;   // Counter state memory
+    static uint8_t ext_clk_led_on = 0;  // LED state cache to avoid redundant writes
+
     {
       uint32_t now = micros();
-      if ( (now - last_micros) > 250 ) {              // 2.5 ticks at 100 uS/tick
-        last_micros = now;                           // Update the watchdog timestamp
-        int64_t pc_snapshot = PICcount;              // Snapshot volatile counter
-        if (pc_snapshot != last_PICcount) {          // Has the counter changed since last sampled?
-          if (!ext_clk_led_on) {                     // turn on only if was off   
-            SET_EXT_LED_CLK; 
+      if ((now - last_micros) > 250) {       // 2.5 ticks at 100 uS/tick
+        last_micros = now;                   // Update the watchdog timestamp
+        int64_t pc_snapshot = PICcount;      // Snapshot volatile counter
+        if (pc_snapshot != last_PICcount) {  // Has the counter changed since last sampled?
+          if (!ext_clk_led_on) {             // turn on only if was off
+            SET_EXT_LED_CLK;
             ext_clk_led_on = 1;
-          } 
-          last_PICcount = pc_snapshot;               // Save the current counter state
+          }
+          last_PICcount = pc_snapshot;  // Save the current counter state
         } else {
-          if (ext_clk_led_on) {                      // turn off only if was on
+          if (ext_clk_led_on) {  // turn off only if was on
             CLR_EXT_LED_CLK;
             Serial.println("10 MHZ Reference lost!");
             Serial.println("Press any key to restart after reference is restored.");
@@ -376,295 +389,350 @@ void loop() {
       }
     }
 #endif
- 
+
 #ifdef SIM_MODE
     // Synthesize INTB low and PICstop increments for both channels
-    PICcount += 1; // advance coarse count artificially
+    PICcount += 1;  // advance coarse count artificially
 #endif
 
     int i;
-    for(i = 0; i < ARRAY_SIZE(channels); ++i) {
-     
+    for (i = 0; i < ARRAY_SIZE(channels); ++i) {
+
       // No work to do unless intb is low
 #ifndef SIM_MODE
-       if(digitalRead(channels[i].INTB)==0) {
+      if (digitalRead(channels[i].INTB) == 0) {
 #else
-       if (true) {
-         channels[i].PICstop = PICcount;
+      if (true) {
+        channels[i].PICstop = PICcount;
 #endif
-         #ifdef DETAIL_TIMING
-           start_micros = micros();
-         #endif
-       
-         // turn LED on -- use board.h macro for speed
+#ifdef DETAIL_TIMING
+        start_micros = micros();
+#endif
+
+        // turn LED on -- use board.h macro for speed
 #ifndef SIM_MODE
-         if (i == 0) {SET_LED_0;SET_EXT_LED_0;};
-         if (i == 1) {SET_LED_1;SET_EXT_LED_1;};
+        if (i == 0) {
+          SET_LED_0;
+          SET_EXT_LED_0;
+        };
+        if (i == 1) {
+          SET_LED_1;
+          SET_EXT_LED_1;
+        };
 #endif
 
         /* See the top-of-file rationale block for details on timestamp math,
          * signed 64-bit usage, overflow considerations, and formatting. */
 
-         channels[i].last_tof = channels[i].tof;  // preserve last value
-         channels[i].last_ts_split = channels[i].ts_split;
-         channels[i].tof = channels[i].read();    // get data from chip
+        channels[i].last_tof = channels[i].tof;  // preserve last value
+        channels[i].last_ts_split = channels[i].ts_split;
+        channels[i].tof = channels[i].read();  // get data from chip
 
-         // Derive coarse seconds and remainder ticks using incremental method
-         // Incremental coarse-time decomposition to avoid 64-bit div/mod per hit
-         // Assumption: at most one second of ticks elapsed since last sample.
-         // We handle a single carry into seconds when delta ≤ ticksPerSecond.
-         // If delta is negative or requires more than one carry (delta > ticksPerSecond),
-         // the incremental state (cached_sec/cached_rem_ticks) would drift, so we realign
-         // by recomputing sec and remainder directly from PICstop (fallback path below).
-         int64_t sec;
-         int32_t remTicks32;
-         int64_t delta = channels[i].PICstop - channels[i].last_picstop;
-         channels[i].last_picstop = channels[i].PICstop;
-         if (delta >= 0 && delta <= ticksPerSecond) {
-           int32_t rem = channels[i].cached_rem_ticks + (int32_t)delta;
-           if (rem >= (int32_t)ticksPerSecond) { rem -= (int32_t)ticksPerSecond; channels[i].cached_sec++; }
-           channels[i].cached_rem_ticks = rem;
-         } else {
-           // Fallback for startup/large jumps: recompute from absolute PICstop
-           channels[i].cached_sec = (int32_t)(channels[i].PICstop / ticksPerSecond);
-           channels[i].cached_rem_ticks = (int32_t)(channels[i].PICstop % ticksPerSecond);
-         }
-         sec = channels[i].cached_sec;
-         remTicks32 = channels[i].cached_rem_ticks;
+        // Derive coarse seconds and remainder ticks using incremental method
+        // Incremental coarse-time decomposition to avoid 64-bit div/mod per hit
+        // Assumption: at most one second of ticks elapsed since last sample.
+        // We handle a single carry into seconds when delta ≤ ticksPerSecond.
+        // If delta is negative or requires more than one carry (delta > ticksPerSecond),
+        // the incremental state (cached_sec/cached_rem_ticks) would drift, so we realign
+        // by recomputing sec and remainder directly from PICstop (fallback path below).
+        int64_t sec;
+        int32_t remTicks32;
+        int64_t delta = channels[i].PICstop - channels[i].last_picstop;
+        channels[i].last_picstop = channels[i].PICstop;
+        if (delta >= 0 && delta <= ticksPerSecond) {
+          int32_t rem = channels[i].cached_rem_ticks + (int32_t)delta;
+          if (rem >= (int32_t)ticksPerSecond) {
+            rem -= (int32_t)ticksPerSecond;
+            channels[i].cached_sec++;
+          }
+          channels[i].cached_rem_ticks = rem;
+        } else {
+          // Fallback for startup/large jumps: recompute from absolute PICstop
+          channels[i].cached_sec = (int32_t)(channels[i].PICstop / ticksPerSecond);
+          channels[i].cached_rem_ticks = (int32_t)(channels[i].PICstop % ticksPerSecond);
+        }
+        sec = channels[i].cached_sec;
+        remTicks32 = channels[i].cached_rem_ticks;
 
-         // Original ps-path: compute remPs and subtract in ps
-         int64_t remPs = (int64_t)remTicks32 * PICTICK_PS;
-         // Subtract fine time-of-flight with borrow if needed
-         if (remPs >= channels[i].tof) {
-           remPs -= channels[i].tof;
-         } else {
-           remPs = (remPs + PS_PER_SEC) - channels[i].tof;
-           sec -= 1;
-         }
-         // Subtract propagation delay similarly
-         if (remPs >= channels[i].prop_delay) {
-           remPs -= channels[i].prop_delay;
-         } else {
-           remPs = (remPs + PS_PER_SEC) - channels[i].prop_delay;
-           sec -= 1;
-         }
-         channels[i].ts_split.sec = (int32_t)sec;
-         channels[i].ts_split.frac_hi = (uint32_t)(remPs / 1000000LL);
-         channels[i].ts_split.frac_lo = (uint32_t)(remPs % 1000000LL);
-         channels[i].new_ts_ready = 1;
-         channels[i].totalize++;                  // increment number of events   
-         channels[i].ready_next();                // Re-arm for next measurement, clear TDC INTB
-       
-// if poll character is not null, only output if we've received that character via serial
-      // NOTE: this may provide random results if measuring timestamp from both channels!
-      if ( (channels[i].totalize > 2) &&             // throw away first readings      
-         ( (!config.POLL_CHAR)  ||                   // if unset, output everything
-           ( (Serial.available() > 0) && (Serial.read() == config.POLL_CHAR) ) ) ) {   
-     
-        switch (config.MODE) {
-          case Timestamp:
+        // Original ps-path: compute remPs and subtract in ps
+        int64_t remPs = (int64_t)remTicks32 * PICTICK_PS;
+        // Subtract fine time-of-flight with borrow if needed
+        if (remPs >= channels[i].tof) {
+          remPs -= channels[i].tof;
+        } else {
+          remPs = (remPs + PS_PER_SEC) - channels[i].tof;
+          sec -= 1;
+        }
+        // Subtract propagation delay similarly
+        if (remPs >= channels[i].prop_delay) {
+          remPs -= channels[i].prop_delay;
+        } else {
+          remPs = (remPs + PS_PER_SEC) - channels[i].prop_delay;
+          sec -= 1;
+        }
+        channels[i].ts_split.sec = (int32_t)sec;
+        channels[i].ts_split.frac_hi = (uint32_t)(remPs / 1000000LL);
+        channels[i].ts_split.frac_lo = (uint32_t)(remPs % 1000000LL);
+        channels[i].new_ts_ready = 1;
+        channels[i].totalize++;    // increment number of events
+        channels[i].ready_next();  // Re-arm for next measurement, clear TDC INTB
+
+        // if poll character is not null, only output if we've received that character via serial
+        // NOTE: this may provide random results if measuring timestamp from both channels!
+        if ((channels[i].totalize > 2) &&  // throw away first readings
+            ((!config.POLL_CHAR) ||        // if unset, output everything
+             ((Serial.available() > 0) && (Serial.read() == config.POLL_CHAR)))) {
+
+          switch (config.MODE) {
+            case Timestamp:
               // Defer Timestamp printing to the post-loop pairing block to enforce ordering
-          break;
-     
-          case Interval:
-            // handled after channel loop (pairing logic)
-          break;
-     
-          case Period:
-            {
-              SplitTime p = diffSplit(channels[i].ts_split, channels[i].last_ts_split);
-              char line[64]; size_t n = 0;
-              n = formatSignedSplitTo(line, sizeof(line), p, PLACES);
-              line[n++] = ' ';
-              line[n++] = 'c';
-              line[n++] = 'h';
-              line[n++] = (char)channels[i].name;
-              writeln64(line, n);
-            }
-          break;
-     
-          case timeLab:
-            // handled after channel loop (pairing logic)
-          break;
- 
-          case Debug:
-            {
-              char line[64]; size_t n = 0;
-              n = formatTimestampSplitTo(line, sizeof(line), channels[i].ts_split, PLACES, WRAP);
-              line[n++] = ' ';
-              line[n++] = 'c';
-              line[n++] = 'h';
-              line[n++] = (char)channels[i].name;
-              writeln64(line, n);
-            }
-          break;
+              break;
 
-        case Null:
-          break;
-   } // switch
+            case Interval:
+              // handled after channel loop (pairing logic)
+              break;
+
+            case Period:
+              {
+                SplitTime p = diffSplit(channels[i].ts_split, channels[i].last_ts_split);
+                char line[64];
+                size_t n = 0;
+                n = formatSignedSplitTo(line, sizeof(line), p, PLACES);
+                line[n++] = ' ';
+                line[n++] = 'c';
+                line[n++] = 'h';
+                line[n++] = (char)channels[i].name;
+                writeln64(line, n);
+              }
+              break;
+
+            case timeLab:
+              // handled after channel loop (pairing logic)
+              break;
+
+            case Debug:
+              {
+                char line[64];
+                size_t n = 0;
+                n = formatTimestampSplitTo(line, sizeof(line), channels[i].ts_split, PLACES, WRAP);
+                line[n++] = ' ';
+                line[n++] = 'c';
+                line[n++] = 'h';
+                line[n++] = (char)channels[i].name;
+                writeln64(line, n);
+              }
+              break;
+
+            case Null:
+              break;
+          }  // switch
 
 
-} // print result
+        }  // print result
 
 #ifndef SIM_MODE
-     // turn LED off
-     if (i == 0) {CLR_LED_0;CLR_EXT_LED_0;};
-     if (i == 1) {CLR_LED_1;CLR_EXT_LED_1;};
+        // turn LED off
+        if (i == 0) {
+          CLR_LED_0;
+          CLR_EXT_LED_0;
+        };
+        if (i == 1) {
+          CLR_LED_1;
+          CLR_EXT_LED_1;
+        };
 #endif
-     
-    #ifdef DETAIL_TIMING
-      end_micros = micros() - start_micros;               
-      Serial.println(end_micros);
-    #endif
 
-    } // if INTB
-  } // for
+#ifdef DETAIL_TIMING
+        end_micros = micros() - start_micros;
+        Serial.println(end_micros);
+#endif
 
-  // Timestamp mode: assemble and print pairs without timeout
-  if (config.MODE == Timestamp) {
-    // Two-slot buffer; accumulate two successive samples (across either channel)
-    // then emit exactly two lines per pair in fixed order: if both channels are
-    // present print chA then chB; if both are the same channel, print that
-    // channel twice.
-    struct PairSlot { SplitTime t; uint8_t ch; };
-    static PairSlot ts_pair[2];
-    static uint8_t ts_pair_count = 0;
+      }  // if INTB
+    }    // for
 
-    // Ingest any fresh samples into the pair buffer
-    for (int ci = 0; ci < 2; ++ci) {
-      if (channels[ci].new_ts_ready && (channels[ci].totalize > 2)) {
-        if (ts_pair_count < 2) {
-          ts_pair[ts_pair_count].t = channels[ci].ts_split;
-          ts_pair[ts_pair_count].ch = (uint8_t)ci;
-          ts_pair_count++;
+    // Timestamp mode: assemble and print pairs without timeout
+    if (config.MODE == Timestamp) {
+      // Two-slot buffer; accumulate two successive samples (across either channel)
+      // then emit exactly two lines per pair in fixed order: if both channels are
+      // present print chA then chB; if both are the same channel, print that
+      // channel twice.
+      struct PairSlot {
+        SplitTime t;
+        uint8_t ch;
+      };
+      static PairSlot ts_pair[2];
+      static uint8_t ts_pair_count = 0;
+
+      // Ingest any fresh samples into the pair buffer
+      for (int ci = 0; ci < 2; ++ci) {
+        if (channels[ci].new_ts_ready && (channels[ci].totalize > 2)) {
+          if (ts_pair_count < 2) {
+            ts_pair[ts_pair_count].t = channels[ci].ts_split;
+            ts_pair[ts_pair_count].ch = (uint8_t)ci;
+            ts_pair_count++;
+          }
+          channels[ci].new_ts_ready = 0;  // consume
         }
-        channels[ci].new_ts_ready = 0; // consume
+      }
+
+      // If we have a complete pair, emit in fixed order with poll gating
+      if (ts_pair_count == 2) {
+        bool ok = (!config.POLL_CHAR);
+        if (!ok) {
+          if ((Serial.available() > 0) && (Serial.read() == config.POLL_CHAR)) ok = true;
+        }
+        if (ok) {
+          // Determine composition and enforce chA then chB order when both present
+          uint8_t a_first = 0;
+          uint8_t b_second = 1;
+          if ((ts_pair[0].ch == 0 && ts_pair[1].ch == 1) || (ts_pair[0].ch == 1 && ts_pair[1].ch == 0)) {
+            // Mixed channels: find A then B
+            const PairSlot *A = (ts_pair[0].ch == 0) ? &ts_pair[0] : &ts_pair[1];
+            const PairSlot *B = (ts_pair[0].ch == 1) ? &ts_pair[0] : &ts_pair[1];
+            {
+              char line[64];
+              size_t n = formatTimestampSplitTo(line, sizeof(line), A->t, PLACES, WRAP);
+              line[n++] = ' ';
+              line[n++] = 'c';
+              line[n++] = 'h';
+              line[n++] = (char)channels[0].name;
+              writeln64(line, n);
+            }
+            {
+              char line[64];
+              size_t n = formatTimestampSplitTo(line, sizeof(line), B->t, PLACES, WRAP);
+              line[n++] = ' ';
+              line[n++] = 'c';
+              line[n++] = 'h';
+              line[n++] = (char)channels[1].name;
+              writeln64(line, n);
+            }
+          } else {
+            // Same channel twice: print both with that channel's name
+            uint8_t ci = ts_pair[0].ch;
+            char cname = channels[ci].name;
+            for (int k = 0; k < 2; ++k) {
+              char line[64];
+              size_t n = formatTimestampSplitTo(line, sizeof(line), ts_pair[k].t, PLACES, WRAP);
+              line[n++] = ' ';
+              line[n++] = 'c';
+              line[n++] = 'h';
+              line[n++] = cname;
+              writeln64(line, n);
+            }
+          }
+          ts_pair_count = 0;  // clear pair buffer after printing
+        }
       }
     }
 
-    // If we have a complete pair, emit in fixed order with poll gating
-    if (ts_pair_count == 2) {
+    // After processing both channels, pair and print once per matched sample for Interval and TimeLab
+    if ((channels[0].new_ts_ready && channels[1].new_ts_ready) && (channels[0].totalize > 2) && (channels[1].totalize > 2)) {
+      // Optional poll gating
       bool ok = (!config.POLL_CHAR);
       if (!ok) {
         if ((Serial.available() > 0) && (Serial.read() == config.POLL_CHAR)) ok = true;
       }
       if (ok) {
-        // Determine composition and enforce chA then chB order when both present
-        uint8_t a_first = 0; uint8_t b_second = 1;
-        if ((ts_pair[0].ch == 0 && ts_pair[1].ch == 1) || (ts_pair[0].ch == 1 && ts_pair[1].ch == 0)) {
-          // Mixed channels: find A then B
-          const PairSlot *A = (ts_pair[0].ch == 0) ? &ts_pair[0] : &ts_pair[1];
-          const PairSlot *B = (ts_pair[0].ch == 1) ? &ts_pair[0] : &ts_pair[1];
-          {
-            char line[64]; size_t n = formatTimestampSplitTo(line, sizeof(line), A->t, PLACES, WRAP);
-            line[n++]=' '; line[n++]='c'; line[n++]='h'; line[n++] = (char)channels[0].name;
-            writeln64(line, n);
-          }
-          {
-            char line[64]; size_t n = formatTimestampSplitTo(line, sizeof(line), B->t, PLACES, WRAP);
-            line[n++]=' '; line[n++]='c'; line[n++]='h'; line[n++] = (char)channels[1].name;
-            writeln64(line, n);
-          }
-        } else {
-          // Same channel twice: print both with that channel's name
-          uint8_t ci = ts_pair[0].ch; char cname = channels[ci].name;
-          for (int k = 0; k < 2; ++k) {
-            char line[64]; size_t n = formatTimestampSplitTo(line, sizeof(line), ts_pair[k].t, PLACES, WRAP);
-            line[n++]=' '; line[n++]='c'; line[n++]='h'; line[n++] = cname;
-            writeln64(line, n);
-          }
+#ifdef SIM_MODE
+        // Count pairs for rate reporting even in Timestamp mode
+        if (config.MODE == Timestamp) { sim_pairs++; }
+        // Report every 10 seconds; exclude the 2s pause from the timing window
+        uint32_t now = micros();
+        if ((now - sim_last) >= 10000000UL) {
+          uint32_t elapsed = now - sim_last;  // microseconds over the last window
+          Serial.print("\n# pairs: ");
+          Serial.println(sim_pairs);
+          Serial.print("# avg pairs/sec: ");
+          Serial.println((uint32_t)((uint64_t)sim_pairs * 1000000UL / elapsed));
+          delay(2000);
+          sim_pairs = 0;
+          sim_last = micros();  // restart window after the pause so delay is excluded
         }
-        ts_pair_count = 0; // clear pair buffer after printing
+#endif
+        switch (config.MODE) {
+          case Interval:
+            {
+              SplitTime d = diffSplit(channels[1].ts_split, channels[0].ts_split);
+              {
+                char line[64];
+                size_t n = formatSignedSplitTo(line, sizeof(line), d, PLACES);
+                line[n++] = ' ';
+                const char suffix[] = "TI(A->B)";
+                const char *s = suffix;
+                while (*s && n < sizeof(line)) line[n++] = *s++;
+                writeln64(line, n);
+              }
+#ifdef SIM_MODE
+              sim_pairs++;
+#endif
+              channels[0].new_ts_ready = 0;
+              channels[1].new_ts_ready = 0;
+              break;
+            }
+          case timeLab:
+            {
+              {
+                char line[64];
+                size_t n;
+                // chA
+                n = formatTimestampSplitTo(line, sizeof(line), channels[0].ts_split, PLACES, WRAP);
+                line[n++] = ' ';
+                line[n++] = 'c';
+                line[n++] = 'h';
+                line[n++] = (char)channels[0].name;
+                writeln64(line, n);
+                // chB
+                n = formatTimestampSplitTo(line, sizeof(line), channels[1].ts_split, PLACES, WRAP);
+                line[n++] = ' ';
+                line[n++] = 'c';
+                line[n++] = 'h';
+                line[n++] = (char)channels[1].name;
+                writeln64(line, n);
+                // chC synthesized (B - A)
+                SplitTime d = diffSplit(channels[1].ts_split, channels[0].ts_split);
+                SplitTime c = { (int32_t)(channels[1].ts_split.sec + d.sec), d.frac_hi, d.frac_lo };
+                n = formatTimestampSplitTo(line, sizeof(line), c, PLACES, WRAP);
+                line[n++] = ' ';
+                line[n++] = 'c';
+                line[n++] = 'h';
+                line[n++] = 'C';
+                line[n++] = ' ';
+                const char suffix[] = "(B - A)";
+                const char *s = suffix;
+                while (*s && n < sizeof(line)) line[n++] = *s++;
+                writeln64(line, n);
+              }
+#ifdef SIM_MODE
+              sim_pairs++;
+#endif
+              channels[0].new_ts_ready = 0;
+              channels[1].new_ts_ready = 0;
+              break;
+            }
+          default: break;
+        }
       }
     }
-  }
 
-  // After processing both channels, pair and print once per matched sample for Interval and TimeLab
-  if ( (channels[0].new_ts_ready && channels[1].new_ts_ready) &&
-       (channels[0].totalize > 2) && (channels[1].totalize > 2) ) {
-    // Optional poll gating
-    bool ok = (!config.POLL_CHAR);
-    if (!ok) {
-      if ((Serial.available() > 0) && (Serial.read() == config.POLL_CHAR)) ok = true;
-    }
-    if (ok) {
-#ifdef SIM_MODE
-      // Count pairs for rate reporting even in Timestamp mode
-      if (config.MODE == Timestamp) { sim_pairs++; }
-      // Report every 10 seconds; exclude the 2s pause from the timing window
-      uint32_t now = micros();
-      if ((now - sim_last) >= 10000000UL) {
-        uint32_t elapsed = now - sim_last; // microseconds over the last window
-        Serial.print("\n# pairs: "); Serial.println(sim_pairs);
-        Serial.print("# avg pairs/sec: "); Serial.println((uint32_t)((uint64_t)sim_pairs * 1000000UL / elapsed));
-        delay(2000);
-        sim_pairs = 0;
-        sim_last = micros(); // restart window after the pause so delay is excluded
-      }
-#endif
-      switch (config.MODE) {
-        case Interval: {
-          SplitTime d = diffSplit(channels[1].ts_split, channels[0].ts_split);
-          {
-            char line[64]; size_t n = formatSignedSplitTo(line, sizeof(line), d, PLACES);
-            line[n++]=' ';
-            const char suffix[] = "TI(A->B)"; const char *s=suffix; while(*s && n<sizeof(line)) line[n++]=*s++;
-            writeln64(line, n);
-          }
-#ifdef SIM_MODE
-          sim_pairs++;
-#endif
-          channels[0].new_ts_ready = 0;
-          channels[1].new_ts_ready = 0;
-          break; }
-        case timeLab: {
-          {
-            char line[64]; size_t n;
-            // chA
-            n = formatTimestampSplitTo(line, sizeof(line), channels[0].ts_split, PLACES, WRAP);
-            line[n++] = ' '; line[n++]='c'; line[n++]='h'; line[n++]=(char)channels[0].name;
-            writeln64(line, n);
-            // chB
-            n = formatTimestampSplitTo(line, sizeof(line), channels[1].ts_split, PLACES, WRAP);
-            line[n++] = ' '; line[n++]='c'; line[n++]='h'; line[n++]=(char)channels[1].name;
-            writeln64(line, n);
-            // chC synthesized (B - A)
-            SplitTime d = diffSplit(channels[1].ts_split, channels[0].ts_split);
-            SplitTime c = { (int32_t)(channels[1].ts_split.sec + d.sec), d.frac_hi, d.frac_lo };
-            n = formatTimestampSplitTo(line, sizeof(line), c, PLACES, WRAP);
-            line[n++] = ' '; line[n++]='c'; line[n++]='h'; line[n++]='C'; line[n++]=' ';
-            const char suffix[] = "(B - A)"; const char *s = suffix; while (*s && n < sizeof(line)) line[n++] = *s++;
-            writeln64(line, n);
-          }
-#ifdef SIM_MODE
-          sim_pairs++;
-#endif
-          channels[0].new_ts_ready = 0;
-          channels[1].new_ts_ready = 0;
-          break; }
-        default: break;
-      }
-    }
-  }
-
-} // while (1) loop
+  }  // while (1) loop
 
 #ifndef SIM_MODE
-Serial.println();
-Serial.println("Got break character... exiting loop");
-Serial.println();
-delay(100);
+  Serial.println();
+  Serial.println("Got break character... exiting loop");
+  Serial.println();
+  delay(100);
 #endif
 
-} // main loop()
+}  // main loop()
 
 
 /****************************************************************
  * Interrupt Service Routines
  ****************************************************************/
- 
+
 // ISR for timer. Capture PICcount on each channel's STOP 0->1 transition.
- void coarseTimer() {
+void coarseTimer() {
 #ifdef FAST_WRAP_TEST
 #ifdef FAST_WRAP_MULTIPLIER
   PICcount += FAST_WRAP_MULTIPLIER;
@@ -674,14 +742,13 @@ delay(100);
 #else
   PICcount++;
 #endif
-  }  
+}
 
- void catch_stop0() {
+void catch_stop0() {
   channels[0].PICstop = PICcount;
- }
+}
 
- void catch_stop1() {
-  channels[1].PICstop = PICcount;  
- }
+void catch_stop1() {
+  channels[1].PICstop = PICcount;
+}
 /****************************************************************/
-       

@@ -7,8 +7,8 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-// 06 September 2025 - version 1
-extern const char SW_VERSION[17] = "20250907.1";
+// 09 September 2025 - version 1
+extern const char SW_VERSION[17] = "20250909.1";
 
 /*
  * NOTES FOR FUTURE GENERATIONS
@@ -142,6 +142,7 @@ int64_t ticksPerSecond; // number of coarse ticks per second
 
 config_t config;
 MeasureMode MODE, lastMODE;
+static uint8_t skip_config_prompt_once = 0;
 
 static tdc7200Channel channels[] = {
         tdc7200Channel('0', ENABLE_0, INTB_0, CSB_0, STOP_0,LED_0),
@@ -182,6 +183,9 @@ void ticc_setup() {
 #else
   Serial.begin(115200);
 #endif
+  // Give the host a brief moment to open and render before printing the splash
+  for (int t = 0; t < 40; ++t) { if (Serial) break; delay(5); }
+  Serial.flush();
   // start the SPI library:
   SPI.end();                  // first close in case we've come here from a break
   SPI.begin();
@@ -213,8 +217,12 @@ void ticc_setup() {
   Serial.println("#####################");
   Serial.println();
   
-  // get and save config change
-  UserConfig(&config);
+  // get and save config change (skip once after exiting config menu via '#')
+  if (!skip_config_prompt_once) {
+    UserConfig(&config);
+  } else {
+    skip_config_prompt_once = 0;
+  }
   MODE = config.MODE;
   
   CLOCK_HZ = config.CLOCK_HZ;
@@ -330,6 +338,7 @@ void loop() {
     if ( (Serial.read() == '#') ) {        // direct entry to config menu; restart after exit
       doSetupMenu(&config);
       while (Serial.available()) (void)Serial.read();
+      skip_config_prompt_once = 1;
       return; // reinitialize via ticc_setup() on next loop entry
     }
      

@@ -653,7 +653,7 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
       serialPrintImmediate("Q            - Exit without writing\r\n");
       showMenu = false;
     }
-    serialPrintImmediate("> ");
+    Serial.println("> ");
     Serial.flush();
     // Force immediate rendering on some terminals by emitting a space then backspace
     serialWriteImmediate(' ');

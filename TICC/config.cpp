@@ -33,13 +33,18 @@ static void serialWriteImmediate(char c) {
   Serial.flush();
 }
 
+static void serialDrain() {
+  Serial.flush();
+  delay(5);
+}
+
 // Read a line into buf (cap includes terminator). Returns length (excludes terminator).
 // Handles echo, backspace, CR/LF termination. Produces a NUL-terminated string without CR/LF.
 static size_t readLine(char *buf, size_t cap) {
   if (cap == 0) return 0;
   size_t n = 0;
   for (;;) {
-    while (!Serial.available()) { /* busy wait */ }
+    while (!Serial.available()) { delay(1); }
     int ch = Serial.read();
     if (ch == '\r' || ch == '\n') {
       serialWriteImmediate('\r'); serialWriteImmediate('\n');
@@ -634,6 +639,7 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
     serialPrintImmediate("Z            - FUDGE0 (int ps) pair A/B\r\n");
     serialPrintImmediate("W            - Write config to EEPROM and exit\r\n");
     serialPrintImmediate("Q            - Exit without writing\r\n> ");
+    serialDrain();
 
     size_t n = readLine(buf, sizeof(buf));
     char *line = trimInPlace(buf);

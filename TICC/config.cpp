@@ -654,6 +654,7 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
       showMenu = false;
     }
     serialPrintImmediate("> ");
+    Serial.flush();
     // Force immediate rendering on some terminals by emitting a space then backspace
     serialWriteImmediate(' ');
     serialWriteImmediate('\b');
@@ -674,6 +675,7 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
         case 'N': pConfigInfo->MODE = Null; break;
       }
       serialPrintImmediate("OK\r\n");
+      Serial.flush();
       continue;
     }
     if (cmd == '?' || cmd == 'M') { showMenu = true; serialPrintImmediate("\r\n"); continue; }
@@ -683,32 +685,38 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
       n = readLine(buf, sizeof(buf)); line = trimInPlace(buf);
       pConfigInfo->POLL_CHAR = (line[0] == '\0' || line[0] == ' ') ? 0x00 : line[0];
       serialPrintImmediate("OK\r\n");
+      Serial.flush();
       continue;
     }
 
     if (cmd == 'H') { // Clock speed MHz -> Hz
       serialPrintImmediate("Clock MHz: "); n = readLine(buf, sizeof(buf)); line = trimInPlace(buf);
       int64_t hz; if (parseDecimalScaled(line, 1000000LL, &hz) && hz > 0) { pConfigInfo->CLOCK_HZ = hz; serialPrintImmediate("OK\r\n"); } else serialPrintImmediate("Invalid\r\n");
+      Serial.flush();
       continue;
     }
     if (cmd == 'U') { // Coarse tick us -> ps
       serialPrintImmediate("Coarse tick (us): "); n = readLine(buf, sizeof(buf)); line = trimInPlace(buf);
       int64_t ps; if (parseDecimalScaled(line, 1000000LL, &ps) && ps > 0) { pConfigInfo->PICTICK_PS = ps; serialPrintImmediate("OK\r\n"); } else serialPrintImmediate("Invalid\r\n");
+      Serial.flush();
       continue;
     }
     if (cmd == 'R') { // wrap digits
       serialPrintImmediate("Wrap digits (0..10): "); n = readLine(buf, sizeof(buf)); line = trimInPlace(buf);
       int64_t wrap; if (parseInt64Simple(line, &wrap) && wrap >= 0 && wrap <= 10) { pConfigInfo->WRAP = (int16_t)wrap; serialPrintImmediate("OK\r\n"); } else serialPrintImmediate("Invalid\r\n");
+      Serial.flush();
       continue;
     }
     if (cmd == 'S') { // sync mode
       serialPrintImmediate("Enter M or C: "); n = readLine(buf, sizeof(buf)); line = trimInPlace(buf);
       char v = toupper(line[0]); if (v == 'M' || v == 'C') { pConfigInfo->SYNC_MODE = v; serialPrintImmediate("OK\r\n"); } else serialPrintImmediate("Invalid\r\n");
+      Serial.flush();
       continue;
     }
     if (cmd == 'N') { // names A/B
       serialPrintImmediate("Enter names A/B: "); n = readLine(buf, sizeof(buf)); line = trimInPlace(buf);
       const char *slash = strchr(line, '/'); if (slash && slash != line && slash[1]) { pConfigInfo->NAME[0] = line[0]; pConfigInfo->NAME[1] = slash[1]; serialPrintImmediate("OK\r\n"); } else serialPrintImmediate("Invalid\r\n");
+      Serial.flush();
       continue;
     }
     if (cmd == 'G' || cmd == 'D' || cmd == 'F' || cmd == 'Z' || cmd == 'E') {
@@ -722,24 +730,27 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
         if (e0 == 'R' || e0 == 'F') pConfigInfo->START_EDGE[0] = e0;
         if (e1 == 'R' || e1 == 'F') pConfigInfo->START_EDGE[1] = e1;
         serialPrintImmediate("OK\r\n");
+        Serial.flush();
         continue;
       }
       bool s0=false, s1=false; int64_t v0=0, v1=0;
-      if (!parseInt64Pair(line, &s0, &v0, &s1, &v1)) { serialPrintImmediate("Invalid\r\n"); continue; }
-      if (cmd == 'G') { if (s0) pConfigInfo->PROP_DELAY[0]=v0; if (s1) pConfigInfo->PROP_DELAY[1]=v1; serialPrintImmediate("OK\r\n"); continue; }
-      if (cmd == 'D') { if (s0) pConfigInfo->TIME_DILATION[0]=v0; if (s1) pConfigInfo->TIME_DILATION[1]=v1; serialPrintImmediate("OK\r\n"); continue; }
-      if (cmd == 'F') { if (s0) pConfigInfo->FIXED_TIME2[0]=v0; if (s1) pConfigInfo->FIXED_TIME2[1]=v1; serialPrintImmediate("OK\r\n"); continue; }
-      if (cmd == 'Z') { if (s0) pConfigInfo->FUDGE0[0]=v0; if (s1) pConfigInfo->FUDGE0[1]=v1; serialPrintImmediate("OK\r\n"); continue; }
+      if (!parseInt64Pair(line, &s0, &v0, &s1, &v1)) { serialPrintImmediate("Invalid\r\n"); Serial.flush(); continue; }
+      if (cmd == 'G') { if (s0) pConfigInfo->PROP_DELAY[0]=v0; if (s1) pConfigInfo->PROP_DELAY[1]=v1; serialPrintImmediate("OK\r\n"); Serial.flush(); continue; }
+      if (cmd == 'D') { if (s0) pConfigInfo->TIME_DILATION[0]=v0; if (s1) pConfigInfo->TIME_DILATION[1]=v1; serialPrintImmediate("OK\r\n"); Serial.flush(); continue; }
+      if (cmd == 'F') { if (s0) pConfigInfo->FIXED_TIME2[0]=v0; if (s1) pConfigInfo->FIXED_TIME2[1]=v1; serialPrintImmediate("OK\r\n"); Serial.flush(); continue; }
+      if (cmd == 'Z') { if (s0) pConfigInfo->FUDGE0[0]=v0; if (s1) pConfigInfo->FUDGE0[1]=v1; serialPrintImmediate("OK\r\n"); Serial.flush(); continue; }
       continue;
     }
 
     if (cmd == 'W') {
       EEPROM_writeAnything(CONFIG_START, *pConfigInfo);
       serialPrintImmediate("Saved.\r\n");
+      Serial.flush();
       return;
     }
     if (cmd == 'Q') { return; }
     serialPrintImmediate("? Unknown command\r\n");
+    Serial.flush();
   }
 }
 
@@ -750,14 +761,16 @@ void UserConfig(struct config_t *pConfigInfo)
     while ( ! Serial )   /* wait until Serial port is open */ ;
 
     Serial.println("# Type any character for config menu");
+    Serial.flush();
     Serial.print("# ");
+    Serial.flush();
     bool configRequested = 0;
     for (int i = 6; i >= 0; --i)  // wait ~6 sec so user can type something
     { 
-      delay(250);   Serial.print('.'); if (Serial.available()) { configRequested = 1; break; }
-      delay(250);   Serial.print('.'); if (Serial.available()) { configRequested = 1; break; }
-      delay(250);   Serial.print('.'); if (Serial.available()) { configRequested = 1; break; }
-      delay(250);   Serial.print('.'); if (Serial.available()) { configRequested = 1; break; }
+      delay(250);   Serial.print('.'); Serial.flush(); if (Serial.available()) { configRequested = 1; break; }
+      delay(250);   Serial.print('.'); Serial.flush(); if (Serial.available()) { configRequested = 1; break; }
+      delay(250);   Serial.print('.'); Serial.flush(); if (Serial.available()) { configRequested = 1; break; }
+      delay(250);   Serial.print('.'); Serial.flush(); if (Serial.available()) { configRequested = 1; break; }
     }
     while (Serial.available()) c = Serial.read();   // eat any characters entered before we start  doSetupMenu()
     if (configRequested) doSetupMenu(pConfigInfo); 

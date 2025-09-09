@@ -833,11 +833,17 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
     if (cmd == '2') { // write and restart (caller will reinit)
       EEPROM_writeAnything(CONFIG_START, *pConfigInfo);
       serialPrintImmediate("Saved. Restarting...\r\n");
+      Serial.flush();
+      delay(100);
+      software_reset();
       return;
     }
     if (cmd == '3') { // defaults and restart
       eeprom_write_config_default(CONFIG_START);
       serialPrintImmediate("Defaults written. Restarting...\r\n");
+      Serial.flush();
+      delay(100);
+      software_reset();
       return;
     }
     serialPrintImmediate("? Unknown command\r\n");
@@ -962,4 +968,10 @@ void eeprom_clear() {
   for (int i = 0 ; i < EEPROM.length() ; i++) {
   EEPROM.write(i, 0xFF);
   } 
+}
+
+// Perform a software reset via watchdog (AVR Mega 2560)
+void software_reset() {
+  wdt_enable(WDTO_15MS);
+  while (1) { }
 }

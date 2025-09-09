@@ -81,6 +81,7 @@ void print_MeasureMode(MeasureMode x);
 void printHzAsMHz(int64_t x);
 void get_serial_number();
 void eeprom_clear();
+void ticc_setup();
 
 /*****************************************************************/
 // These allow us to read/write struct in eeprom

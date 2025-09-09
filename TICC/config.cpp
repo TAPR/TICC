@@ -637,18 +637,81 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
   for (;;) {
     if (showMenu) {
       serialPrintImmediate("\r\n== TICC Configuration ==\r\n");
-      serialPrintImmediate("T/P/I/L/D/N  - Set Mode\r\n");
-      serialPrintImmediate("O            - Set Poll Character (space to clear)\r\n");
-      serialPrintImmediate("H            - Set Clock Speed (MHz, e.g., 10 or 10.0)\r\n");
-      serialPrintImmediate("U            - Set Coarse Tick (us, e.g., 100 or 100.0)\r\n");
-      serialPrintImmediate("R            - Set Timestamp Wrap digits (0=no wrap)\r\n");
-      serialPrintImmediate("S            - Master/Client (M/C)\r\n");
-      serialPrintImmediate("N            - Channel Names (e.g., A/B)\r\n");
-      serialPrintImmediate("G            - Propagation Delay (ps) pair A/B\r\n");
-      serialPrintImmediate("E            - Trigger Edge pair (R/F) A/B\r\n");
-      serialPrintImmediate("D            - Time Dilation (int) pair A/B\r\n");
-      serialPrintImmediate("F            - fixedTime2 (int ps) pair A/B\r\n");
-      serialPrintImmediate("Z            - FUDGE0 (int ps) pair A/B\r\n");
+      // Mode
+      serialPrintImmediate("T/P/I/L/D/N  - Set Mode (currently: ");
+      switch (pConfigInfo->MODE) {
+        case Timestamp: serialPrintImmediate("Timestamp"); break;
+        case Period:    serialPrintImmediate("Period"); break;
+        case Interval:  serialPrintImmediate("Interval A->B"); break;
+        case timeLab:   serialPrintImmediate("TimeLab 3-ch"); break;
+        case Debug:     serialPrintImmediate("Debug"); break;
+        case Null:      serialPrintImmediate("Null"); break;
+      }
+      serialPrintImmediate(")\r\n");
+      // Poll char
+      serialPrintImmediate("O            - Poll Character (currently: ");
+      if (pConfigInfo->POLL_CHAR) {
+        char ch[8]; ch[0] = pConfigInfo->POLL_CHAR; ch[1] = 0; serialPrintImmediate(ch);
+      } else {
+        serialPrintImmediate("none");
+      }
+      serialPrintImmediate(")\r\n");
+      // Clock speed MHz
+      {
+        char tmp[48];
+        int32_t mhz   = (int32_t)(pConfigInfo->CLOCK_HZ / 1000000LL);
+        int32_t frac6 = (int32_t)(pConfigInfo->CLOCK_HZ % 1000000LL);
+        sprintf(tmp, "H            - Clock Speed MHz (currently: %ld.%06ld)\r\n", mhz, frac6);
+        serialPrintImmediate(tmp);
+      }
+      // Coarse tick us
+      {
+        char tmp[48];
+        int32_t us    = (int32_t)(pConfigInfo->PICTICK_PS / 1000000LL);
+        int32_t frac6 = (int32_t)(pConfigInfo->PICTICK_PS % 1000000LL);
+        sprintf(tmp, "U            - Coarse Tick us (currently: %ld.%06ld)\r\n", us, frac6);
+        serialPrintImmediate(tmp);
+      }
+      // Wrap digits
+      {
+        char tmp[48]; sprintf(tmp, "R            - Timestamp Wrap digits (currently: %d)\r\n", (int)pConfigInfo->WRAP);
+        serialPrintImmediate(tmp);
+      }
+      // Sync mode
+      {
+        char tmp[48]; sprintf(tmp, "S            - Master/Client (currently: %c)\r\n", pConfigInfo->SYNC_MODE);
+        serialPrintImmediate(tmp);
+      }
+      // Channel names
+      {
+        char tmp[48]; sprintf(tmp, "N            - Channel Names (currently: %c/%c)\r\n", pConfigInfo->NAME[0], pConfigInfo->NAME[1]);
+        serialPrintImmediate(tmp);
+      }
+      // Prop delays
+      {
+        char tmp[64]; sprintf(tmp, "G            - Propagation Delay ps A/B (currently: %ld/%ld)\r\n", (int32_t)pConfigInfo->PROP_DELAY[0], (int32_t)pConfigInfo->PROP_DELAY[1]);
+        serialPrintImmediate(tmp);
+      }
+      // Trigger edges
+      {
+        char tmp[64]; sprintf(tmp, "E            - Trigger Edge A/B (currently: %c/%c)\r\n", pConfigInfo->START_EDGE[0], pConfigInfo->START_EDGE[1]);
+        serialPrintImmediate(tmp);
+      }
+      // Time dilation
+      {
+        char tmp[64]; sprintf(tmp, "D            - Time Dilation A/B (currently: %ld/%ld)\r\n", (int32_t)pConfigInfo->TIME_DILATION[0], (int32_t)pConfigInfo->TIME_DILATION[1]);
+        serialPrintImmediate(tmp);
+      }
+      // fixedTime2
+      {
+        char tmp[64]; sprintf(tmp, "F            - fixedTime2 ps A/B (currently: %ld/%ld)\r\n", (int32_t)pConfigInfo->FIXED_TIME2[0], (int32_t)pConfigInfo->FIXED_TIME2[1]);
+        serialPrintImmediate(tmp);
+      }
+      // FUDGE0
+      {
+        char tmp[64]; sprintf(tmp, "Z            - FUDGE0 ps A/B (currently: %ld/%ld)\r\n", (int32_t)pConfigInfo->FUDGE0[0], (int32_t)pConfigInfo->FUDGE0[1]);
+        serialPrintImmediate(tmp);
+      }
       serialPrintImmediate("W            - Write config to EEPROM and exit\r\n");
       serialPrintImmediate("Q            - Exit without writing\r\n");
       showMenu = false;

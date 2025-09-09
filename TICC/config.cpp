@@ -653,7 +653,7 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
       serialPrintImmediate("Q            - Exit without writing\r\n");
       showMenu = false;
     }
-    Serial.println("> ");
+    Serial.print("> ");
     Serial.flush();
     // Force immediate rendering on some terminals by emitting a space then backspace
     serialWriteImmediate(' ');
@@ -761,26 +761,16 @@ void UserConfig(struct config_t *pConfigInfo)
     // Do not block on Serial readiness; setup() already delays after begin
 
     Serial.println("# Type any character for config menu");
-    Serial.flush();
     Serial.print("# ");
-    Serial.flush();
     bool configRequested = 0;
-    int dots = 0;
     for (int i = 6; i >= 0; --i)  // wait ~6 sec so user can type something
-    {
-      for (int k = 0; k < 4; ++k) {
-        delay(250);
-        ++dots;
-        Serial.print('\r');
-        Serial.print("# ");
-        for (int j = 0; j < dots; ++j) Serial.print('.');
-        Serial.flush();
-        if (Serial.available()) { configRequested = 1; break; }
-      }
-      if (configRequested) break;
+    { 
+      delay(250);   Serial.print('.'); if (Serial.available()) { configRequested = 1; break; }
+      delay(250);   Serial.print('.'); if (Serial.available()) { configRequested = 1; break; }
+      delay(250);   Serial.print('.'); if (Serial.available()) { configRequested = 1; break; }
+      delay(250);   Serial.print('.'); if (Serial.available()) { configRequested = 1; break; }
     }
     Serial.println();
-    Serial.flush();
     while (Serial.available()) c = Serial.read();   // eat any characters entered before we start  doSetupMenu()
     if (configRequested) doSetupMenu(pConfigInfo); 
 }

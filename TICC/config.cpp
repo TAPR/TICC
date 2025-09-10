@@ -693,10 +693,10 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
     serialWriteImmediate('\b');
     n = readLine(buf, sizeof(buf));
     line = trimInPlace(buf);
+    cmd = toupper(line[0]);
     if (n == 0) continue;
     serialDrain();
 
-    args = line + 1; while (*args == ' ') args++;
     args = line + 1; while (*args == ' ') args++;
 
     // A) Mode submenu
@@ -756,6 +756,7 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
       char c = toupper(line[0]); if (c == 'M' || c == 'C') { char old=pConfigInfo->SYNC_MODE; pConfigInfo->SYNC_MODE=c; char m[64]; sprintf(m, "OK -- Sync %c -> %c\r\n", old, c); serialPrintImmediate(m); } else serialPrintImmediate("Invalid\r\n");
       Serial.flush();
       continue;
+    }
     // E) Wrap digits
     // E) Channel names
     if (cmd == 'E') {
@@ -856,8 +857,6 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
     serialPrintImmediate("? Unknown command\r\n");
   }
 }
-}
-
 
 void UserConfig(struct config_t *pConfigInfo) 
 {

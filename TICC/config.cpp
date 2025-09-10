@@ -656,65 +656,11 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
         serialPrintImmediate("none");
       }
       serialPrintImmediate(")\r\n");
-      // C) Clock speed MHz
-      {
-        char tmp[48];
-        int32_t mhz   = (int32_t)(pConfigInfo->CLOCK_HZ / 1000000LL);
-        int32_t frac6 = (int32_t)(pConfigInfo->CLOCK_HZ % 1000000LL);
-        sprintf(tmp, "C            - Clock Speed MHz (currently: %ld.%06ld)\r\n", mhz, frac6);
-        serialPrintImmediate(tmp);
-      }
-      // D) Coarse tick us
-      {
-        char tmp[48];
-        int32_t us    = (int32_t)(pConfigInfo->PICTICK_PS / 1000000LL);
-        int32_t frac6 = (int32_t)(pConfigInfo->PICTICK_PS % 1000000LL);
-        sprintf(tmp, "D            - Coarse Tick us (currently: %ld.%06ld)\r\n", us, frac6);
-        serialPrintImmediate(tmp);
-      }
-      // E) Wrap digits
-      {
-        char tmp[48]; sprintf(tmp, "E            - Timestamp Wrap digits (currently: %d)\r\n", (int)pConfigInfo->WRAP);
-        serialPrintImmediate(tmp);
-      }
-      // F) Sync mode
-      {
-        char tmp[48]; sprintf(tmp, "F            - Master/Client (currently: %c)\r\n", pConfigInfo->SYNC_MODE);
-        serialPrintImmediate(tmp);
-      }
-      // G) Channel names
-      {
-        char tmp[48]; sprintf(tmp, "G            - Channel Names (currently: %c/%c)\r\n", pConfigInfo->NAME[0], pConfigInfo->NAME[1]);
-        serialPrintImmediate(tmp);
-      }
-      // H) Prop delays
-      {
-        char tmp[64]; sprintf(tmp, "H            - Propagation Delay ps A/B (currently: %ld/%ld)\r\n", (int32_t)pConfigInfo->PROP_DELAY[0], (int32_t)pConfigInfo->PROP_DELAY[1]);
-        serialPrintImmediate(tmp);
-      }
-      // I) Trigger edges
-      {
-        char tmp[64]; sprintf(tmp, "I            - Trigger Edge A/B (currently: %c/%c)\r\n", pConfigInfo->START_EDGE[0], pConfigInfo->START_EDGE[1]);
-        serialPrintImmediate(tmp);
-      }
-      // J) Time dilation
-      {
-        char tmp[64]; sprintf(tmp, "J            - Time Dilation A/B (currently: %ld/%ld)\r\n", (int32_t)pConfigInfo->TIME_DILATION[0], (int32_t)pConfigInfo->TIME_DILATION[1]);
-        serialPrintImmediate(tmp);
-      }
-      // K) fixedTime2
-      {
-        char tmp[64]; sprintf(tmp, "K            - fixedTime2 ps A/B (currently: %ld/%ld)\r\n", (int32_t)pConfigInfo->FIXED_TIME2[0], (int32_t)pConfigInfo->FIXED_TIME2[1]);
-        serialPrintImmediate(tmp);
-      }
-      // L) FUDGE0
-      {
-        char tmp[64]; sprintf(tmp, "L            - FUDGE0 ps A/B (currently: %ld/%ld)\r\n", (int32_t)pConfigInfo->FUDGE0[0], (int32_t)pConfigInfo->FUDGE0[1]);
-        serialPrintImmediate(tmp);
-      }
+      serialPrintImmediate("C            - Advanced settings\r\n");
       serialPrintImmediate("1            - Discard changes and exit\r\n");
       serialPrintImmediate("2            - Write changes to EEPROM and restart\r\n");
       serialPrintImmediate("3            - Reset all to defaults and restart\r\n");
+      serialPrintImmediate("?            - Show this menu again\r\n");
       showMenu = false;
     }
     Serial.print("> ");
@@ -733,31 +679,47 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
     // A) Mode submenu
     if (cmd == 'A') {
       // Mode submenu
-      serialPrintImmediate("\r\n-- Mode --\r\n");
-      serialPrintImmediate("A - Timestamps\r\n");
-      serialPrintImmediate("B - Time Interval A -> B\r\n");
-      serialPrintImmediate("C - Period\r\n");
-      serialPrintImmediate("D - TimeLab 3-cornered Hat\r\n");
-      serialPrintImmediate("E - Debug\r\n");
-      serialPrintImmediate("F - Null Output\r\n> ");
-      size_t mn = readLine(buf, sizeof(buf)); char *mline = trimInPlace(buf);
-      if (mn) {
-        char m = toupper(mline[0]); MeasureMode old = pConfigInfo->MODE;
-        switch (m) {
-          case 'A': pConfigInfo->MODE = Timestamp; break;
-          case 'B': pConfigInfo->MODE = Interval; break;
-          case 'C': pConfigInfo->MODE = Period; break;
-          case 'D': pConfigInfo->MODE = timeLab; break;
-          case 'E': pConfigInfo->MODE = Debug; break;
-          case 'F': pConfigInfo->MODE = Null; break;
-          default: break;
+      for (;;) {
+        serialPrintImmediate("\r\n-- Mode --\r\n");
+        serialPrintImmediate("A - Timestamps\r\n");
+        serialPrintImmediate("B - Time Interval A -> B\r\n");
+        serialPrintImmediate("C - Period\r\n");
+        serialPrintImmediate("D - TimeLab 3-cornered Hat\r\n");
+        serialPrintImmediate("E - Debug\r\n");
+        serialPrintImmediate("F - Null Output\r\n");
+        serialPrintImmediate("1 - Keep changes and return to main menu\r\n");
+        serialPrintImmediate("2 - Discard changes and return to main menu\r\n");
+        serialPrintImmediate("> ");
+        size_t mn = readLine(buf, sizeof(buf)); char *mline = trimInPlace(buf);
+        if (mn) {
+          char m = toupper(mline[0]);
+          if (m == '1' || m == '2') {
+            // Return options - no mode change needed
+            if (m == '1') {
+              serialPrintImmediate("Mode changes kept.\r\n");
+            } else {
+              serialPrintImmediate("Mode changes discarded.\r\n");
+            }
+            showMenu = true;
+            break; // Exit the submenu loop
+          } else {
+            // Mode change options
+            MeasureMode old = pConfigInfo->MODE;
+            switch (m) {
+              case 'A': pConfigInfo->MODE = Timestamp; break;
+              case 'B': pConfigInfo->MODE = Interval; break;
+              case 'C': pConfigInfo->MODE = Period; break;
+              case 'D': pConfigInfo->MODE = timeLab; break;
+              case 'E': pConfigInfo->MODE = Debug; break;
+              case 'F': pConfigInfo->MODE = Null; break;
+              default: break;
+            }
+            serialPrintImmediate("OK -- Mode changed\r\n");
+          }
         }
-        serialPrintImmediate("OK -- Mode changed\r\n");
       }
-      showMenu = true;
       continue;
     }
-
     if (cmd == '?' || cmd == 'M') { showMenu = true; serialPrintImmediate("\r\n"); continue; }
 
     // B) Poll char
@@ -765,27 +727,75 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
       char old = pConfigInfo->POLL_CHAR;
       serialPrintImmediate("Enter poll character (space to clear): ");
       n = readLine(buf, sizeof(buf)); line = trimInPlace(buf);
-      pConfigInfo->POLL_CHAR = (line[0] == '\0' || line[0] == ' ') ? 0x00 : line[0];
-      char msg[64]; if (old) sprintf(msg, "OK -- Poll Char %c -> %c\r\n", old, pConfigInfo->POLL_CHAR ? pConfigInfo->POLL_CHAR : ' '); else sprintf(msg, "OK -- Poll Char none -> %c\r\n", pConfigInfo->POLL_CHAR ? pConfigInfo->POLL_CHAR : ' '); serialPrintImmediate(msg);
-      Serial.flush();
-      continue;
-    }
-
-    // C) Clock speed MHz
     if (cmd == 'C') {
-      serialPrintImmediate("Clock MHz: "); n = readLine(buf, sizeof(buf)); line = trimInPlace(buf);
-      int64_t hz; if (parseDecimalScaled(line, 1000000LL, &hz) && hz > 0) { int64_t old=pConfigInfo->CLOCK_HZ; pConfigInfo->CLOCK_HZ = hz; char m[64]; sprintf(m, "OK -- Clock %ld.%06ld -> %ld.%06ld\r\n", (int32_t)(old/1000000LL),(int32_t)(old%1000000LL),(int32_t)(hz/1000000LL),(int32_t)(hz%1000000LL)); serialPrintImmediate(m); } else serialPrintImmediate("Invalid\r\n");
-      Serial.flush();
+      // Advanced submenu
+      for (;;) {
+        serialPrintImmediate("\r\n-- Advanced Settings --\r\n");
+        serialPrintImmediate("A1 - Clock Speed MHz\r\n");
+        serialPrintImmediate("A2 - Coarse Tick us\r\n");
+        serialPrintImmediate("A3 - Propagation Delay ps A/B\r\n");
+        serialPrintImmediate("A4 - Time Dilation A/B\r\n");
+        serialPrintImmediate("A5 - fixedTime2 ps A/B\r\n");
+        serialPrintImmediate("A6 - FUDGE0 ps A/B\r\n");
+        serialPrintImmediate("1 - Keep changes and return to main menu\r\n");
+        serialPrintImmediate("2 - Discard changes and return to main menu\r\n");
+        serialPrintImmediate("> ");
+        size_t an = readLine(buf, sizeof(buf)); char *aline = trimInPlace(buf);
+        if (an) {
+          if (aline[0] == '1' || aline[0] == '2') {
+            // Return options - no changes needed
+            if (aline[0] == '1') {
+              serialPrintImmediate("Advanced changes kept.\r\n");
+            } else {
+              serialPrintImmediate("Advanced changes discarded.\r\n");
+            }
+            showMenu = true;
+            break; // Exit the submenu loop
+          } else {
+            // Advanced setting options
+            char a = toupper(aline[0]);
+            const char *aargs = aline + 1; while (*aargs == ' ') aargs++;
+            
+            // A1) Clock speed MHz
+            if (a == 'A' && aline[1] == '1') {
+              serialPrintImmediate("Clock MHz: "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
+              int64_t hz; if (parseDecimalScaled(cline, 1000000LL, &hz) && hz > 0) { int64_t old=pConfigInfo->CLOCK_HZ; pConfigInfo->CLOCK_HZ = hz; char m[64]; sprintf(m, "OK -- Clock %ld.%06ld -> %ld.%06ld\r\n", (int32_t)(old/1000000LL),(int32_t)(old%1000000LL),(int32_t)(hz/1000000LL),(int32_t)(hz%1000000LL)); serialPrintImmediate(m); } else serialPrintImmediate("Invalid\r\n");
+              Serial.flush();
+            }
+            // A2) Coarse tick us
+            else if (a == 'A' && aline[1] == '2') {
+              serialPrintImmediate("Coarse tick (us): "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
+              int64_t ps; if (parseDecimalScaled(cline, 1000000LL, &ps) && ps > 0) { int64_t old=pConfigInfo->PICTICK_PS; pConfigInfo->PICTICK_PS = ps; char m[64]; sprintf(m, "OK -- Coarse %ld.%06ld -> %ld.%06ld\r\n", (int32_t)(old/1000000LL),(int32_t)(old%1000000LL),(int32_t)(ps/1000000LL),(int32_t)(ps%1000000LL)); serialPrintImmediate(m); } else serialPrintImmediate("Invalid\r\n");
+              Serial.flush();
+            }
+            // A3) Prop delays
+            else if (a == 'A' && aline[1] == '3') {
+              serialPrintImmediate("Enter pair A/B: "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
+              bool s0=false, s1=false; int64_t v0=0, v1=0; if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { serialPrintImmediate("Invalid\r\n"); Serial.flush(); } else { int32_t o0=pConfigInfo->PROP_DELAY[0], o1=pConfigInfo->PROP_DELAY[1]; if (s0) pConfigInfo->PROP_DELAY[0]=v0; if (s1) pConfigInfo->PROP_DELAY[1]=v1; char m[80]; sprintf(m, "OK -- PropDelay %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->PROP_DELAY[0],(long)pConfigInfo->PROP_DELAY[1]); serialPrintImmediate(m); Serial.flush(); }
+            }
+            // A4) Time dilation
+            else if (a == 'A' && aline[1] == '4') {
+              serialPrintImmediate("Enter pair A/B: "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
+              bool s0=false, s1=false; int64_t v0=0, v1=0; if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { serialPrintImmediate("Invalid\r\n"); Serial.flush(); } else { int32_t o0=pConfigInfo->TIME_DILATION[0], o1=pConfigInfo->TIME_DILATION[1]; if (s0) pConfigInfo->TIME_DILATION[0]=v0; if (s1) pConfigInfo->TIME_DILATION[1]=v1; char m[80]; sprintf(m, "OK -- TimeDilation %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->TIME_DILATION[0],(long)pConfigInfo->TIME_DILATION[1]); serialPrintImmediate(m); Serial.flush(); }
+            }
+            // A5) fixedTime2
+            else if (a == 'A' && aline[1] == '5') {
+              serialPrintImmediate("Enter pair A/B: "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
+              bool s0=false, s1=false; int64_t v0=0, v1=0; if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { serialPrintImmediate("Invalid\r\n"); Serial.flush(); } else { int32_t o0=pConfigInfo->FIXED_TIME2[0], o1=pConfigInfo->FIXED_TIME2[1]; if (s0) pConfigInfo->FIXED_TIME2[0]=v0; if (s1) pConfigInfo->FIXED_TIME2[1]=v1; char m[80]; sprintf(m, "OK -- fixedTime2 %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->FIXED_TIME2[0],(long)pConfigInfo->FIXED_TIME2[1]); serialPrintImmediate(m); Serial.flush(); }
+            }
+            // A6) FUDGE0
+            else if (a == 'A' && aline[1] == '6') {
+              serialPrintImmediate("Enter pair A/B: "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
+              bool s0=false, s1=false; int64_t v0=0, v1=0; if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { serialPrintImmediate("Invalid\r\n"); Serial.flush(); } else { int32_t o0=pConfigInfo->FUDGE0[0], o1=pConfigInfo->FUDGE0[1]; if (s0) pConfigInfo->FUDGE0[0]=v0; if (s1) pConfigInfo->FUDGE0[1]=v1; char m[80]; sprintf(m, "OK -- FUDGE0 %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->FUDGE0[0],(long)pConfigInfo->FUDGE0[1]); serialPrintImmediate(m); Serial.flush(); }
+            }
+            else { serialPrintImmediate("Invalid\r\n"); Serial.flush(); }
+          }
+        }
+      }
       continue;
+    }
     }
 
-    // D) Coarse tick us
-    if (cmd == 'D') {
-      serialPrintImmediate("Coarse tick (us): "); n = readLine(buf, sizeof(buf)); line = trimInPlace(buf);
-      int64_t ps; if (parseDecimalScaled(line, 1000000LL, &ps) && ps > 0) { int64_t old=pConfigInfo->PICTICK_PS; pConfigInfo->PICTICK_PS = ps; char m[64]; sprintf(m, "OK -- Coarse %ld.%06ld -> %ld.%06ld\r\n", (int32_t)(old/1000000LL),(int32_t)(old%1000000LL),(int32_t)(ps/1000000LL),(int32_t)(ps%1000000LL)); serialPrintImmediate(m); } else serialPrintImmediate("Invalid\r\n");
-      Serial.flush();
-      continue;
-    }
 
     // E) Wrap digits
     if (cmd == 'E') {
@@ -821,26 +831,17 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
     }
 
     // H/I/J/K/L group
-    if (cmd == 'H' || cmd == 'I' || cmd == 'J' || cmd == 'K' || cmd == 'L') {
-      // Pair or edges
-      if (cmd == 'I') {
-        serialPrintImmediate("Enter edges A/B (R/F): "); n = readLine(buf, sizeof(buf)); char *ln = trimInPlace(buf);
-        const char *slash = strchr(ln, '/');
-        char e0 = (slash == NULL) ? toupper(ln[0]) : (slash == ln ? '\0' : toupper(ln[0]));
-        char e1 = (slash == NULL) ? toupper(ln[0]) : (slash[1] ? toupper(slash[1]) : '\0');
-        char old0=pConfigInfo->START_EDGE[0], old1=pConfigInfo->START_EDGE[1];
-        if (e0 == 'R' || e0 == 'F') pConfigInfo->START_EDGE[0] = e0;
-        if (e1 == 'R' || e1 == 'F') pConfigInfo->START_EDGE[1] = e1;
-        char m[64]; sprintf(m, "OK -- Edges %c/%c -> %c/%c\r\n", old0, old1, pConfigInfo->START_EDGE[0], pConfigInfo->START_EDGE[1]); serialPrintImmediate(m);
-        Serial.flush();
-        continue;
-      }
-      serialPrintImmediate("Enter pair A/B: "); n = readLine(buf, sizeof(buf)); char *ln = trimInPlace(buf);
-      bool s0=false, s1=false; int64_t v0=0, v1=0; if (!parseInt64Pair(ln, &s0, &v0, &s1, &v1)) { serialPrintImmediate("Invalid\r\n"); Serial.flush(); continue; }
-      if (cmd == 'H') { int32_t o0=pConfigInfo->PROP_DELAY[0], o1=pConfigInfo->PROP_DELAY[1]; if (s0) pConfigInfo->PROP_DELAY[0]=v0; if (s1) pConfigInfo->PROP_DELAY[1]=v1; char m[80]; sprintf(m, "OK -- PropDelay %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->PROP_DELAY[0],(long)pConfigInfo->PROP_DELAY[1]); serialPrintImmediate(m); Serial.flush(); continue; }
-      if (cmd == 'J') { int32_t o0=pConfigInfo->TIME_DILATION[0], o1=pConfigInfo->TIME_DILATION[1]; if (s0) pConfigInfo->TIME_DILATION[0]=v0; if (s1) pConfigInfo->TIME_DILATION[1]=v1; char m[80]; sprintf(m, "OK -- TimeDilation %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->TIME_DILATION[0],(long)pConfigInfo->TIME_DILATION[1]); serialPrintImmediate(m); Serial.flush(); continue; }
-      if (cmd == 'K') { int32_t o0=pConfigInfo->FIXED_TIME2[0], o1=pConfigInfo->FIXED_TIME2[1]; if (s0) pConfigInfo->FIXED_TIME2[0]=v0; if (s1) pConfigInfo->FIXED_TIME2[1]=v1; char m[80]; sprintf(m, "OK -- fixedTime2 %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->FIXED_TIME2[0],(long)pConfigInfo->FIXED_TIME2[1]); serialPrintImmediate(m); Serial.flush(); continue; }
-      if (cmd == 'L') { int32_t o0=pConfigInfo->FUDGE0[0], o1=pConfigInfo->FUDGE0[1]; if (s0) pConfigInfo->FUDGE0[0]=v0; if (s1) pConfigInfo->FUDGE0[1]=v1; char m[80]; sprintf(m, "OK -- FUDGE0 %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->FUDGE0[0],(long)pConfigInfo->FUDGE0[1]); serialPrintImmediate(m); Serial.flush(); continue; }
+    // I) Trigger edges
+    if (cmd == 'I') {
+      serialPrintImmediate("Enter edges A/B (R/F): "); n = readLine(buf, sizeof(buf)); char *ln = trimInPlace(buf);
+      const char *slash = strchr(ln, '/');
+      char e0 = (slash == NULL) ? toupper(ln[0]) : (slash == ln ? '\0' : toupper(ln[0]));
+      char e1 = (slash == NULL) ? toupper(ln[0]) : (slash[1] ? toupper(slash[1]) : '\0');
+      char old0=pConfigInfo->START_EDGE[0], old1=pConfigInfo->START_EDGE[1];
+      if (e0 == 'R' || e0 == 'F') pConfigInfo->START_EDGE[0] = e0;
+      if (e1 == 'R' || e1 == 'F') pConfigInfo->START_EDGE[1] = e1;
+      char m[64]; sprintf(m, "OK -- Edges %c/%c -> %c/%c\r\n", old0, old1, pConfigInfo->START_EDGE[0], pConfigInfo->START_EDGE[1]); serialPrintImmediate(m);
+      Serial.flush();
       continue;
     }
 

@@ -557,7 +557,7 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
         int64_t Hz = MHz * 1000000LL;
         int64_t fract = pConfigInfo->CLOCK_HZ - Hz;
         sprintf(tmp, "G1 - Clock Speed MHz (currently: %ld.%06ld)\r\n", (int32_t)MHz, (int32_t)fract);
-        serialPrintImmediate(tmp);
+        configPrint(tmp);
       }
       
       // G2 - Coarse Tick us
@@ -567,35 +567,35 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
         int64_t ps = us * 1000000LL;
         int64_t fract = pConfigInfo->PICTICK_PS - ps;
         sprintf(tmp, "G2 - Coarse Tick us (currently: %ld.%06ld)\r\n", (int32_t)us, (int32_t)fract);
-        serialPrintImmediate(tmp);
+        configPrint(tmp);
       }
       
       // G3 - Propagation Delay ps A/B
       {
         char tmp[64]; 
         sprintf(tmp, "G3 - Propagation Delay ps A/B (currently: %ld/%ld)\r\n", (long)pConfigInfo->PROP_DELAY[0], (long)pConfigInfo->PROP_DELAY[1]);
-        serialPrintImmediate(tmp);
+        configPrint(tmp);
       }
       
       // G4 - Time Dilation A/B
       {
         char tmp[64]; 
         sprintf(tmp, "G4 - Time Dilation A/B (currently: %ld/%ld)\r\n", (long)pConfigInfo->TIME_DILATION[0], (long)pConfigInfo->TIME_DILATION[1]);
-        serialPrintImmediate(tmp);
+        configPrint(tmp);
       }
       
       // G5 - fixedTime2 ps A/B
       {
         char tmp[64]; 
         sprintf(tmp, "G5 - fixedTime2 ps A/B (currently: %ld/%ld)\r\n", (long)pConfigInfo->FIXED_TIME2[0], (long)pConfigInfo->FIXED_TIME2[1]);
-        serialPrintImmediate(tmp);
+        configPrint(tmp);
       }
       
       // G6 - FUDGE0 ps A/B
       {
         char tmp[64]; 
         sprintf(tmp, "G6 - FUDGE0 ps A/B (currently: %ld/%ld)\r\n", (long)pConfigInfo->FUDGE0[0], (long)pConfigInfo->FUDGE0[1]);
-        serialPrintImmediate(tmp);
+        configPrint(tmp);
       }
       
       configPrint("1 - Discard changes and return to main menu\r\n");

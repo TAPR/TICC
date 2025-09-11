@@ -198,7 +198,7 @@ void apply_config_changes() {
   ticksPerSecond = PS_PER_SEC / PICTICK_PS;
 
   // Update channel-specific settings
-  for (int i = 0; i < ARRAY_SIZE(channels); ++i) {
+  for (size_t i = 0; i < ARRAY_SIZE(channels); ++i) {
     channels[i].name = config.NAME[i];
     channels[i].prop_delay = config.PROP_DELAY[i];
     channels[i].time_dilation = config.TIME_DILATION[i];
@@ -209,21 +209,21 @@ void apply_config_changes() {
 
 // Flush all channels and reset their state
 void flush_all_channels() {
-  for (int i = 0; i < ARRAY_SIZE(channels); ++i) {
+  for (size_t i = 0; i < ARRAY_SIZE(channels); ++i) {
     channels[i].flush_and_reset();
   }
 }
 
 // Stop measurements on all channels
 void stop_all_measurements() {
-  for (int i = 0; i < ARRAY_SIZE(channels); ++i) {
+  for (size_t i = 0; i < ARRAY_SIZE(channels); ++i) {
     channels[i].stop_measurements();
   }
 }
 
 // Start measurements on all channels
 void start_all_measurements() {
-  for (int i = 0; i < ARRAY_SIZE(channels); ++i) {
+  for (size_t i = 0; i < ARRAY_SIZE(channels); ++i) {
     channels[i].start_measurements();
   }
 }
@@ -255,7 +255,7 @@ Here is where setup really happens
 ****************************************************************/
 void ticc_setup() {
 
-  int i;
+  size_t i;
   boolean last_pin;
 
   pinMode(COARSEint, INPUT);
@@ -410,6 +410,9 @@ void ticc_setup() {
     case Debug:
       Serial.println("# time1 time2 clock1 cal1 cal2 PICstop tof timestamp");
       break;
+    case Null:
+      Serial.println("# null output mode - no data");
+      break;
   }  // switch
 
 #ifdef FAST_WRAP_TEST
@@ -484,7 +487,7 @@ void loop() {
     PICcount += 1;  // advance coarse count artificially
 #endif
 
-    int i;
+    size_t i;
     for (i = 0; i < ARRAY_SIZE(channels); ++i) {
 
       // No work to do unless intb is low
@@ -605,11 +608,11 @@ void loop() {
                 size_t n = 0;
                 
                 // Raw TDC7200 values (6 digits each)
-                n += sprintf(line + n, "%06u ", channels[i].time1Result);
-                n += sprintf(line + n, "%06u ", channels[i].time2Result);
-                n += sprintf(line + n, "%06u ", channels[i].clock1Result);
-                n += sprintf(line + n, "%06u ", channels[i].cal1Result);
-                n += sprintf(line + n, "%06u ", channels[i].cal2Result);
+                n += sprintf(line + n, "%06lu ", (unsigned long)channels[i].time1Result);
+                n += sprintf(line + n, "%06lu ", (unsigned long)channels[i].time2Result);
+                n += sprintf(line + n, "%06lu ", (unsigned long)channels[i].clock1Result);
+                n += sprintf(line + n, "%06lu ", (unsigned long)channels[i].cal1Result);
+                n += sprintf(line + n, "%06lu ", (unsigned long)channels[i].cal2Result);
                 
                 // PICstop (int64_t - need special handling)
                 char pic_buf[32];
@@ -701,8 +704,6 @@ void loop() {
         }
         if (ok) {
           // Determine composition and enforce chA then chB order when both present
-          uint8_t a_first = 0;
-          uint8_t b_second = 1;
           if ((ts_pair[0].ch == 0 && ts_pair[1].ch == 1) || (ts_pair[0].ch == 1 && ts_pair[1].ch == 0)) {
             // Mixed channels: find A then B
             const PairSlot *A = (ts_pair[0].ch == 0) ? &ts_pair[0] : &ts_pair[1];

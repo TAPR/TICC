@@ -39,7 +39,8 @@ void tdc7200Channel::tdc_setup() {
   config_byte2 = 0;
   return;
 #endif
-  byte CALIBRATION2_PERIODS, AVG_CYCLES, NUM_STOP;
+  byte CALIBRATION2_PERIODS = 0x80;  // default to 20 periods
+  byte AVG_CYCLES, NUM_STOP;
    
   digitalWrite(ENABLE, LOW);
   delay(5);  

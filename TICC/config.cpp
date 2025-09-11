@@ -754,7 +754,17 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
     serialPrintImmediate("A3 - Period\r\n");
     serialPrintImmediate("A4 - TimeLab 3-cornered Hat\r\n");
     serialPrintImmediate("A5 - Debug\r\n");
-    serialPrintImmediate("A6 - Null Output\r\n> ");
+    serialPrintImmediate("A6 - Null Output\r\n");
+    serialPrintImmediate("Current mode: ");
+    switch (pConfigInfo->MODE) {
+      case Timestamp: serialPrintImmediate("Timestamp"); break;
+      case Period:    serialPrintImmediate("Period"); break;
+      case Interval:  serialPrintImmediate("Time Interval A->B"); break;
+      case timeLab:   serialPrintImmediate("TimeLab 3-cornered Hat"); break;
+      case Debug:     serialPrintImmediate("Debug"); break;
+      case Null:      serialPrintImmediate("Null Output"); break;
+    }
+    serialPrintImmediate("\r\n> ");
     char buf[96];
     size_t mn = readLine(buf, sizeof(buf)); char *mline = trimInPlace(buf);
     if (mn) {
@@ -849,12 +859,55 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
     // Interactive Advanced submenu
     for (;;) {
       serialPrintImmediate("\r\n-- Advanced Settings --\r\n");
-      serialPrintImmediate("G1 - Clock Speed MHz\r\n");
-      serialPrintImmediate("G2 - Coarse Tick us\r\n");
-      serialPrintImmediate("G3 - Propagation Delay ps A/B\r\n");
-      serialPrintImmediate("G4 - Time Dilation A/B\r\n");
-      serialPrintImmediate("G5 - fixedTime2 ps A/B\r\n");
-      serialPrintImmediate("G6 - FUDGE0 ps A/B\r\n");
+      
+      // G1 - Clock Speed MHz
+      {
+        char tmp[64]; 
+        int64_t MHz = pConfigInfo->CLOCK_HZ / 1000000LL;
+        int64_t Hz = MHz * 1000000LL;
+        int64_t fract = pConfigInfo->CLOCK_HZ - Hz;
+        sprintf(tmp, "G1 - Clock Speed MHz (currently: %ld.%06ld)\r\n", (int32_t)MHz, (int32_t)fract);
+        serialPrintImmediate(tmp);
+      }
+      
+      // G2 - Coarse Tick us
+      {
+        char tmp[64]; 
+        int64_t us = pConfigInfo->PICTICK_PS / 1000000LL;
+        int64_t ps = us * 1000000LL;
+        int64_t fract = pConfigInfo->PICTICK_PS - ps;
+        sprintf(tmp, "G2 - Coarse Tick us (currently: %ld.%06ld)\r\n", (int32_t)us, (int32_t)fract);
+        serialPrintImmediate(tmp);
+      }
+      
+      // G3 - Propagation Delay ps A/B
+      {
+        char tmp[64]; 
+        sprintf(tmp, "G3 - Propagation Delay ps A/B (currently: %ld/%ld)\r\n", (long)pConfigInfo->PROP_DELAY[0], (long)pConfigInfo->PROP_DELAY[1]);
+        serialPrintImmediate(tmp);
+      }
+      
+      // G4 - Time Dilation A/B
+      {
+        char tmp[64]; 
+        sprintf(tmp, "G4 - Time Dilation A/B (currently: %ld/%ld)\r\n", (long)pConfigInfo->TIME_DILATION[0], (long)pConfigInfo->TIME_DILATION[1]);
+        serialPrintImmediate(tmp);
+      }
+      
+      // G5 - fixedTime2 ps A/B
+      {
+        char tmp[64]; 
+        sprintf(tmp, "G5 - fixedTime2 ps A/B (currently: %ld/%ld)\r\n", (long)pConfigInfo->FIXED_TIME2[0], (long)pConfigInfo->FIXED_TIME2[1]);
+        serialPrintImmediate(tmp);
+      }
+      
+      // G6 - FUDGE0 ps A/B
+      {
+        char tmp[64]; 
+        sprintf(tmp, "G6 - FUDGE0 ps A/B (currently: %ld/%ld)\r\n", (long)pConfigInfo->FUDGE0[0], (long)pConfigInfo->FUDGE0[1]);
+        serialPrintImmediate(tmp);
+      }
+      
       serialPrintImmediate("1 - Keep changes and return to main menu\r\n");
       serialPrintImmediate("2 - Discard changes and return to main menu\r\n");
       serialPrintImmediate("> ");

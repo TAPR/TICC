@@ -764,17 +764,31 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
       case Debug:     serialPrintImmediate("Debug"); break;
       case Null:      serialPrintImmediate("Null Output"); break;
     }
-    serialPrintImmediate("\r\n> ");
+    serialPrintImmediate("\r\n1 - Discard changes and return to main menu\r\n");
+    serialPrintImmediate("2 - Keep changes and return to main menu\r\n");
+    serialPrintImmediate("> ");
     char buf[96];
     size_t mn = readLine(buf, sizeof(buf)); char *mline = trimInPlace(buf);
     if (mn) {
-      char m = toupper(mline[0]); MeasureMode old = pConfigInfo->MODE;
-      if (m == 'A' && mline[1] == '1') pConfigInfo->MODE = Timestamp;
-      else if (m == 'A' && mline[1] == '2') pConfigInfo->MODE = Interval;
-      else if (m == 'A' && mline[1] == '3') pConfigInfo->MODE = Period;
-      else if (m == 'A' && mline[1] == '4') pConfigInfo->MODE = timeLab;
-      else if (m == 'A' && mline[1] == '5') pConfigInfo->MODE = Debug;
-      else if (m == 'A' && mline[1] == '6') pConfigInfo->MODE = Null;
+      if (mline[0] == '1' || mline[0] == '2') {
+        // Return options
+        if (mline[0] == '1') {
+          serialPrintImmediate("Mode changes discarded.\r\n");
+        } else {
+          serialPrintImmediate("Mode changes kept.\r\n");
+        }
+        *showMenu = true;
+        return true;
+      } else {
+        // Mode setting options
+        char m = toupper(mline[0]); MeasureMode old = pConfigInfo->MODE;
+        if (m == 'A' && mline[1] == '1') pConfigInfo->MODE = Timestamp;
+        else if (m == 'A' && mline[1] == '2') pConfigInfo->MODE = Interval;
+        else if (m == 'A' && mline[1] == '3') pConfigInfo->MODE = Period;
+        else if (m == 'A' && mline[1] == '4') pConfigInfo->MODE = timeLab;
+        else if (m == 'A' && mline[1] == '5') pConfigInfo->MODE = Debug;
+        else if (m == 'A' && mline[1] == '6') pConfigInfo->MODE = Null;
+      }
     }
     return true;
   }
@@ -854,6 +868,14 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
     return true;
   }
 
+  // H) Show startup info
+  if (cmd == 'H') {
+    serialPrintImmediate("\r\n");
+    print_config(*pConfigInfo);
+    serialPrintImmediate("\r\n");
+    return true;
+  }
+
   // G) Advanced submenu
   if (cmd == 'G') {
     // Interactive Advanced submenu
@@ -908,8 +930,8 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
         serialPrintImmediate(tmp);
       }
       
-      serialPrintImmediate("1 - Keep changes and return to main menu\r\n");
-      serialPrintImmediate("2 - Discard changes and return to main menu\r\n");
+      serialPrintImmediate("1 - Discard changes and return to main menu\r\n");
+      serialPrintImmediate("2 - Keep changes and return to main menu\r\n");
       serialPrintImmediate("> ");
       char buf[96];
       size_t an = readLine(buf, sizeof(buf)); char *aline = trimInPlace(buf);
@@ -917,9 +939,9 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
         if (aline[0] == '1' || aline[0] == '2') {
           // Return options - no changes needed
           if (aline[0] == '1') {
-            serialPrintImmediate("Advanced changes kept.\r\n");
-          } else {
             serialPrintImmediate("Advanced changes discarded.\r\n");
+          } else {
+            serialPrintImmediate("Advanced changes kept.\r\n");
           }
           *showMenu = true;
           break; // Exit the submenu loop
@@ -984,7 +1006,7 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
     if (showMenu) {
       serialPrintImmediate("\r\n== TICC Configuration ==\r\n");
       // A) Mode
-      serialPrintImmediate("A            - Mode (currently: ");
+      serialPrintImmediate("A - Mode (currently: ");
       switch (pConfigInfo->MODE) {
         case Timestamp: serialPrintImmediate("Timestamp"); break;
         case Period:    serialPrintImmediate("Period"); break;
@@ -996,26 +1018,26 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
       serialPrintImmediate(")\r\n");
       // B) Wrap digits
       {
-        char tmp[48]; sprintf(tmp, "B            - Timestamp Wrap digits (currently: %d)\r\n", (int)pConfigInfo->WRAP);
+        char tmp[48]; sprintf(tmp, "B - Timestamp Wrap digits (currently: %d)\r\n", (int)pConfigInfo->WRAP);
         serialPrintImmediate(tmp);
       }
       // C) Trigger edges
       {
-        char tmp[64]; sprintf(tmp, "C            - Trigger Edge A/B (currently: %c/%c)\r\n", pConfigInfo->START_EDGE[0], pConfigInfo->START_EDGE[1]);
+        char tmp[64]; sprintf(tmp, "C - Trigger Edge A/B (currently: %c/%c)\r\n", pConfigInfo->START_EDGE[0], pConfigInfo->START_EDGE[1]);
         serialPrintImmediate(tmp);
       }
       // D) Sync mode
       {
-        char tmp[48]; sprintf(tmp, "D            - Master/Client (currently: %c)\r\n", pConfigInfo->SYNC_MODE);
+        char tmp[48]; sprintf(tmp, "D - Master/Client (currently: %c)\r\n", pConfigInfo->SYNC_MODE);
         serialPrintImmediate(tmp);
       }
       // E) Channel names
       {
-        char tmp[48]; sprintf(tmp, "E            - Channel Names (currently: %c/%c)\r\n", pConfigInfo->NAME[0], pConfigInfo->NAME[1]);
+        char tmp[48]; sprintf(tmp, "E - Channel Names (currently: %c/%c)\r\n", pConfigInfo->NAME[0], pConfigInfo->NAME[1]);
         serialPrintImmediate(tmp);
       }
       // F) Poll char
-      serialPrintImmediate("F            - Poll Character (currently: ");
+      serialPrintImmediate("F - Poll Character (currently: ");
       if (pConfigInfo->POLL_CHAR) {
         char ch[8]; ch[0] = pConfigInfo->POLL_CHAR; ch[1] = 0; serialPrintImmediate(ch);
       } else {
@@ -1023,11 +1045,12 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
       }
       serialPrintImmediate(")\r\n");
       // G) Advanced settings
-      serialPrintImmediate("G            - Advanced settings\r\n");
-      serialPrintImmediate("1            - Discard changes and exit\r\n");
-      serialPrintImmediate("2            - Write changes to EEPROM and restart\r\n");
-      serialPrintImmediate("3            - Reset all to defaults and restart\r\n");
-      serialPrintImmediate("?            - Show this menu again\r\n");
+      serialPrintImmediate("G - Advanced settings\r\n");
+      serialPrintImmediate("H - Show startup info\r\n");
+      serialPrintImmediate("1 - Discard changes and exit\r\n");
+      serialPrintImmediate("2 - Write changes to EEPROM and restart\r\n");
+      serialPrintImmediate("3 - Reset all to defaults and restart\r\n");
+      serialPrintImmediate("? - Show this menu again\r\n");
       showMenu = false;
     }
     Serial.print("> ");

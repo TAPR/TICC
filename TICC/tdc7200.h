@@ -87,6 +87,8 @@ public:
   void ready_next();
   void flush_and_reset();  // Clear partial measurements and reset state
   void reset_channel_state();  // Reset channel variables without hardware reset
+  void stop_measurements();  // Stop TDC7200 measurements
+  void start_measurements();  // Start TDC7200 measurements
   byte readReg8(byte address);
   uint32_t readReg24(byte address);
   void write(byte address, byte value);

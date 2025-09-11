@@ -148,6 +148,7 @@ volatile uint8_t request_restart = 0;
 // Configuration change tracking
 static config_t config_backup;  // Backup of config before changes
 uint8_t config_changed = 0;  // Flag indicating config was modified (global for config.cpp access)
+static uint8_t config_requested = 0;  // Flag indicating user requested config menu
 
 static tdc7200Channel channels[] = {
   tdc7200Channel('0', ENABLE_0, INTB_0, CSB_0, STOP_0, LED_0),
@@ -210,6 +211,20 @@ void apply_config_changes() {
 void flush_all_channels() {
   for (int i = 0; i < ARRAY_SIZE(channels); ++i) {
     channels[i].flush_and_reset();
+  }
+}
+
+// Stop measurements on all channels
+void stop_all_measurements() {
+  for (int i = 0; i < ARRAY_SIZE(channels); ++i) {
+    channels[i].stop_measurements();
+  }
+}
+
+// Start measurements on all channels
+void start_all_measurements() {
+  for (int i = 0; i < ARRAY_SIZE(channels); ++i) {
+    channels[i].start_measurements();
   }
 }
 
@@ -424,44 +439,10 @@ void loop() {
 
   while (1) {
     if ( (Serial.read() == '#') ) {        // direct entry to config menu
+      // Set flag to enter config at end of current loop iteration
+      config_requested = 1;
       // Clear any remaining characters from the serial buffer (like the <enter> from "#<enter>")
       while (Serial.available()) (void)Serial.read();
-      
-      // Small delay to ensure buffer is fully cleared
-      delay(10);
-      
-      // Double-check buffer is clear
-      while (Serial.available()) (void)Serial.read();
-      
-      // Backup config before making changes
-      backup_config();
-      
-      // Enter config menu directly (no T/P choice needed)
-      doSetupMenu(&config);
-      
-      // Clear any remaining characters after config menu exits
-      while (Serial.available()) (void)Serial.read();
-      
-      // Handle exit from config menu
-      if (config_changed) {
-        // Apply changes and handle restart vs resume
-        handle_config_change_exit();
-        
-        // If restart required, exit loop to reinitialize
-        if (config_change_requires_restart()) {
-          skip_config_prompt_once = 1;
-          return; // reinitialize via ticc_setup() on next loop entry
-        }
-        // Otherwise continue in the same loop with new settings
-      } else {
-        // No changes made, just resume
-        Serial.println("# No changes made, resuming operation");
-      }
-      
-      // Clear the config_changed flag for next time
-      config_changed = 0;
-      
-      skip_config_prompt_once = 1;
     }
 
 #ifndef SIM_MODE
@@ -822,6 +803,58 @@ void loop() {
           default: break;
         }
       }
+    }
+
+    // Check if config was requested during this loop iteration
+    if (config_requested) {
+      config_requested = 0;  // Clear the flag
+      
+      // Stop TDC7200 measurements to prevent new data during config
+      Serial.println("# Stopping measurements for config...");
+      stop_all_measurements();
+      
+      // Flush any pending measurements from TDC7200 chips to prevent
+      // them from appearing after returning from config menu
+      Serial.println("# Flushing pending measurements before config...");
+      flush_all_channels();
+      
+      // Small delay to ensure buffer is fully cleared
+      delay(10);
+      
+      // Double-check buffer is clear
+      while (Serial.available()) (void)Serial.read();
+      
+      // Backup config before making changes
+      backup_config();
+      
+      // Enter config menu directly (no T/P choice needed)
+      doSetupMenu(&config);
+      
+      // Clear any remaining characters after config menu exits
+      while (Serial.available()) (void)Serial.read();
+      
+      // Handle exit from config menu
+      if (config_changed) {
+        // Apply changes and handle restart vs resume
+        handle_config_change_exit();
+        
+        // If restart required, exit loop to reinitialize
+        if (config_change_requires_restart()) {
+          skip_config_prompt_once = 1;
+          return; // reinitialize via ticc_setup() on next loop entry
+        }
+        // Otherwise continue in the same loop with new settings
+      } else {
+        // No changes made, just resume
+        Serial.println("# No changes made, resuming operation");
+      }
+      
+      // Restart measurements after config changes
+      Serial.println("# Restarting measurements...");
+      start_all_measurements();
+      
+      // Clear the config_changed flag for next time
+      config_changed = 0;
     }
 
   }  // while (1) loop

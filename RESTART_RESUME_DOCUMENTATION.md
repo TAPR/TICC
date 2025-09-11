@@ -263,6 +263,15 @@ Could extend restart logic to be more granular:
   - Clean single "> " prompt now displayed
   - System tested and working properly with resume functionality
 
+- **v1.4** (2025-01-09): Fixed measurement timing issue
+  - Implemented flag-based config entry to complete current loop iteration
+  - Added TDC7200 stop/start functionality to prevent new measurements during config
+  - Added TDC7200 flush operation before config entry to clear pending measurements
+  - Prevents timestamps from appearing after returning from config menu
+  - Much cleaner implementation using config_requested flag
+  - Ensures all pending measurements are processed and flushed before config entry
+  - TDC7200 chips are stopped during config and restarted after config exit
+
 ---
 
 *This documentation will be updated as the restart/resume functionality evolves.*

@@ -352,3 +352,24 @@ void tdc7200Channel::write(byte address, byte value) {
   digitalWrite(CSB, HIGH);
   SPI.endTransaction();
 }
+
+// Stop TDC7200 measurements
+void tdc7200Channel::stop_measurements() {
+#ifdef SIM_MODE
+  // nothing to do in simulation
+  return;
+#endif
+  // Stop current measurement by clearing START_MEAS bit
+  byte stop_config = config_byte1 & ~0x01;  // Clear START_MEAS bit
+  write(CONFIG1, stop_config);
+}
+
+// Start TDC7200 measurements
+void tdc7200Channel::start_measurements() {
+#ifdef SIM_MODE
+  // nothing to do in simulation
+  return;
+#endif
+  // Start measurement by setting START_MEAS bit
+  write(CONFIG1, config_byte1);
+}

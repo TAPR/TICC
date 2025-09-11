@@ -386,7 +386,6 @@ void ticc_setup() {
 
   // print header to stdout
   Serial.println("");
-  Serial.println("");
   switch (config.MODE) {
     case Timestamp:
       Serial.print("# timestamp (seconds with ");

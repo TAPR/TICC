@@ -44,6 +44,15 @@ static void serialPrintImmediate(const char *s) {
   Serial.flush();
 }
 
+// Helper function to print config output with "# " prefix for data file compatibility
+static void configPrint(const char* msg) {
+  serialPrintImmediate("# ");
+  serialPrintImmediate(msg);
+}
+
+// Macro to replace serialPrintImmediate with configPrint for config output
+#define CONFIG_PRINT(msg) configPrint(msg)
+
 static void serialWriteImmediate(char c) {
   Serial.write(c);
   Serial.flush();
@@ -269,7 +278,7 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
     else if (choice == '5') pConfigInfo->MODE = Debug;
     else if (choice == '6') pConfigInfo->MODE = Null;
     else {
-      serialPrintImmediate("Invalid mode choice\r\n");
+      configPrint("Invalid mode choice\r\n");
       return true;
     }
     MARK_CONFIG_CHANGED();
@@ -282,36 +291,36 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
     char choice = line[1];
     if (choice == '1') {
       // G1) Clock speed MHz - need user input
-      serialPrintImmediate("Clock MHz: "); 
+      configPrint("Clock MHz: "); 
       char buf[96];
       size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
       int64_t hz; if (parseDecimalScaled(cline, 1000000LL, &hz) && hz > 0) { 
         int64_t old=pConfigInfo->CLOCK_HZ; pConfigInfo->CLOCK_HZ = hz; 
         MARK_CONFIG_CHANGED();
         char m[64]; sprintf(m, "OK -- Clock %ld.%06ld -> %ld.%06ld\r\n", (int32_t)(old/1000000LL),(int32_t)(old%1000000LL),(int32_t)(hz/1000000LL),(int32_t)(hz%1000000LL)); serialPrintImmediate(m); 
-      } else serialPrintImmediate("Invalid\r\n");
+      } else configPrint("Invalid\r\n");
       Serial.flush();
     }
     else if (choice == '2') {
       // G2) Coarse tick us - need user input
-      serialPrintImmediate("Coarse tick (us): "); 
+      configPrint("Coarse tick (us): "); 
       char buf[96];
       size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
       int64_t ps; if (parseDecimalScaled(cline, 1000000LL, &ps) && ps > 0) { 
         int64_t old=pConfigInfo->PICTICK_PS; pConfigInfo->PICTICK_PS = ps; 
         MARK_CONFIG_CHANGED();
         char m[64]; sprintf(m, "OK -- Coarse %ld.%06ld -> %ld.%06ld\r\n", (int32_t)(old/1000000LL),(int32_t)(old%1000000LL),(int32_t)(ps/1000000LL),(int32_t)(ps%1000000LL)); serialPrintImmediate(m); 
-      } else serialPrintImmediate("Invalid\r\n");
+      } else configPrint("Invalid\r\n");
       Serial.flush();
     }
     else if (choice == '3') {
       // G3) Prop delays - need user input
-      serialPrintImmediate("Enter pair A/B: "); 
+      configPrint("Enter pair A/B: "); 
       char buf[96];
       size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
       bool s0=false, s1=false; int64_t v0=0, v1=0; 
       if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { 
-        serialPrintImmediate("Invalid\r\n"); Serial.flush(); 
+        configPrint("Invalid\r\n"); Serial.flush(); 
       } else { 
         int32_t o0=pConfigInfo->PROP_DELAY[0], o1=pConfigInfo->PROP_DELAY[1]; 
         if (s0) pConfigInfo->PROP_DELAY[0]=v0; if (s1) pConfigInfo->PROP_DELAY[1]=v1; 
@@ -321,12 +330,12 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
     }
     else if (choice == '4') {
       // G4) Time dilation - need user input
-      serialPrintImmediate("Enter pair A/B: "); 
+      configPrint("Enter pair A/B: "); 
       char buf[96];
       size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
       bool s0=false, s1=false; int64_t v0=0, v1=0; 
       if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { 
-        serialPrintImmediate("Invalid\r\n"); Serial.flush(); 
+        configPrint("Invalid\r\n"); Serial.flush(); 
       } else { 
         int32_t o0=pConfigInfo->TIME_DILATION[0], o1=pConfigInfo->TIME_DILATION[1]; 
         if (s0) pConfigInfo->TIME_DILATION[0]=v0; if (s1) pConfigInfo->TIME_DILATION[1]=v1; 
@@ -336,12 +345,12 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
     }
     else if (choice == '5') {
       // G5) fixedTime2 - need user input
-      serialPrintImmediate("Enter pair A/B: "); 
+      configPrint("Enter pair A/B: "); 
       char buf[96];
       size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
       bool s0=false, s1=false; int64_t v0=0, v1=0; 
       if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { 
-        serialPrintImmediate("Invalid\r\n"); Serial.flush(); 
+        configPrint("Invalid\r\n"); Serial.flush(); 
       } else { 
         int32_t o0=pConfigInfo->FIXED_TIME2[0], o1=pConfigInfo->FIXED_TIME2[1]; 
         if (s0) pConfigInfo->FIXED_TIME2[0]=v0; if (s1) pConfigInfo->FIXED_TIME2[1]=v1; 
@@ -351,12 +360,12 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
     }
     else if (choice == '6') {
       // G6) FUDGE0 - need user input
-      serialPrintImmediate("Enter pair A/B: "); 
+      configPrint("Enter pair A/B: "); 
       char buf[96];
       size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
       bool s0=false, s1=false; int64_t v0=0, v1=0; 
       if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { 
-        serialPrintImmediate("Invalid\r\n"); Serial.flush(); 
+        configPrint("Invalid\r\n"); Serial.flush(); 
       } else { 
         int32_t o0=pConfigInfo->FUDGE0[0], o1=pConfigInfo->FUDGE0[1]; 
         if (s0) pConfigInfo->FUDGE0[0]=v0; if (s1) pConfigInfo->FUDGE0[1]=v1; 
@@ -365,7 +374,7 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
       }
     }
     else {
-      serialPrintImmediate("Invalid advanced choice\r\n");
+      configPrint("Invalid advanced choice\r\n");
     }
     return true;
   }
@@ -374,34 +383,35 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
   if (cmd == 'A') {
     // Interactive Mode submenu
     for (;;) {
-      serialPrintImmediate("\r\n-- Mode --\r\n");
-      serialPrintImmediate("A1 - Timestamps\r\n");
-      serialPrintImmediate("A2 - Time Interval A -> B\r\n");
-      serialPrintImmediate("A3 - Period\r\n");
-      serialPrintImmediate("A4 - TimeLab 3-cornered Hat\r\n");
-      serialPrintImmediate("A5 - Debug\r\n");
-      serialPrintImmediate("A6 - Null Output\r\n");
-      serialPrintImmediate("Current mode: ");
+      configPrint("\r\n-- Mode --\r\n");
+      configPrint("A1 - Timestamps\r\n");
+      configPrint("A2 - Time Interval A -> B\r\n");
+      configPrint("A3 - Period\r\n");
+      configPrint("A4 - TimeLab 3-cornered Hat\r\n");
+      configPrint("A5 - Debug\r\n");
+      configPrint("A6 - Null Output\r\n");
+      configPrint("\r\n");
+      configPrint("Current mode: ");
       switch (pConfigInfo->MODE) {
-        case Timestamp: serialPrintImmediate("Timestamp"); break;
-        case Period:    serialPrintImmediate("Period"); break;
-        case Interval:  serialPrintImmediate("Time Interval A->B"); break;
-        case timeLab:   serialPrintImmediate("TimeLab 3-cornered Hat"); break;
-        case Debug:     serialPrintImmediate("Debug"); break;
-        case Null:      serialPrintImmediate("Null Output"); break;
+        case Timestamp: configPrint("Timestamp"); break;
+        case Period:    configPrint("Period"); break;
+        case Interval:  configPrint("Time Interval A->B"); break;
+        case timeLab:   configPrint("TimeLab 3-cornered Hat"); break;
+        case Debug:     configPrint("Debug"); break;
+        case Null:      configPrint("Null Output"); break;
       }
-      serialPrintImmediate("\r\n1 - Discard changes and return to main menu\r\n");
-      serialPrintImmediate("2 - Keep changes and return to main menu\r\n");
-      serialPrintImmediate("> ");
+      configPrint("\r\n1 - Discard changes and return to main menu\r\n");
+      configPrint("2 - Keep changes and return to main menu\r\n");
+      configPrint("> ");
       char buf[96];
       size_t mn = readLine(buf, sizeof(buf)); char *mline = trimInPlace(buf);
       if (mn) {
         if (mline[0] == '1' || mline[0] == '2') {
           // Return options
           if (mline[0] == '1') {
-            serialPrintImmediate("Mode changes discarded.\r\n");
+            configPrint("Mode changes discarded.\r\n");
           } else {
-            serialPrintImmediate("Mode changes kept.\r\n");
+            configPrint("Mode changes kept.\r\n");
           }
           *showMenu = true;
           break; // Exit the submenu loop
@@ -414,31 +424,49 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
           else if (m == 'A' && mline[1] == '4') pConfigInfo->MODE = timeLab;
           else if (m == 'A' && mline[1] == '5') pConfigInfo->MODE = Debug;
           else if (m == 'A' && mline[1] == '6') pConfigInfo->MODE = Null;
+          
+          // Show mode change confirmation and mark config as changed
+          if (old != pConfigInfo->MODE) {
+            char msg[128];
+            sprintf(msg, "Mode was %s; now %s\r\n", 
+                    (old == Timestamp) ? "Timestamp" :
+                    (old == Interval) ? "Time Interval A->B" :
+                    (old == Period) ? "Period" :
+                    (old == timeLab) ? "TimeLab 3-cornered Hat" :
+                    (old == Debug) ? "Debug" : "Null Output",
+                    (pConfigInfo->MODE == Timestamp) ? "Timestamp" :
+                    (pConfigInfo->MODE == Interval) ? "Time Interval A->B" :
+                    (pConfigInfo->MODE == Period) ? "Period" :
+                    (pConfigInfo->MODE == timeLab) ? "TimeLab 3-cornered Hat" :
+                    (pConfigInfo->MODE == Debug) ? "Debug" : "Null Output");
+            serialPrintImmediate(msg);
+            MARK_CONFIG_CHANGED();
+          }
         }
       }
     }
     return true;
   }
 
-  if (cmd == '?' || cmd == 'M') { *showMenu = true; serialPrintImmediate("\r\n"); return true; }
+  if (cmd == '?' || cmd == 'M') { *showMenu = true; configPrint("\r\n"); return true; }
 
   // B) Wrap digits
   if (cmd == 'B') {
-    serialPrintImmediate("Wrap digits (0..10): "); 
+    configPrint("Wrap digits (0..10): "); 
     char buf[96];
     size_t n = readLine(buf, sizeof(buf)); char *line = trimInPlace(buf);
     int64_t wrap; if (parseInt64Simple(line, &wrap) && wrap >= 0 && wrap <= 10) { 
       int16_t old=pConfigInfo->WRAP; pConfigInfo->WRAP = (int16_t)wrap; 
       MARK_CONFIG_CHANGED();
       char m[64]; sprintf(m, "OK -- Wrap %d -> %d\r\n", (int)old, (int)pConfigInfo->WRAP); serialPrintImmediate(m); 
-    } else serialPrintImmediate("Invalid\r\n");
+    } else configPrint("Invalid\r\n");
     Serial.flush();
     return true;
   }
   
   // C) Trigger edges
   if (cmd == 'C') {
-    serialPrintImmediate("Enter edges A/B (R/F): "); 
+    configPrint("Enter edges A/B (R/F): "); 
     char buf[96];
     size_t n = readLine(buf, sizeof(buf)); char *ln = trimInPlace(buf);
     if (ln[0] && ln[1] && ln[2] == '/' && ln[3]) {
@@ -448,15 +476,15 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
         pConfigInfo->START_EDGE[0]=e0; pConfigInfo->START_EDGE[1]=e1;
         MARK_CONFIG_CHANGED();
         char m[64]; sprintf(m, "OK -- Edges %c/%c -> %c/%c\r\n", o0,o1,e0,e1); serialPrintImmediate(m);
-      } else serialPrintImmediate("Invalid\r\n");
-    } else serialPrintImmediate("Invalid\r\n");
+      } else configPrint("Invalid\r\n");
+    } else configPrint("Invalid\r\n");
     Serial.flush();
     return true;
   }
   
   // D) Sync mode
   if (cmd == 'D') {
-    serialPrintImmediate("Enter M or C: "); 
+    configPrint("Enter M or C: "); 
     char buf[96];
     size_t n = readLine(buf, sizeof(buf)); char *line = trimInPlace(buf);
     char c = toupper(line[0]); 
@@ -464,14 +492,14 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
       char old=pConfigInfo->SYNC_MODE; pConfigInfo->SYNC_MODE=c; 
       MARK_CONFIG_CHANGED();
       char m[64]; sprintf(m, "OK -- Sync %c -> %c\r\n", old, c); serialPrintImmediate(m); 
-    } else serialPrintImmediate("Invalid\r\n");
+    } else configPrint("Invalid\r\n");
     Serial.flush();
     return true;
   }
   
   // E) Channel names
   if (cmd == 'E') {
-    serialPrintImmediate("Enter names A/B: "); 
+    configPrint("Enter names A/B: "); 
     char buf[96];
     size_t n = readLine(buf, sizeof(buf)); char *ln = trimInPlace(buf);
     if (ln[0] && ln[1] == '/' && ln[2]) {
@@ -479,7 +507,7 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
       pConfigInfo->NAME[0]=ln[0]; pConfigInfo->NAME[1]=ln[2];
       MARK_CONFIG_CHANGED();
       char m[64]; sprintf(m, "OK -- Names %c/%c -> %c/%c\r\n", o0,o1,ln[0],ln[2]); serialPrintImmediate(m);
-    } else serialPrintImmediate("Invalid\r\n");
+    } else configPrint("Invalid\r\n");
     Serial.flush();
     return true;
   }
@@ -487,7 +515,7 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
   // F) Poll char
   if (cmd == 'F') {
     char old = pConfigInfo->POLL_CHAR;
-    serialPrintImmediate("Enter poll character (space to clear): ");
+    configPrint("Enter poll character (space to clear): ");
     char buf[96];
     size_t n = readLine(buf, sizeof(buf)); char *line = trimInPlace(buf);
     pConfigInfo->POLL_CHAR = (line[0] == '\0' || line[0] == ' ') ? 0x00 : line[0];
@@ -502,16 +530,16 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
 
   // H) Show startup info
   if (cmd == 'H') {
-    serialPrintImmediate("\r\n");
+    configPrint("\r\n");
     print_config(*pConfigInfo);
-    serialPrintImmediate("\r\n");
+    configPrint("\r\n");
     return true;
   }
 
   // W) Write changes to EEPROM (without restart)
   if (cmd == 'W') {
     EEPROM_writeAnything(CONFIG_START, *pConfigInfo);
-    serialPrintImmediate("Changes written to EEPROM (will persist across restarts)\r\n");
+    configPrint("Changes written to EEPROM (will persist across restarts)\r\n");
     return true;
   }
 
@@ -519,7 +547,7 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
   if (cmd == 'G') {
     // Interactive Advanced submenu
     for (;;) {
-      serialPrintImmediate("\r\n-- Advanced Settings --\r\n");
+      configPrint("\r\n-- Advanced Settings --\r\n");
       
       // G1 - Clock Speed MHz
       {
@@ -569,18 +597,18 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
         serialPrintImmediate(tmp);
       }
       
-      serialPrintImmediate("1 - Discard changes and return to main menu\r\n");
-      serialPrintImmediate("2 - Keep changes and return to main menu\r\n");
-      serialPrintImmediate("> ");
+      configPrint("1 - Discard changes and return to main menu\r\n");
+      configPrint("2 - Keep changes and return to main menu\r\n");
+      configPrint("> ");
       char buf[96];
       size_t an = readLine(buf, sizeof(buf)); char *aline = trimInPlace(buf);
       if (an) {
         if (aline[0] == '1' || aline[0] == '2') {
           // Return options - no changes needed
           if (aline[0] == '1') {
-            serialPrintImmediate("Advanced changes discarded.\r\n");
+            configPrint("Advanced changes discarded.\r\n");
           } else {
-            serialPrintImmediate("Advanced changes kept.\r\n");
+            configPrint("Advanced changes kept.\r\n");
           }
           *showMenu = true;
           break; // Exit the submenu loop
@@ -591,37 +619,37 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
           
           // G1) Clock speed MHz
           if (a == 'G' && aline[1] == '1') {
-            serialPrintImmediate("Clock MHz: "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
-            int64_t hz; if (parseDecimalScaled(cline, 1000000LL, &hz) && hz > 0) { int64_t old=pConfigInfo->CLOCK_HZ; pConfigInfo->CLOCK_HZ = hz; char m[64]; sprintf(m, "OK -- Clock %ld.%06ld -> %ld.%06ld\r\n", (int32_t)(old/1000000LL),(int32_t)(old%1000000LL),(int32_t)(hz/1000000LL),(int32_t)(hz%1000000LL)); serialPrintImmediate(m); } else serialPrintImmediate("Invalid\r\n");
+            configPrint("Clock MHz: "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
+            int64_t hz; if (parseDecimalScaled(cline, 1000000LL, &hz) && hz > 0) { int64_t old=pConfigInfo->CLOCK_HZ; pConfigInfo->CLOCK_HZ = hz; char m[64]; sprintf(m, "OK -- Clock %ld.%06ld -> %ld.%06ld\r\n", (int32_t)(old/1000000LL),(int32_t)(old%1000000LL),(int32_t)(hz/1000000LL),(int32_t)(hz%1000000LL)); serialPrintImmediate(m); } else configPrint("Invalid\r\n");
             Serial.flush();
           }
           // G2) Coarse tick us
           else if (a == 'G' && aline[1] == '2') {
-            serialPrintImmediate("Coarse tick (us): "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
-            int64_t ps; if (parseDecimalScaled(cline, 1000000LL, &ps) && ps > 0) { int64_t old=pConfigInfo->PICTICK_PS; pConfigInfo->PICTICK_PS = ps; char m[64]; sprintf(m, "OK -- Coarse %ld.%06ld -> %ld.%06ld\r\n", (int32_t)(old/1000000LL),(int32_t)(old%1000000LL),(int32_t)(ps/1000000LL),(int32_t)(ps%1000000LL)); serialPrintImmediate(m); } else serialPrintImmediate("Invalid\r\n");
+            configPrint("Coarse tick (us): "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
+            int64_t ps; if (parseDecimalScaled(cline, 1000000LL, &ps) && ps > 0) { int64_t old=pConfigInfo->PICTICK_PS; pConfigInfo->PICTICK_PS = ps; char m[64]; sprintf(m, "OK -- Coarse %ld.%06ld -> %ld.%06ld\r\n", (int32_t)(old/1000000LL),(int32_t)(old%1000000LL),(int32_t)(ps/1000000LL),(int32_t)(ps%1000000LL)); serialPrintImmediate(m); } else configPrint("Invalid\r\n");
             Serial.flush();
           }
           // G3) Prop delays
           else if (a == 'G' && aline[1] == '3') {
-            serialPrintImmediate("Enter pair A/B: "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
-            bool s0=false, s1=false; int64_t v0=0, v1=0; if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { serialPrintImmediate("Invalid\r\n"); Serial.flush(); } else { int32_t o0=pConfigInfo->PROP_DELAY[0], o1=pConfigInfo->PROP_DELAY[1]; if (s0) pConfigInfo->PROP_DELAY[0]=v0; if (s1) pConfigInfo->PROP_DELAY[1]=v1; char m[80]; sprintf(m, "OK -- PropDelay %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->PROP_DELAY[0],(long)pConfigInfo->PROP_DELAY[1]); serialPrintImmediate(m); Serial.flush(); }
+            configPrint("Enter pair A/B: "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
+            bool s0=false, s1=false; int64_t v0=0, v1=0; if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { configPrint("Invalid\r\n"); Serial.flush(); } else { int32_t o0=pConfigInfo->PROP_DELAY[0], o1=pConfigInfo->PROP_DELAY[1]; if (s0) pConfigInfo->PROP_DELAY[0]=v0; if (s1) pConfigInfo->PROP_DELAY[1]=v1; char m[80]; sprintf(m, "OK -- PropDelay %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->PROP_DELAY[0],(long)pConfigInfo->PROP_DELAY[1]); serialPrintImmediate(m); Serial.flush(); }
           }
           // G4) Time dilation
           else if (a == 'G' && aline[1] == '4') {
-            serialPrintImmediate("Enter pair A/B: "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
-            bool s0=false, s1=false; int64_t v0=0, v1=0; if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { serialPrintImmediate("Invalid\r\n"); Serial.flush(); } else { int32_t o0=pConfigInfo->TIME_DILATION[0], o1=pConfigInfo->TIME_DILATION[1]; if (s0) pConfigInfo->TIME_DILATION[0]=v0; if (s1) pConfigInfo->TIME_DILATION[1]=v1; char m[80]; sprintf(m, "OK -- TimeDilation %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->TIME_DILATION[0],(long)pConfigInfo->TIME_DILATION[1]); serialPrintImmediate(m); Serial.flush(); }
+            configPrint("Enter pair A/B: "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
+            bool s0=false, s1=false; int64_t v0=0, v1=0; if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { configPrint("Invalid\r\n"); Serial.flush(); } else { int32_t o0=pConfigInfo->TIME_DILATION[0], o1=pConfigInfo->TIME_DILATION[1]; if (s0) pConfigInfo->TIME_DILATION[0]=v0; if (s1) pConfigInfo->TIME_DILATION[1]=v1; char m[80]; sprintf(m, "OK -- TimeDilation %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->TIME_DILATION[0],(long)pConfigInfo->TIME_DILATION[1]); serialPrintImmediate(m); Serial.flush(); }
           }
           // G5) fixedTime2
           else if (a == 'G' && aline[1] == '5') {
-            serialPrintImmediate("Enter pair A/B: "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
-            bool s0=false, s1=false; int64_t v0=0, v1=0; if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { serialPrintImmediate("Invalid\r\n"); Serial.flush(); } else { int32_t o0=pConfigInfo->FIXED_TIME2[0], o1=pConfigInfo->FIXED_TIME2[1]; if (s0) pConfigInfo->FIXED_TIME2[0]=v0; if (s1) pConfigInfo->FIXED_TIME2[1]=v1; char m[80]; sprintf(m, "OK -- fixedTime2 %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->FIXED_TIME2[0],(long)pConfigInfo->FIXED_TIME2[1]); serialPrintImmediate(m); Serial.flush(); }
+            configPrint("Enter pair A/B: "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
+            bool s0=false, s1=false; int64_t v0=0, v1=0; if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { configPrint("Invalid\r\n"); Serial.flush(); } else { int32_t o0=pConfigInfo->FIXED_TIME2[0], o1=pConfigInfo->FIXED_TIME2[1]; if (s0) pConfigInfo->FIXED_TIME2[0]=v0; if (s1) pConfigInfo->FIXED_TIME2[1]=v1; char m[80]; sprintf(m, "OK -- fixedTime2 %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->FIXED_TIME2[0],(long)pConfigInfo->FIXED_TIME2[1]); serialPrintImmediate(m); Serial.flush(); }
           }
           // G6) FUDGE0
           else if (a == 'G' && aline[1] == '6') {
-            serialPrintImmediate("Enter pair A/B: "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
-            bool s0=false, s1=false; int64_t v0=0, v1=0; if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { serialPrintImmediate("Invalid\r\n"); Serial.flush(); } else { int32_t o0=pConfigInfo->FUDGE0[0], o1=pConfigInfo->FUDGE0[1]; if (s0) pConfigInfo->FUDGE0[0]=v0; if (s1) pConfigInfo->FUDGE0[1]=v1; char m[80]; sprintf(m, "OK -- FUDGE0 %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->FUDGE0[0],(long)pConfigInfo->FUDGE0[1]); serialPrintImmediate(m); Serial.flush(); }
+            configPrint("Enter pair A/B: "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
+            bool s0=false, s1=false; int64_t v0=0, v1=0; if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { configPrint("Invalid\r\n"); Serial.flush(); } else { int32_t o0=pConfigInfo->FUDGE0[0], o1=pConfigInfo->FUDGE0[1]; if (s0) pConfigInfo->FUDGE0[0]=v0; if (s1) pConfigInfo->FUDGE0[1]=v1; char m[80]; sprintf(m, "OK -- FUDGE0 %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->FUDGE0[0],(long)pConfigInfo->FUDGE0[1]); serialPrintImmediate(m); Serial.flush(); }
           }
-          else { serialPrintImmediate("Invalid\r\n"); Serial.flush(); }
+          else { configPrint("Invalid\r\n"); Serial.flush(); }
         }
       }
     }
@@ -630,28 +658,28 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
 
   // Numbered exits - now handled by main loop restart/resume logic
   if (cmd == '1') { 
-    serialPrintImmediate("Discarded changes.\r\n"); 
+    configPrint("Discarded changes.\r\n"); 
     config_changed = 0; // Clear the changed flag since we're discarding
     return false; 
   }
   if (cmd == '2') { 
     // Apply changes and restart
-    serialPrintImmediate("Applying changes and restarting...\r\n"); 
+    configPrint("Applying changes and restarting...\r\n"); 
     return false; 
   }
   if (cmd == '3') { 
     // Apply changes and resume operation
-    serialPrintImmediate("Applying changes and resuming operation...\r\n"); 
+    configPrint("Applying changes and resuming operation...\r\n"); 
     return false; 
   }
   if (cmd == '4') { 
     // Reset all to defaults and restart
     eeprom_write_config_default(CONFIG_START); 
-    serialPrintImmediate("Defaults written. Restarting...\r\n"); 
+    configPrint("Defaults written. Restarting...\r\n"); 
     return false; 
   }
 
-  serialPrintImmediate("? Unknown command\r\n");
+  configPrint("? Unknown command\r\n");
   return true;
 }
 
@@ -661,58 +689,61 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
   bool showMenu = true;
   for (;;) {
     if (showMenu) {
-      serialPrintImmediate("\r\n== TICC Configuration ==\r\n");
+      configPrint("\r\n");
+      configPrint("== TICC Configuration ==\r\n");
       // A) Mode
-      serialPrintImmediate("A - Mode (currently: ");
+      configPrint("A - Mode (currently: ");
       switch (pConfigInfo->MODE) {
-        case Timestamp: serialPrintImmediate("Timestamp"); break;
-        case Period:    serialPrintImmediate("Period"); break;
-        case Interval:  serialPrintImmediate("Interval A->B"); break;
-        case timeLab:   serialPrintImmediate("TimeLab 3-ch"); break;
-        case Debug:     serialPrintImmediate("Debug"); break;
-        case Null:      serialPrintImmediate("Null"); break;
+        case Timestamp: configPrint("Timestamp"); break;
+        case Period:    configPrint("Period"); break;
+        case Interval:  configPrint("Interval A->B"); break;
+        case timeLab:   configPrint("TimeLab 3-ch"); break;
+        case Debug:     configPrint("Debug"); break;
+        case Null:      configPrint("Null"); break;
       }
-      serialPrintImmediate(")\r\n");
+      configPrint(")\r\n");
       // B) Wrap digits
       {
         char tmp[48]; sprintf(tmp, "B - Timestamp Wrap digits (currently: %d)\r\n", (int)pConfigInfo->WRAP);
-        serialPrintImmediate(tmp);
+        configPrint(tmp);
       }
       // C) Trigger edges
       {
         char tmp[64]; sprintf(tmp, "C - Trigger Edge A/B (currently: %c/%c)\r\n", pConfigInfo->START_EDGE[0], pConfigInfo->START_EDGE[1]);
-        serialPrintImmediate(tmp);
+        configPrint(tmp);
       }
       // D) Sync mode
       {
-        char tmp[48]; sprintf(tmp, "D - Master/Client (currently: %c)\r\n", pConfigInfo->SYNC_MODE);
-        serialPrintImmediate(tmp);
+      char tmp[48]; sprintf(tmp, "D - Master/Client (currently: %c)\r\n", pConfigInfo->SYNC_MODE);
+        configPrint(tmp);
       }
       // E) Channel names
       {
         char tmp[48]; sprintf(tmp, "E - Channel Names (currently: %c/%c)\r\n", pConfigInfo->NAME[0], pConfigInfo->NAME[1]);
-        serialPrintImmediate(tmp);
+        configPrint(tmp);
       }
       // F) Poll char
-      serialPrintImmediate("F - Poll Character (currently: ");
+      configPrint("F - Poll Character (currently: ");
       if (pConfigInfo->POLL_CHAR) {
-        char ch[8]; ch[0] = pConfigInfo->POLL_CHAR; ch[1] = 0; serialPrintImmediate(ch);
+        char ch[8]; ch[0] = pConfigInfo->POLL_CHAR; ch[1] = 0; configPrint(ch);
       } else {
-        serialPrintImmediate("none");
+        configPrint("none");
       }
-      serialPrintImmediate(")\r\n");
+      configPrint(")\r\n");
       // G) Advanced settings
-      serialPrintImmediate("G - Advanced settings\r\n");
-      serialPrintImmediate("H - Show startup info\r\n");
-      serialPrintImmediate("W - Write changes to EEPROM (persist across restarts)\r\n");
-      serialPrintImmediate("1 - Discard changes and exit\r\n");
-      serialPrintImmediate("2 - Apply changes and restart\r\n");
-      serialPrintImmediate("3 - Apply changes and resume operation\r\n");
-      serialPrintImmediate("4 - Reset all to defaults and restart\r\n");
-      serialPrintImmediate("? - Show this menu again\r\n");
+      configPrint("G - Advanced settings\r\n");
+      configPrint("\r\n");
+      configPrint("? - Show this menu again\r\n");
+      configPrint("H - Show startup info\r\n");
+      configPrint("W - Write changes to EEPROM (persist across restarts)\r\n");
+      configPrint("\r\n");
+      configPrint("1 - Discard changes and exit\r\n");
+      configPrint("2 - Apply changes and restart\r\n");
+      configPrint("3 - Apply changes and resume operation\r\n");
+      configPrint("4 - Reset all to defaults and restart\r\n");
       showMenu = false;
     }
-    Serial.print("> ");
+    configPrint("> ");
     Serial.flush();
     size_t n = readLine(buf, sizeof(buf));
     char *line = trimInPlace(buf);

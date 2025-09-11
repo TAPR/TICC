@@ -393,14 +393,15 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
       configPrint("\r\n");
       configPrint("Current mode: ");
       switch (pConfigInfo->MODE) {
-        case Timestamp: configPrint("Timestamp"); break;
-        case Period:    configPrint("Period"); break;
-        case Interval:  configPrint("Time Interval A->B"); break;
-        case timeLab:   configPrint("TimeLab 3-cornered Hat"); break;
-        case Debug:     configPrint("Debug"); break;
-        case Null:      configPrint("Null Output"); break;
+        case Timestamp: serialPrintImmediate("Timestamp"); break;
+        case Period:    serialPrintImmediate("Period"); break;
+        case Interval:  serialPrintImmediate("Time Interval A->B"); break;
+        case timeLab:   serialPrintImmediate("TimeLab 3-cornered Hat"); break;
+        case Debug:     serialPrintImmediate("Debug"); break;
+        case Null:      serialPrintImmediate("Null Output"); break;
       }
-      configPrint("\r\n1 - Discard changes and return to main menu\r\n");
+      configPrint("\r\n");
+      configPrint("1 - Discard changes and return to main menu\r\n");
       configPrint("2 - Keep changes and return to main menu\r\n");
       configPrint("> ");
       char buf[96];
@@ -694,14 +695,14 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
       // A) Mode
       configPrint("A - Mode (currently: ");
       switch (pConfigInfo->MODE) {
-        case Timestamp: configPrint("Timestamp"); break;
-        case Period:    configPrint("Period"); break;
-        case Interval:  configPrint("Interval A->B"); break;
-        case timeLab:   configPrint("TimeLab 3-ch"); break;
-        case Debug:     configPrint("Debug"); break;
-        case Null:      configPrint("Null"); break;
+        case Timestamp: serialPrintImmediate("Timestamp"); break;
+        case Period:    serialPrintImmediate("Period"); break;
+        case Interval:  serialPrintImmediate("Interval A->B"); break;
+        case timeLab:   serialPrintImmediate("TimeLab 3-ch"); break;
+        case Debug:     serialPrintImmediate("Debug"); break;
+        case Null:      serialPrintImmediate("Null"); break;
       }
-      configPrint(")\r\n");
+      serialPrintImmediate(")\r\n");
       // B) Wrap digits
       {
         char tmp[48]; sprintf(tmp, "B - Timestamp Wrap digits (currently: %d)\r\n", (int)pConfigInfo->WRAP);
@@ -725,11 +726,11 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
       // F) Poll char
       configPrint("F - Poll Character (currently: ");
       if (pConfigInfo->POLL_CHAR) {
-        char ch[8]; ch[0] = pConfigInfo->POLL_CHAR; ch[1] = 0; configPrint(ch);
+        char ch[8]; ch[0] = pConfigInfo->POLL_CHAR; ch[1] = 0; serialPrintImmediate(ch);
       } else {
-        configPrint("none");
+        serialPrintImmediate("none");
       }
-      configPrint(")\r\n");
+      serialPrintImmediate(")\r\n");
       // G) Advanced settings
       configPrint("G - Advanced settings\r\n");
       configPrint("\r\n");

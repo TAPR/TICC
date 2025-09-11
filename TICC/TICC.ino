@@ -145,6 +145,10 @@ MeasureMode MODE, lastMODE;
 static uint8_t skip_config_prompt_once = 0;
 volatile uint8_t request_restart = 0;
 
+// Configuration change tracking
+static config_t config_backup;  // Backup of config before changes
+uint8_t config_changed = 0;  // Flag indicating config was modified (global for config.cpp access)
+
 static tdc7200Channel channels[] = {
   tdc7200Channel('0', ENABLE_0, INTB_0, CSB_0, STOP_0, LED_0),
   tdc7200Channel('1', ENABLE_1, INTB_1, CSB_1, STOP_1, LED_1),
@@ -157,7 +161,82 @@ ticc_setup() below
 void setup() {}
 
 /****************************************************************
-Here is where setup really happensw
+Configuration change management functions
+****************************************************************/
+
+// Backup current config before making changes
+void backup_config() {
+  config_backup = config;
+  config_changed = 0;
+}
+
+// Check if a config change requires a full restart vs. just a flush
+uint8_t config_change_requires_restart() {
+  // These parameters require full restart (hardware reinitialization)
+  if (config.CLOCK_HZ != config_backup.CLOCK_HZ) return 1;
+  if (config.PICTICK_PS != config_backup.PICTICK_PS) return 1;
+  if (config.CAL_PERIODS != config_backup.CAL_PERIODS) return 1;
+  if (config.START_EDGE[0] != config_backup.START_EDGE[0]) return 1;
+  if (config.START_EDGE[1] != config_backup.START_EDGE[1]) return 1;
+  if (config.SYNC_MODE != config_backup.SYNC_MODE) return 1;
+  
+  // These parameters can be changed with just a flush
+  // MODE, POLL_CHAR, WRAP, NAME, PROP_DELAY, TIME_DILATION, FIXED_TIME2, FUDGE0, TIMEOUT
+  return 0;
+}
+
+// Apply config changes that don't require restart
+void apply_config_changes() {
+  // Update global variables from config
+  MODE = config.MODE;
+  CLOCK_HZ = config.CLOCK_HZ;
+  CLOCK_PERIOD = (PS_PER_SEC / CLOCK_HZ);
+  PICTICK_PS = config.PICTICK_PS;
+  CAL_PERIODS = config.CAL_PERIODS;
+  WRAP = config.WRAP;
+  ticksPerSecond = PS_PER_SEC / PICTICK_PS;
+
+  // Update channel-specific settings
+  for (int i = 0; i < ARRAY_SIZE(channels); ++i) {
+    channels[i].name = config.NAME[i];
+    channels[i].prop_delay = config.PROP_DELAY[i];
+    channels[i].time_dilation = config.TIME_DILATION[i];
+    channels[i].fixed_time2 = config.FIXED_TIME2[i];
+    channels[i].fudge = config.PROP_DELAY[i] + config.FUDGE0[i];
+  }
+}
+
+// Flush all channels and reset their state
+void flush_all_channels() {
+  for (int i = 0; i < ARRAY_SIZE(channels); ++i) {
+    channels[i].flush_and_reset();
+  }
+}
+
+// Handle restart vs. resume decision after config changes
+void handle_config_change_exit() {
+  if (!config_changed) {
+    // No changes made, just resume
+    return;
+  }
+  
+  if (config_change_requires_restart()) {
+    // Full restart required
+    Serial.println("# Configuration changes require restart. Restarting...");
+    delay(1000);
+    return; // This will cause ticc_setup() to be called again
+  } else {
+    // Can resume with flush
+    Serial.println("# Applying configuration changes...");
+    apply_config_changes();
+    flush_all_channels();
+    Serial.println("# Resuming operation with new settings.");
+    Serial.println("# (Changes are temporary - will revert on restart)");
+  }
+}
+
+/****************************************************************
+Here is where setup really happens
 ****************************************************************/
 void ticc_setup() {
 
@@ -344,11 +423,45 @@ void loop() {
   ticc_setup();  // initialize and optionally go to config
 
   while (1) {
-    if ( (Serial.read() == '#') ) {        // direct entry to config menu; restart after exit
-      doSetupMenu(&config);
+    if ( (Serial.read() == '#') ) {        // direct entry to config menu
+      // Clear any remaining characters from the serial buffer (like the <enter> from "#<enter>")
       while (Serial.available()) (void)Serial.read();
+      
+      // Small delay to ensure buffer is fully cleared
+      delay(10);
+      
+      // Double-check buffer is clear
+      while (Serial.available()) (void)Serial.read();
+      
+      // Backup config before making changes
+      backup_config();
+      
+      // Enter config menu directly (no T/P choice needed)
+      doSetupMenu(&config);
+      
+      // Clear any remaining characters after config menu exits
+      while (Serial.available()) (void)Serial.read();
+      
+      // Handle exit from config menu
+      if (config_changed) {
+        // Apply changes and handle restart vs resume
+        handle_config_change_exit();
+        
+        // If restart required, exit loop to reinitialize
+        if (config_change_requires_restart()) {
+          skip_config_prompt_once = 1;
+          return; // reinitialize via ticc_setup() on next loop entry
+        }
+        // Otherwise continue in the same loop with new settings
+      } else {
+        // No changes made, just resume
+        Serial.println("# No changes made, resuming operation");
+      }
+      
+      // Clear the config_changed flag for next time
+      config_changed = 0;
+      
       skip_config_prompt_once = 1;
-      return; // reinitialize via ticc_setup() on next loop entry
     }
 
 #ifndef SIM_MODE

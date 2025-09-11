@@ -134,6 +134,60 @@ void tdc7200Channel::ready_next() {
   write(CONFIG1, config_byte1);
   }
 
+// Flush partial measurements and reset TDC7200 state
+void tdc7200Channel::flush_and_reset() {
+#ifndef SIM_MODE
+  // Acknowledge any pending interrupts to clear them
+  tdc_ack_int();
+  
+  // Stop current measurement by clearing START_MEAS bit
+  byte stop_config = config_byte1 & ~0x01;  // Clear START_MEAS bit
+  write(CONFIG1, stop_config);
+  
+  // Wait a moment for any in-progress measurement to complete
+  delay(10);
+  
+  // Acknowledge interrupts again to clear any that occurred during stop
+  tdc_ack_int();
+  
+  // Re-enable measurement for next cycle
+  ready_next();
+#endif
+
+  // Reset channel state variables
+  reset_channel_state();
+}
+
+// Reset channel state variables without hardware reset
+void tdc7200Channel::reset_channel_state() {
+  // Clear measurement data
+  time1Result = 0;
+  time2Result = 0;
+  time3Result = 0;
+  clock1Result = 0;
+  cal1Result = 0;
+  cal2Result = 0;
+  
+  // Clear timestamp data
+  tof = 0;
+  last_tof = 0;
+  new_ts_ready = 0;
+  ts_split.sec = 0;
+  ts_split.frac_hi = 0;
+  ts_split.frac_lo = 0;
+  last_ts_split.sec = 0;
+  last_ts_split.frac_hi = 0;
+  last_ts_split.frac_lo = 0;
+  
+  // Reset coarse-time cache
+  last_picstop = 0;
+  cached_sec = 0;
+  cached_rem_ticks = 0;
+  
+  // Note: We deliberately do NOT reset totalize counter or PICstop
+  // as these should maintain continuity across config changes
+}
+
 // Read TDC
 int64_t tdc7200Channel::read() {
 #ifdef SIM_MODE

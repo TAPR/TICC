@@ -31,6 +31,7 @@ void printTimestampSplit(const SplitTime &t, int places, int32_t wrap);
 void printSignedSplit(const SplitTime &t, int places);
 
 void print_int64(int64_t x);
+size_t format_int64_to_buffer(char *buf, size_t cap, int64_t num);
 
 // Legacy helpers retained for compatibility
 void print_timestamp_sec_frac(int64_t sec, int64_t frac_ps, int places, int32_t wrap);

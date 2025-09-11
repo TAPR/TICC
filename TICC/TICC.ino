@@ -601,13 +601,42 @@ void loop() {
 
             case Debug:
               {
-                char line[64];
+                char line[128];
                 size_t n = 0;
-                n = formatTimestampSplitTo(line, sizeof(line), channels[i].ts_split, PLACES, WRAP);
+                
+                // Raw TDC7200 values (6 digits each)
+                n += sprintf(line + n, "%06u ", channels[i].time1Result);
+                n += sprintf(line + n, "%06u ", channels[i].time2Result);
+                n += sprintf(line + n, "%06u ", channels[i].clock1Result);
+                n += sprintf(line + n, "%06u ", channels[i].cal1Result);
+                n += sprintf(line + n, "%06u ", channels[i].cal2Result);
+                
+                // PICstop (int64_t - need special handling)
+                char pic_buf[32];
+                size_t pic_len = format_int64_to_buffer(pic_buf, sizeof(pic_buf), channels[i].PICstop);
+                memcpy(line + n, pic_buf, pic_len);
+                n += pic_len;
+                line[n++] = ' ';
+                
+                // tof (int64_t - need special handling) 
+                char tof_buf[32];
+                size_t tof_len = format_int64_to_buffer(tof_buf, sizeof(tof_buf), channels[i].tof);
+                memcpy(line + n, tof_buf, tof_len);
+                n += tof_len;
+                line[n++] = ' ';
+                
+                // timestamp (SplitTime - use existing function)
+                char ts_buf[32];
+                size_t ts_len = formatTimestampSplitTo(ts_buf, sizeof(ts_buf), channels[i].ts_split, PLACES, WRAP);
+                memcpy(line + n, ts_buf, ts_len);
+                n += ts_len;
+                
+                // Channel name
                 line[n++] = ' ';
                 line[n++] = 'c';
                 line[n++] = 'h';
                 line[n++] = (char)channels[i].name;
+                
                 writeln64(line, n);
               }
               break;

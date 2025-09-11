@@ -49,6 +49,35 @@ void print_int64(int64_t num ) {
     Serial.print(p);
 }
 
+// Buffer-formatting version of print_int64
+size_t format_int64_to_buffer(char *buf, size_t cap, int64_t num) {
+  const static char toAscii[] = "0123456789ABCDEF";
+  int base = 10;
+  
+  char temp_buffer[65];            //because you might be doing binary
+  char* p = &temp_buffer[64];      //this pointer writes into the buffer, starting at the END
+
+  // zero to terminate a C type string
+  *p = 0;
+
+  // do digits until the number reaches zero
+  do {
+    // working on the least significant digit
+    //put an ASCII digit at the front of the string
+    *(--p) = toAscii[(int)(num % base)];
+
+    //knock the least significant digit off the number
+    num = num / base;
+    } while (num != 0);
+
+    // copy to output buffer, respecting capacity
+    size_t len = strlen(p);
+    if (len >= cap) len = cap - 1;  // leave room for null terminator
+    strncpy(buf, p, len);
+    buf[len] = '\0';
+    return len;
+}
+
 // ------------------------------------------------------------
 // Lightweight 32-bit printing helpers (no sprintf/printf)
 // ------------------------------------------------------------

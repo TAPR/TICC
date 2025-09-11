@@ -12,7 +12,6 @@
 #include <ctype.h>
 #include <EEPROM.h>           // read/write EEPROM
 #include <SPI.h>
-#include <avr/wdt.h>          // watchdog for software reset
 
 #include "misc.h"             // random functions
 #include "config.h"           // config and eeprom
@@ -383,11 +382,12 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
   if (cmd == 'A') {
     // Interactive Mode submenu
     for (;;) {
-      configPrint("\r\n-- Mode --\r\n");
+      configPrint("\r\n");
+      configPrint("-- Mode --\r\n");
       configPrint("A1 - Timestamps\r\n");
       configPrint("A2 - Time Interval A -> B\r\n");
       configPrint("A3 - Period\r\n");
-      configPrint("A4 - TimeLab 3-cornered Hat\r\n");
+      configPrint("A4 - TimeLab 3-Cornered Hat\r\n");
       configPrint("A5 - Debug\r\n");
       configPrint("A6 - Null Output\r\n");
       configPrint("\r\n");
@@ -396,7 +396,7 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
         case Timestamp: serialPrintImmediate("Timestamp"); break;
         case Period:    serialPrintImmediate("Period"); break;
         case Interval:  serialPrintImmediate("Time Interval A->B"); break;
-        case timeLab:   serialPrintImmediate("TimeLab 3-cornered Hat"); break;
+        case timeLab:   serialPrintImmediate("TimeLab 3-Cornered Hat"); break;
         case Debug:     serialPrintImmediate("Debug"); break;
         case Null:      serialPrintImmediate("Null Output"); break;
       }
@@ -433,12 +433,12 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
                     (old == Timestamp) ? "Timestamp" :
                     (old == Interval) ? "Time Interval A->B" :
                     (old == Period) ? "Period" :
-                    (old == timeLab) ? "TimeLab 3-cornered Hat" :
+                    (old == timeLab) ? "TimeLab 3-Cornered Hat" :
                     (old == Debug) ? "Debug" : "Null Output",
                     (pConfigInfo->MODE == Timestamp) ? "Timestamp" :
                     (pConfigInfo->MODE == Interval) ? "Time Interval A->B" :
                     (pConfigInfo->MODE == Period) ? "Period" :
-                    (pConfigInfo->MODE == timeLab) ? "TimeLab 3-cornered Hat" :
+                    (pConfigInfo->MODE == timeLab) ? "TimeLab 3-Cornered Hat" :
                     (pConfigInfo->MODE == Debug) ? "Debug" : "Null Output");
             serialPrintImmediate(msg);
             MARK_CONFIG_CHANGED();
@@ -548,7 +548,8 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
   if (cmd == 'G') {
     // Interactive Advanced submenu
     for (;;) {
-      configPrint("\r\n-- Advanced Settings --\r\n");
+      configPrint("\r\n");
+      configPrint("-- Advanced Settings --\r\n");
       
       // G1 - Clock Speed MHz
       {
@@ -607,9 +608,9 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
         if (aline[0] == '1' || aline[0] == '2') {
           // Return options - no changes needed
           if (aline[0] == '1') {
-            configPrint("Advanced changes discarded.\r\n");
+            configPrint("Changes discarded.\r\n");
           } else {
-            configPrint("Advanced changes kept.\r\n");
+            configPrint("Changes kept.\r\n");
           }
           *showMenu = true;
           break; // Exit the submenu loop
@@ -831,7 +832,7 @@ void print_MeasureMode(MeasureMode x) {
       Serial.println("Time Interval A->B");
       break;
     case timeLab:
-      Serial.println("TimeLab 3-channel");
+      Serial.println("TimeLab 3-Cornered Hat");
       break;
     case Debug:
       Serial.println("Debug");
@@ -916,8 +917,3 @@ void eeprom_clear() {
   } 
 }
 
-// Perform a software reset via watchdog (AVR Mega 2560)
-void software_reset() {
-  wdt_enable(WDTO_15MS);
-  while (1) { }
-}

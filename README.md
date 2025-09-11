@@ -2,14 +2,17 @@
 Sub-nanosecond time interval counter built on a shield for the
 Arduino Mega 2560.
 
-06 September 2025: New firmware version (beta) that adds/fixes:
+11 September 2025: New firmware version (beta) that adds/fixes:
 * Timestamps don't overflow for 68 years
 * Fix to bug in printing long timestamps (misplaced "-" sign)
-* Fix to longstanding kludge in TDC7200 interrupt handling
-* Changed most 64 bit arithmetic to 32 bit for speed
-* Reworked print routines for speed
-(Together, these should improve the maximum number of measurements
-per second, but that hasn't been benchmarked yet)
+* Fully rework menu system with submenus and multiple command
+  execution for scripting
+@ Optimizations and bug fixes:
+  * Fix to longstanding kludge in TDC7200 interrupt handling
+  * Changed most 64 bit arithmetic to 32 bit for speed
+  * Reworked print routines for speed
+  (Together, these should improve the maximum number of measurements
+  per second, but that hasn't been benchmarked yet)
 
 12 April 2020: New firmware version that adds:
 

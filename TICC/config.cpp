@@ -748,46 +748,48 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
   // Main menu commands
   if (cmd == 'A') {
     // Interactive Mode submenu
-    serialPrintImmediate("\r\n-- Mode --\r\n");
-    serialPrintImmediate("A1 - Timestamps\r\n");
-    serialPrintImmediate("A2 - Time Interval A -> B\r\n");
-    serialPrintImmediate("A3 - Period\r\n");
-    serialPrintImmediate("A4 - TimeLab 3-cornered Hat\r\n");
-    serialPrintImmediate("A5 - Debug\r\n");
-    serialPrintImmediate("A6 - Null Output\r\n");
-    serialPrintImmediate("Current mode: ");
-    switch (pConfigInfo->MODE) {
-      case Timestamp: serialPrintImmediate("Timestamp"); break;
-      case Period:    serialPrintImmediate("Period"); break;
-      case Interval:  serialPrintImmediate("Time Interval A->B"); break;
-      case timeLab:   serialPrintImmediate("TimeLab 3-cornered Hat"); break;
-      case Debug:     serialPrintImmediate("Debug"); break;
-      case Null:      serialPrintImmediate("Null Output"); break;
-    }
-    serialPrintImmediate("\r\n1 - Discard changes and return to main menu\r\n");
-    serialPrintImmediate("2 - Keep changes and return to main menu\r\n");
-    serialPrintImmediate("> ");
-    char buf[96];
-    size_t mn = readLine(buf, sizeof(buf)); char *mline = trimInPlace(buf);
-    if (mn) {
-      if (mline[0] == '1' || mline[0] == '2') {
-        // Return options
-        if (mline[0] == '1') {
-          serialPrintImmediate("Mode changes discarded.\r\n");
+    for (;;) {
+      serialPrintImmediate("\r\n-- Mode --\r\n");
+      serialPrintImmediate("A1 - Timestamps\r\n");
+      serialPrintImmediate("A2 - Time Interval A -> B\r\n");
+      serialPrintImmediate("A3 - Period\r\n");
+      serialPrintImmediate("A4 - TimeLab 3-cornered Hat\r\n");
+      serialPrintImmediate("A5 - Debug\r\n");
+      serialPrintImmediate("A6 - Null Output\r\n");
+      serialPrintImmediate("Current mode: ");
+      switch (pConfigInfo->MODE) {
+        case Timestamp: serialPrintImmediate("Timestamp"); break;
+        case Period:    serialPrintImmediate("Period"); break;
+        case Interval:  serialPrintImmediate("Time Interval A->B"); break;
+        case timeLab:   serialPrintImmediate("TimeLab 3-cornered Hat"); break;
+        case Debug:     serialPrintImmediate("Debug"); break;
+        case Null:      serialPrintImmediate("Null Output"); break;
+      }
+      serialPrintImmediate("\r\n1 - Discard changes and return to main menu\r\n");
+      serialPrintImmediate("2 - Keep changes and return to main menu\r\n");
+      serialPrintImmediate("> ");
+      char buf[96];
+      size_t mn = readLine(buf, sizeof(buf)); char *mline = trimInPlace(buf);
+      if (mn) {
+        if (mline[0] == '1' || mline[0] == '2') {
+          // Return options
+          if (mline[0] == '1') {
+            serialPrintImmediate("Mode changes discarded.\r\n");
+          } else {
+            serialPrintImmediate("Mode changes kept.\r\n");
+          }
+          *showMenu = true;
+          break; // Exit the submenu loop
         } else {
-          serialPrintImmediate("Mode changes kept.\r\n");
+          // Mode setting options
+          char m = toupper(mline[0]); MeasureMode old = pConfigInfo->MODE;
+          if (m == 'A' && mline[1] == '1') pConfigInfo->MODE = Timestamp;
+          else if (m == 'A' && mline[1] == '2') pConfigInfo->MODE = Interval;
+          else if (m == 'A' && mline[1] == '3') pConfigInfo->MODE = Period;
+          else if (m == 'A' && mline[1] == '4') pConfigInfo->MODE = timeLab;
+          else if (m == 'A' && mline[1] == '5') pConfigInfo->MODE = Debug;
+          else if (m == 'A' && mline[1] == '6') pConfigInfo->MODE = Null;
         }
-        *showMenu = true;
-        return true;
-      } else {
-        // Mode setting options
-        char m = toupper(mline[0]); MeasureMode old = pConfigInfo->MODE;
-        if (m == 'A' && mline[1] == '1') pConfigInfo->MODE = Timestamp;
-        else if (m == 'A' && mline[1] == '2') pConfigInfo->MODE = Interval;
-        else if (m == 'A' && mline[1] == '3') pConfigInfo->MODE = Period;
-        else if (m == 'A' && mline[1] == '4') pConfigInfo->MODE = timeLab;
-        else if (m == 'A' && mline[1] == '5') pConfigInfo->MODE = Debug;
-        else if (m == 'A' && mline[1] == '6') pConfigInfo->MODE = Null;
       }
     }
     return true;
@@ -1104,6 +1106,7 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
         if (*cmd_start == '\0') break;  // No more commands
       } else {
         break;  // No more commands
+      
       }
     }
     

@@ -639,9 +639,115 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
   char cmd = toupper(line[0]);
   char *args = line + 1; while (*args == ' ') args++;
   
-  // A) Mode submenu
+  // Direct submenu commands (A1-A6, G1-G6)
+  if (cmd == 'A' && strlen(line) >= 2 && isdigit(line[1])) {
+    // Mode submenu commands
+    char choice = line[1];
+    MeasureMode old = pConfigInfo->MODE;
+    if (choice == '1') pConfigInfo->MODE = Timestamp;
+    else if (choice == '2') pConfigInfo->MODE = Interval;
+    else if (choice == '3') pConfigInfo->MODE = Period;
+    else if (choice == '4') pConfigInfo->MODE = timeLab;
+    else if (choice == '5') pConfigInfo->MODE = Debug;
+    else if (choice == '6') pConfigInfo->MODE = Null;
+    else {
+      serialPrintImmediate("Invalid mode choice\r\n");
+      return true;
+    }
+    char msg[64]; sprintf(msg, "OK -- Mode set to %d\r\n", (int)choice); serialPrintImmediate(msg);
+    return true;
+  }
+  
+  if (cmd == 'G' && strlen(line) >= 2 && isdigit(line[1])) {
+    // Advanced submenu commands
+    char choice = line[1];
+    if (choice == '1') {
+      // G1) Clock speed MHz - need user input
+      serialPrintImmediate("Clock MHz: "); 
+      char buf[96];
+      size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
+      int64_t hz; if (parseDecimalScaled(cline, 1000000LL, &hz) && hz > 0) { 
+        int64_t old=pConfigInfo->CLOCK_HZ; pConfigInfo->CLOCK_HZ = hz; 
+        char m[64]; sprintf(m, "OK -- Clock %ld.%06ld -> %ld.%06ld\r\n", (int32_t)(old/1000000LL),(int32_t)(old%1000000LL),(int32_t)(hz/1000000LL),(int32_t)(hz%1000000LL)); serialPrintImmediate(m); 
+      } else serialPrintImmediate("Invalid\r\n");
+      Serial.flush();
+    }
+    else if (choice == '2') {
+      // G2) Coarse tick us - need user input
+      serialPrintImmediate("Coarse tick (us): "); 
+      char buf[96];
+      size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
+      int64_t ps; if (parseDecimalScaled(cline, 1000000LL, &ps) && ps > 0) { 
+        int64_t old=pConfigInfo->PICTICK_PS; pConfigInfo->PICTICK_PS = ps; 
+        char m[64]; sprintf(m, "OK -- Coarse %ld.%06ld -> %ld.%06ld\r\n", (int32_t)(old/1000000LL),(int32_t)(old%1000000LL),(int32_t)(ps/1000000LL),(int32_t)(ps%1000000LL)); serialPrintImmediate(m); 
+      } else serialPrintImmediate("Invalid\r\n");
+      Serial.flush();
+    }
+    else if (choice == '3') {
+      // G3) Prop delays - need user input
+      serialPrintImmediate("Enter pair A/B: "); 
+      char buf[96];
+      size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
+      bool s0=false, s1=false; int64_t v0=0, v1=0; 
+      if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { 
+        serialPrintImmediate("Invalid\r\n"); Serial.flush(); 
+      } else { 
+        int32_t o0=pConfigInfo->PROP_DELAY[0], o1=pConfigInfo->PROP_DELAY[1]; 
+        if (s0) pConfigInfo->PROP_DELAY[0]=v0; if (s1) pConfigInfo->PROP_DELAY[1]=v1; 
+        char m[80]; sprintf(m, "OK -- PropDelay %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->PROP_DELAY[0],(long)pConfigInfo->PROP_DELAY[1]); serialPrintImmediate(m); Serial.flush(); 
+      }
+    }
+    else if (choice == '4') {
+      // G4) Time dilation - need user input
+      serialPrintImmediate("Enter pair A/B: "); 
+      char buf[96];
+      size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
+      bool s0=false, s1=false; int64_t v0=0, v1=0; 
+      if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { 
+        serialPrintImmediate("Invalid\r\n"); Serial.flush(); 
+      } else { 
+        int32_t o0=pConfigInfo->TIME_DILATION[0], o1=pConfigInfo->TIME_DILATION[1]; 
+        if (s0) pConfigInfo->TIME_DILATION[0]=v0; if (s1) pConfigInfo->TIME_DILATION[1]=v1; 
+        char m[80]; sprintf(m, "OK -- TimeDilation %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->TIME_DILATION[0],(long)pConfigInfo->TIME_DILATION[1]); serialPrintImmediate(m); Serial.flush(); 
+      }
+    }
+    else if (choice == '5') {
+      // G5) fixedTime2 - need user input
+      serialPrintImmediate("Enter pair A/B: "); 
+      char buf[96];
+      size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
+      bool s0=false, s1=false; int64_t v0=0, v1=0; 
+      if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { 
+        serialPrintImmediate("Invalid\r\n"); Serial.flush(); 
+      } else { 
+        int32_t o0=pConfigInfo->FIXED_TIME2[0], o1=pConfigInfo->FIXED_TIME2[1]; 
+        if (s0) pConfigInfo->FIXED_TIME2[0]=v0; if (s1) pConfigInfo->FIXED_TIME2[1]=v1; 
+        char m[80]; sprintf(m, "OK -- fixedTime2 %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->FIXED_TIME2[0],(long)pConfigInfo->FIXED_TIME2[1]); serialPrintImmediate(m); Serial.flush(); 
+      }
+    }
+    else if (choice == '6') {
+      // G6) FUDGE0 - need user input
+      serialPrintImmediate("Enter pair A/B: "); 
+      char buf[96];
+      size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
+      bool s0=false, s1=false; int64_t v0=0, v1=0; 
+      if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { 
+        serialPrintImmediate("Invalid\r\n"); Serial.flush(); 
+      } else { 
+        int32_t o0=pConfigInfo->FUDGE0[0], o1=pConfigInfo->FUDGE0[1]; 
+        if (s0) pConfigInfo->FUDGE0[0]=v0; if (s1) pConfigInfo->FUDGE0[1]=v1; 
+        char m[80]; sprintf(m, "OK -- FUDGE0 %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->FUDGE0[0],(long)pConfigInfo->FUDGE0[1]); serialPrintImmediate(m); Serial.flush(); 
+      }
+    }
+    else {
+      serialPrintImmediate("Invalid advanced choice\r\n");
+    }
+    return true;
+  }
+
+  // Main menu commands
   if (cmd == 'A') {
-    // Mode submenu
+    // Interactive Mode submenu
     serialPrintImmediate("\r\n-- Mode --\r\n");
     serialPrintImmediate("A1 - Timestamps\r\n");
     serialPrintImmediate("A2 - Time Interval A -> B\r\n");
@@ -740,7 +846,7 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
 
   // G) Advanced submenu
   if (cmd == 'G') {
-    // Advanced submenu
+    // Interactive Advanced submenu
     for (;;) {
       serialPrintImmediate("\r\n-- Advanced Settings --\r\n");
       serialPrintImmediate("G1 - Clock Speed MHz\r\n");
@@ -889,6 +995,7 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
     while (cmd_start && *cmd_start && !should_exit) {
       // Find the next semicolon or end of string
       cmd_end = strchr(cmd_start, ';');
+      bool had_semicolon = (cmd_end != NULL);
       if (cmd_end) {
         *cmd_end = '\0';  // Temporarily null-terminate
       } else {
@@ -898,20 +1005,29 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
       // Process this command
       char *cmd_line = trimInPlace(cmd_start);
       if (strlen(cmd_line) > 0) {
+        // Debug output for semicolon commands
+        char debug_msg[64];
+        sprintf(debug_msg, "Processing command: '%s'\r\n", cmd_line);
+        serialPrintImmediate(debug_msg);
+        
         if (!processCommand(pConfigInfo, cmd_line, &showMenu)) {
           should_exit = true;
           break;
         }
       }
       
+      // Restore semicolon if we had one
+      if (had_semicolon) {
+        *cmd_end = ';';
+      }
+      
       // Move to next command
-      if (cmd_end && *cmd_end == '\0') {
+      if (had_semicolon) {
         cmd_start = cmd_end + 1;
         while (*cmd_start == ' ') cmd_start++;  // Skip leading spaces
         if (*cmd_start == '\0') break;  // No more commands
       } else {
         break;  // No more commands
-        
       }
     }
     

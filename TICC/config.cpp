@@ -473,8 +473,8 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
     configPrint("Enter edges A/B (R/F): "); 
     char buf[96];
     size_t n = readLine(buf, sizeof(buf)); char *ln = trimInPlace(buf);
-    if (ln[0] && ln[1] && ln[2] == '/' && ln[3]) {
-      char e0 = toupper(ln[0]), e1 = toupper(ln[3]);
+    if (ln[0] && ln[1] == '/' && ln[2]) {
+      char e0 = toupper(ln[0]), e1 = toupper(ln[2]);
       if ((e0 == 'R' || e0 == 'F') && (e1 == 'R' || e1 == 'F')) {
         char o0=pConfigInfo->START_EDGE[0], o1=pConfigInfo->START_EDGE[1];
         pConfigInfo->START_EDGE[0]=e0; pConfigInfo->START_EDGE[1]=e1;

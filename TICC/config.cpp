@@ -19,6 +19,7 @@
 #include "tdc7200.h"          // TDC registers and structures
 
 extern const char SW_VERSION[17]; // set in TICC.ino
+extern const char SW_TAG[6];      // set in TICC.ino
 char SER_NUM[17];          // set by get_ser_num();
 
 // External variables for config change tracking
@@ -858,7 +859,11 @@ void print_config (config_t x) {
           }
   Serial.print("# EEPROM Version: ");Serial.print(EEPROM.read(CONFIG_START)); 
   Serial.print(", Board Version: ");Serial.println(x.BOARD_REV);
-  Serial.print("# Software Version: ");Serial.println(SW_VERSION); // Print from const, not from eeprom, which won't update until next "W" command
+  Serial.print("# Software Version: ");Serial.print(SW_VERSION);
+  if (strlen(SW_TAG) > 0) {
+    Serial.print(" (");Serial.print(SW_TAG);Serial.print(")");
+  }
+  Serial.println(); // Print from const, not from eeprom, which won't update until next "W" command
   Serial.print("# Board Serial Number: ");Serial.println(x.SER_NUM); 
   Serial.print("# Clock Speed: ");printHzAsMHz(x.CLOCK_HZ);Serial.println(" MHz");
   Serial.print("# Coarse tick: ");printHzAsMHz(x.PICTICK_PS);Serial.println(" usec");

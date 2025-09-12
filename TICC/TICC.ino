@@ -9,7 +9,7 @@
 
 // 11 September 2025 - version 1
 extern const char SW_VERSION[17] = "20250911.1";
-
+extern const char SW_TAG[6] = "BETA";
 /*
  * NOTES FOR FUTURE GENERATIONS
  * 

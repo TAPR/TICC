@@ -7,9 +7,10 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-// 11 September 2025 - version 1
-extern const char SW_VERSION[17] = "20250911.1";
+// 12 September 2025 - version 1
+extern const char SW_VERSION[17] = "20250912.1";
 extern const char SW_TAG[6] = "BETA";
+
 /*
  * NOTES FOR FUTURE GENERATIONS
  * 
@@ -302,15 +303,15 @@ void ticc_setup() {
   lastMODE = config.MODE;
 
   // print banner -- all non-data output lines begin with "#" so they're seen as comments
-  Serial.println();
+  Serial.println("# ");
   Serial.println("# TAPR TICC Timestamping Counter");
   Serial.println("# Copyright 2016-2025 N8UR, K9TRV, NH6Z, WA8YWQ");
-  Serial.println();
+  Serial.println("# ");
   Serial.println("#####################");
   Serial.println("# TICC Configuration: ");
   print_config(config);
   Serial.println("#####################");
-  Serial.println();
+  Serial.println("# ");
 
   // get and save config change (skip once after exiting config menu via '#')
   if (!skip_config_prompt_once) {
@@ -363,16 +364,16 @@ void ticc_setup() {
       if (i <= 50) {                              // should never get above 20 (100us)
         i++;
         if (i == 50) {  // something's probably wrong
-          Serial.println("");
-          Serial.println("");
+          Serial.println("# ");
+          Serial.println("# ");
           Serial.println("# No COARSE_CLOCK... is 10 MHz connected?");
         }
       }
     }
     digitalWrite(CLIENT_SYNC, HIGH);  // send sync pulse
   } else {
-    Serial.println("");
-    Serial.println("");
+    Serial.println("# ");
+    Serial.println("# ");
     Serial.println("# In client mode and waiting for sync...");
   }
 
@@ -385,7 +386,7 @@ void ticc_setup() {
   pinMode(CLIENT_SYNC, INPUT);                       // set back to input just to be neat
 
   // print header to stdout
-  Serial.println("");
+  Serial.println("# ");
   switch (config.MODE) {
     case Timestamp:
       Serial.print("# timestamp (seconds with ");
@@ -469,8 +470,8 @@ void loop() {
         } else {
           if (ext_clk_led_on) {  // turn off only if was on
             CLR_EXT_LED_CLK;
-            Serial.println("10 MHZ Reference lost!");
-            Serial.println("Press any key to restart after reference is restored.");
+            Serial.println("# 10 MHZ Reference lost!");
+            Serial.println("# Press any key to restart after reference is restored.");
             ext_clk_led_on = 0;
             // Wait for a key press, then restart (reinitialize on next loop entry)
             while (Serial.available() == 0) { delay(10); }
@@ -889,9 +890,9 @@ void loop() {
   }  // while (1) loop
 
 #ifndef SIM_MODE
-  Serial.println();
-  Serial.println("Got break character... exiting loop");
-  Serial.println();
+  Serial.println("# ");
+  Serial.println("# Got break character... exiting loop");
+  Serial.println("# ");
   delay(100);
 #endif
 

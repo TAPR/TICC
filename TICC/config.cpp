@@ -817,7 +817,7 @@ void UserConfig(struct config_t *pConfigInfo)
       delay(250);   Serial.print('.'); if (Serial.available()) { configRequested = 1; break; }
       delay(250);   Serial.print('.'); if (Serial.available()) { configRequested = 1; break; }
     }
-    Serial.println();
+    Serial.println("# ");
     while (Serial.available()) c = Serial.read();   // eat any characters entered before we start  doSetupMenu()
     if (configRequested) doSetupMenu(pConfigInfo); 
 }
@@ -850,39 +850,73 @@ void eeprom_write_config_default (uint16_t offset) {
 
 void print_config (config_t x) {
   char tmpbuf[8];
-  Serial.print("# Measurement Mode: ");print_MeasureMode(MeasureMode(x.MODE));
-  Serial.print("# Poll Character: ");
-  if (x.POLL_CHAR) {
-            Serial.println(x.POLL_CHAR);          // normally unset
-          } else {
-            Serial.println("none");
-          }
-  Serial.print("# EEPROM Version: ");Serial.print(EEPROM.read(CONFIG_START)); 
-  Serial.print(", Board Version: ");Serial.println(x.BOARD_REV);
+  
+  // Software Version
   Serial.print("# Software Version: ");Serial.print(SW_VERSION);
   if (strlen(SW_TAG) > 0) {
     Serial.print(" (");Serial.print(SW_TAG);Serial.print(")");
   }
-  Serial.println(); // Print from const, not from eeprom, which won't update until next "W" command
-  Serial.print("# Board Serial Number: ");Serial.println(x.SER_NUM); 
-  Serial.print("# Clock Speed: ");printHzAsMHz(x.CLOCK_HZ);Serial.println(" MHz");
-  Serial.print("# Coarse tick: ");printHzAsMHz(x.PICTICK_PS);Serial.println(" usec");
-  Serial.print("# Cal Periods: ");Serial.println(x.CAL_PERIODS);
-  Serial.print("# Timestamp Wrap:  ");Serial.print(x.WRAP);Serial.println("");
-  Serial.print("# SyncMode: ");Serial.println(x.SYNC_MODE);
-  Serial.print("# Ch Names: ");Serial.print(x.NAME[0]);Serial.print("/");Serial.println(x.NAME[1]);
-  Serial.print("# PropDelay: ");Serial.print((int32_t)x.PROP_DELAY[0]);
-    Serial.print(" (ch0), ");Serial.print((int32_t)x.PROP_DELAY[1]);Serial.println(" (ch1)");
-  Serial.print("# Timeout: ");
-    sprintf(tmpbuf,"0x%.2X",x.TIMEOUT);Serial.println(tmpbuf);
+  Serial.println();
+  
+  // EEPROM Version and Board Version
+  Serial.print("# EEPROM Version: ");Serial.print(EEPROM.read(CONFIG_START)); 
+  Serial.print(", Board Version: ");Serial.println(x.BOARD_REV);
+  
+  // Board Serial Number
+  Serial.print("# Board Serial Number: ");Serial.println(x.SER_NUM);
+  
+  // Measurement Mode (most important param)
+  Serial.print("# Measurement Mode: ");print_MeasureMode(MeasureMode(x.MODE));
+  
+  // Timestamp Wrap
+  Serial.print("# Timestamp Wrap: ");Serial.println(x.WRAP);
+  
+  // Trigger Edge
   Serial.print("# Trigger Edge: ");Serial.print(x.START_EDGE[0]);Serial.print(" (ch0), ");  
-    Serial.print(x.START_EDGE[1]);Serial.println(" (ch1)");
+  Serial.print(x.START_EDGE[1]);Serial.println(" (ch1)");
+  
+  // SyncMode
+  Serial.print("# SyncMode: ");Serial.println(x.SYNC_MODE);
+  
+  // Channel Names
+  Serial.print("# Channel Names: ");Serial.print(x.NAME[0]);Serial.print("/");Serial.println(x.NAME[1]);
+  
+  // Poll Character (moved to follow Channel Names)
+  Serial.print("# Poll Character: ");
+  if (x.POLL_CHAR) {
+    Serial.println(x.POLL_CHAR);
+  } else {
+    Serial.println("none");
+  }
+  
+  // Clock Speed
+  Serial.print("# Clock Speed: ");printHzAsMHz(x.CLOCK_HZ);Serial.println(" MHz");
+  
+  // Coarse tick
+  Serial.print("# Coarse tick: ");printHzAsMHz(x.PICTICK_PS);Serial.println(" usec");
+  
+  // Cal Periods
+  Serial.print("# Cal Periods: ");Serial.println(x.CAL_PERIODS);
+  
+  // PropDelay
+  Serial.print("# PropDelay: ");Serial.print((int32_t)x.PROP_DELAY[0]);
+  Serial.print(" (ch0), ");Serial.print((int32_t)x.PROP_DELAY[1]);Serial.println(" (ch1)");
+  
+  // Timeout
+  Serial.print("# Timeout: ");
+  sprintf(tmpbuf,"0x%.2X",x.TIMEOUT);Serial.println(tmpbuf);
+  
+  // Time Dilation
   Serial.print("# Time Dilation: ");Serial.print((int32_t)x.TIME_DILATION[0]);
-    Serial.print(" (ch0), ");Serial.print((int32_t)x.TIME_DILATION[1]);Serial.println(" (ch1)");
+  Serial.print(" (ch0), ");Serial.print((int32_t)x.TIME_DILATION[1]);Serial.println(" (ch1)");
+  
+  // FIXED_TIME2
   Serial.print("# FIXED_TIME2: ");Serial.print((int32_t)x.FIXED_TIME2[0]);
-    Serial.print(" (ch0), ");Serial.print((int32_t)x.FIXED_TIME2[1]);Serial.println(" (ch1)");
+  Serial.print(" (ch0), ");Serial.print((int32_t)x.FIXED_TIME2[1]);Serial.println(" (ch1)");
+  
+  // FUDGE0
   Serial.print("# FUDGE0: ");Serial.print((int32_t)x.FUDGE0[0]);
-    Serial.print(" (ch0), ");Serial.print((int32_t)x.FUDGE0[1]);Serial.println(" (ch1)");
+  Serial.print(" (ch0), ");Serial.print((int32_t)x.FUDGE0[1]);Serial.println(" (ch1)");
 }
 
 void get_serial_number() { 

@@ -392,6 +392,7 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
       configPrint("A6 - Null Output\r\n");
       configPrint("\r\n");
       configPrint("Current mode: ");
+      
       switch (pConfigInfo->MODE) {
         case Timestamp: serialPrintImmediate("Timestamp"); break;
         case Period:    serialPrintImmediate("Period"); break;
@@ -400,6 +401,7 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
         case Debug:     serialPrintImmediate("Debug"); break;
         case Null:      serialPrintImmediate("Null Output"); break;
       }
+      serialPrintImmediate("\r\n");
       configPrint("\r\n");
       configPrint("1 - Discard changes and return to main menu\r\n");
       configPrint("2 - Keep changes and return to main menu\r\n");

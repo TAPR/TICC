@@ -183,7 +183,7 @@ uint8_t config_change_requires_restart() {
   if (config.SYNC_MODE != config_backup.SYNC_MODE) return 1;
   
   // These parameters can be changed with just a flush
-  // MODE, POLL_CHAR, WRAP, NAME, PROP_DELAY, TIME_DILATION, FIXED_TIME2, FUDGE0, TIMEOUT
+  // MODE, POLL_CHAR, WRAP, PLACES, NAME, PROP_DELAY, TIME_DILATION, FIXED_TIME2, FUDGE0, TIMEOUT
   return 0;
 }
 
@@ -390,22 +390,22 @@ void ticc_setup() {
   switch (config.MODE) {
     case Timestamp:
       Serial.print("# timestamp (seconds with ");
-      Serial.print(PLACES);
+      Serial.print(config.PLACES);
       Serial.println(" decimal places)");
       break;
     case Interval:
       Serial.print("# time interval A->B (seconds with ");
-      Serial.print(PLACES);
+      Serial.print(config.PLACES);
       Serial.println(" decimal places)");
       break;
     case Period:
       Serial.print("# period (seconds with ");
-      Serial.print(PLACES);
+      Serial.print(config.PLACES);
       Serial.println(" decimal places)");
       break;
     case timeLab:
       Serial.print("# timestamp chA, chB; interval chA->B (seconds with ");
-      Serial.print(PLACES);
+      Serial.print(config.PLACES);
       Serial.println(" decimal places)");
       break;
     case Debug:
@@ -590,7 +590,7 @@ void loop() {
                 SplitTime p = diffSplit(channels[i].ts_split, channels[i].last_ts_split);
                 char line[64];
                 size_t n = 0;
-                n = formatSignedSplitTo(line, sizeof(line), p, PLACES);
+                n = formatSignedSplitTo(line, sizeof(line), p, config.PLACES);
                 line[n++] = ' ';
                 line[n++] = 'c';
                 line[n++] = 'h';
@@ -631,7 +631,7 @@ void loop() {
                 
                 // timestamp (SplitTime - use existing function)
                 char ts_buf[32];
-                size_t ts_len = formatTimestampSplitTo(ts_buf, sizeof(ts_buf), channels[i].ts_split, PLACES, WRAP);
+                size_t ts_len = formatTimestampSplitTo(ts_buf, sizeof(ts_buf), channels[i].ts_split, config.PLACES, WRAP);
                 memcpy(line + n, ts_buf, ts_len);
                 n += ts_len;
                 
@@ -711,7 +711,7 @@ void loop() {
             const PairSlot *B = (ts_pair[0].ch == 1) ? &ts_pair[0] : &ts_pair[1];
             {
               char line[64];
-              size_t n = formatTimestampSplitTo(line, sizeof(line), A->t, PLACES, WRAP);
+              size_t n = formatTimestampSplitTo(line, sizeof(line), A->t, config.PLACES, WRAP);
               line[n++] = ' ';
               line[n++] = 'c';
               line[n++] = 'h';
@@ -720,7 +720,7 @@ void loop() {
             }
             {
               char line[64];
-              size_t n = formatTimestampSplitTo(line, sizeof(line), B->t, PLACES, WRAP);
+              size_t n = formatTimestampSplitTo(line, sizeof(line), B->t, config.PLACES, WRAP);
               line[n++] = ' ';
               line[n++] = 'c';
               line[n++] = 'h';
@@ -733,7 +733,7 @@ void loop() {
             char cname = channels[ci].name;
             for (int k = 0; k < 2; ++k) {
               char line[64];
-              size_t n = formatTimestampSplitTo(line, sizeof(line), ts_pair[k].t, PLACES, WRAP);
+              size_t n = formatTimestampSplitTo(line, sizeof(line), ts_pair[k].t, config.PLACES, WRAP);
               line[n++] = ' ';
               line[n++] = 'c';
               line[n++] = 'h';
@@ -776,7 +776,7 @@ void loop() {
               SplitTime d = diffSplit(channels[1].ts_split, channels[0].ts_split);
               {
                 char line[64];
-                size_t n = formatSignedSplitTo(line, sizeof(line), d, PLACES);
+                size_t n = formatSignedSplitTo(line, sizeof(line), d, config.PLACES);
                 line[n++] = ' ';
                 const char suffix[] = "TI(A->B)";
                 const char *s = suffix;
@@ -796,14 +796,14 @@ void loop() {
                 char line[64];
                 size_t n;
                 // chA
-                n = formatTimestampSplitTo(line, sizeof(line), channels[0].ts_split, PLACES, WRAP);
+                n = formatTimestampSplitTo(line, sizeof(line), channels[0].ts_split, config.PLACES, WRAP);
                 line[n++] = ' ';
                 line[n++] = 'c';
                 line[n++] = 'h';
                 line[n++] = (char)channels[0].name;
                 writeln64(line, n);
                 // chB
-                n = formatTimestampSplitTo(line, sizeof(line), channels[1].ts_split, PLACES, WRAP);
+                n = formatTimestampSplitTo(line, sizeof(line), channels[1].ts_split, config.PLACES, WRAP);
                 line[n++] = ' ';
                 line[n++] = 'c';
                 line[n++] = 'h';
@@ -812,7 +812,7 @@ void loop() {
                 // chC synthesized (B - A)
                 SplitTime d = diffSplit(channels[1].ts_split, channels[0].ts_split);
                 SplitTime c = { (int32_t)(channels[1].ts_split.sec + d.sec), d.frac_hi, d.frac_lo };
-                n = formatTimestampSplitTo(line, sizeof(line), c, PLACES, WRAP);
+                n = formatTimestampSplitTo(line, sizeof(line), c, config.PLACES, WRAP);
                 line[n++] = ' ';
                 line[n++] = 'c';
                 line[n++] = 'h';

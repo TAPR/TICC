@@ -7,8 +7,8 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-// 12 September 2025 - version 1
-extern const char SW_VERSION[17] = "20250912.1";
+// 15 September 2025 - version 1
+extern const char SW_VERSION[17] = "20250915.1";
 extern const char SW_TAG[6] = "BETA";
 
 /*
@@ -591,10 +591,7 @@ void loop() {
                 char line[64];
                 size_t n = 0;
                 n = formatSignedSplitTo(line, sizeof(line), p, config.PLACES);
-                line[n++] = ' ';
-                line[n++] = 'c';
-                line[n++] = 'h';
-                line[n++] = (char)channels[i].name;
+                n += sprintf(line + n, " ch%c", (char)channels[i].name);
                 writeln64(line, n);
               }
               break;
@@ -636,10 +633,7 @@ void loop() {
                 n += ts_len;
                 
                 // Channel name
-                line[n++] = ' ';
-                line[n++] = 'c';
-                line[n++] = 'h';
-                line[n++] = (char)channels[i].name;
+                n += sprintf(line + n, " ch%c", (char)channels[i].name);
                 
                 writeln64(line, n);
               }
@@ -712,19 +706,13 @@ void loop() {
             {
               char line[64];
               size_t n = formatTimestampSplitTo(line, sizeof(line), A->t, config.PLACES, WRAP);
-              line[n++] = ' ';
-              line[n++] = 'c';
-              line[n++] = 'h';
-              line[n++] = (char)channels[0].name;
+              n += sprintf(line + n, " ch%c", (char)channels[0].name);
               writeln64(line, n);
             }
             {
               char line[64];
               size_t n = formatTimestampSplitTo(line, sizeof(line), B->t, config.PLACES, WRAP);
-              line[n++] = ' ';
-              line[n++] = 'c';
-              line[n++] = 'h';
-              line[n++] = (char)channels[1].name;
+              n += sprintf(line + n, " ch%c", (char)channels[1].name);
               writeln64(line, n);
             }
           } else {
@@ -734,10 +722,7 @@ void loop() {
             for (int k = 0; k < 2; ++k) {
               char line[64];
               size_t n = formatTimestampSplitTo(line, sizeof(line), ts_pair[k].t, config.PLACES, WRAP);
-              line[n++] = ' ';
-              line[n++] = 'c';
-              line[n++] = 'h';
-              line[n++] = cname;
+              n += sprintf(line + n, " ch%c", cname);
               writeln64(line, n);
             }
           }
@@ -777,10 +762,7 @@ void loop() {
               {
                 char line[64];
                 size_t n = formatSignedSplitTo(line, sizeof(line), d, config.PLACES);
-                line[n++] = ' ';
-                const char suffix[] = "TI(A->B)";
-                const char *s = suffix;
-                while (*s && n < sizeof(line)) line[n++] = *s++;
+                n += sprintf(line + n, " TI(A->B)");
                 writeln64(line, n);
               }
 #ifdef SIM_MODE
@@ -797,30 +779,17 @@ void loop() {
                 size_t n;
                 // chA
                 n = formatTimestampSplitTo(line, sizeof(line), channels[0].ts_split, config.PLACES, WRAP);
-                line[n++] = ' ';
-                line[n++] = 'c';
-                line[n++] = 'h';
-                line[n++] = (char)channels[0].name;
+                n += sprintf(line + n, " ch%c", (char)channels[0].name);
                 writeln64(line, n);
                 // chB
                 n = formatTimestampSplitTo(line, sizeof(line), channels[1].ts_split, config.PLACES, WRAP);
-                line[n++] = ' ';
-                line[n++] = 'c';
-                line[n++] = 'h';
-                line[n++] = (char)channels[1].name;
+                n += sprintf(line + n, " ch%c", (char)channels[1].name);
                 writeln64(line, n);
                 // chC synthesized (B - A)
                 SplitTime d = diffSplit(channels[1].ts_split, channels[0].ts_split);
                 SplitTime c = { (int32_t)(channels[1].ts_split.sec + d.sec), d.frac_hi, d.frac_lo };
                 n = formatTimestampSplitTo(line, sizeof(line), c, config.PLACES, WRAP);
-                line[n++] = ' ';
-                line[n++] = 'c';
-                line[n++] = 'h';
-                line[n++] = 'C';
-                line[n++] = ' ';
-                const char suffix[] = "(B - A)";
-                const char *s = suffix;
-                while (*s && n < sizeof(line)) line[n++] = *s++;
+                n += sprintf(line + n, " chC (B - A)");
                 writeln64(line, n);
               }
 #ifdef SIM_MODE

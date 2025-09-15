@@ -109,10 +109,6 @@ extern const char SW_TAG[6] = "BETA";
 //   impact throughput; enable only for profiling/troubleshooting.
 //#define DETAIL_TIMING
 
-#ifdef DETAIL_TIMING
-int32_t start_micros;
-int32_t end_micros;
-#endif
 
 volatile int64_t PICcount;
 int64_t CLOCK_HZ;
@@ -464,10 +460,6 @@ void loop() {
 
       // No work to do unless intb is low
       if (digitalRead(channels[i].INTB) == 0) {
-#ifdef DETAIL_TIMING
-        start_micros = micros();
-#endif
-
         // turn LED on -- use board.h macro for speed
         if (i == 0) {
           SET_LED_0;
@@ -619,11 +611,6 @@ void loop() {
           CLR_LED_1;
           CLR_EXT_LED_1;
         };
-
-#ifdef DETAIL_TIMING
-        end_micros = micros() - start_micros;
-        Serial.println(end_micros);
-#endif
 
       }  // if INTB
     }    // for

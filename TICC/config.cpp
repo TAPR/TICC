@@ -265,7 +265,10 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
   if (strlen(line) == 0) return true; // Empty command, continue
   
   char cmd = toupper(line[0]);
-  char *args = line + 1; while (*args == ' ') args++;
+  // Check for direct parameters (no spaces required between command and parameters)
+  char *args = line + 1;
+  // Skip leading spaces if present, but also handle no-space case
+  while (*args == ' ') args++;
   
   // Direct submenu commands (A1-A6, G1-G6)
   if (cmd == 'A' && strlen(line) >= 2 && isdigit(line[1])) {
@@ -283,7 +286,17 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
       return true;
     }
     MARK_CONFIG_CHANGED();
-    char msg[64]; sprintf(msg, "OK -- Mode set to %d\r\n", (int)choice); configPrint(msg);
+    char msg[64]; 
+    const char* modeName = "Unknown";
+    switch (pConfigInfo->MODE) {
+      case Timestamp: modeName = "Timestamp"; break;
+      case Interval: modeName = "Interval"; break;
+      case Period: modeName = "Period"; break;
+      case timeLab: modeName = "TimeLab"; break;
+      case Debug: modeName = "Debug"; break;
+      case Null: modeName = "Null"; break;
+    }
+    sprintf(msg, "OK -- Mode set to %s\r\n", modeName); configPrint(msg);
     return true;
   }
   
@@ -291,10 +304,19 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
     // Advanced submenu commands
     char choice = line[1];
     if (choice == '1') {
-      // G1) Clock speed MHz - need user input
-      configPrint("Clock MHz: "); 
-      char buf[96];
-      size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
+      // G1) Clock speed MHz
+      char *cline;
+      if (strlen(args) >= 2) {  // Need at least 2 chars for G1 plus parameter
+        // Direct parameter provided (e.g., "G1"10.0")
+        cline = args + 1;  // Skip past "G1"
+      } else {
+        // Interactive mode
+        configPrint("Clock MHz: "); 
+        char buf[96];
+        size_t cn = readLine(buf, sizeof(buf)); 
+        cline = trimInPlace(buf);
+      }
+      
       int64_t hz; if (parseDecimalScaled(cline, 1000000LL, &hz) && hz > 0) { 
         int64_t old=pConfigInfo->CLOCK_HZ; pConfigInfo->CLOCK_HZ = hz; 
         MARK_CONFIG_CHANGED();
@@ -303,10 +325,19 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
       Serial.flush();
     }
     else if (choice == '2') {
-      // G2) Coarse tick us - need user input
-      configPrint("Coarse tick (us): "); 
-      char buf[96];
-      size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
+      // G2) Coarse tick us
+      char *cline;
+      if (strlen(args) >= 2) {  // Need at least 2 chars for G2 plus parameter
+        // Direct parameter provided (e.g., "G2"100.0")
+        cline = args + 1;  // Skip past "G2"
+      } else {
+        // Interactive mode
+        configPrint("Coarse tick (us): "); 
+        char buf[96];
+        size_t cn = readLine(buf, sizeof(buf)); 
+        cline = trimInPlace(buf);
+      }
+      
       int64_t ps; if (parseDecimalScaled(cline, 1000000LL, &ps) && ps > 0) { 
         int64_t old=pConfigInfo->PICTICK_PS; pConfigInfo->PICTICK_PS = ps; 
         MARK_CONFIG_CHANGED();
@@ -315,10 +346,19 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
       Serial.flush();
     }
     else if (choice == '3') {
-      // G3) Prop delays - need user input
-      configPrint("Enter pair A/B: "); 
-      char buf[96];
-      size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
+      // G3) Prop delays
+      char *cline;
+      if (strlen(args) >= 2) {  // Need at least 2 chars for G3 plus parameter
+        // Direct parameter provided (e.g., "G3"100/200")
+        cline = args + 1;  // Skip past "G3"
+      } else {
+        // Interactive mode
+        configPrint("Enter pair A/B: "); 
+        char buf[96];
+        size_t cn = readLine(buf, sizeof(buf)); 
+        cline = trimInPlace(buf);
+      }
+      
       bool s0=false, s1=false; int64_t v0=0, v1=0; 
       if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { 
         configPrint("Invalid\r\n"); Serial.flush(); 
@@ -330,10 +370,19 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
       }
     }
     else if (choice == '4') {
-      // G4) Time dilation - need user input
-      configPrint("Enter pair A/B: "); 
-      char buf[96];
-      size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
+      // G4) Time dilation
+      char *cline;
+      if (strlen(args) >= 2) {  // Need at least 2 chars for G4 plus parameter
+        // Direct parameter provided (e.g., "G4"1.001/1.002")
+        cline = args + 1;  // Skip past "G4"
+      } else {
+        // Interactive mode
+        configPrint("Enter pair A/B: "); 
+        char buf[96];
+        size_t cn = readLine(buf, sizeof(buf)); 
+        cline = trimInPlace(buf);
+      }
+      
       bool s0=false, s1=false; int64_t v0=0, v1=0; 
       if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { 
         configPrint("Invalid\r\n"); Serial.flush(); 
@@ -345,10 +394,19 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
       }
     }
     else if (choice == '5') {
-      // G5) fixedTime2 - need user input
-      configPrint("Enter pair A/B: "); 
-      char buf[96];
-      size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
+      // G5) fixedTime2
+      char *cline;
+      if (strlen(args) >= 2) {  // Need at least 2 chars for G5 plus parameter
+        // Direct parameter provided (e.g., "G5"1000/2000")
+        cline = args + 1;  // Skip past "G5"
+      } else {
+        // Interactive mode
+        configPrint("Enter pair A/B: "); 
+        char buf[96];
+        size_t cn = readLine(buf, sizeof(buf)); 
+        cline = trimInPlace(buf);
+      }
+      
       bool s0=false, s1=false; int64_t v0=0, v1=0; 
       if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { 
         configPrint("Invalid\r\n"); Serial.flush(); 
@@ -360,10 +418,19 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
       }
     }
     else if (choice == '6') {
-      // G6) FUDGE0 - need user input
-      configPrint("Enter pair A/B: "); 
-      char buf[96];
-      size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
+      // G6) FUDGE0
+      char *cline;
+      if (strlen(args) >= 2) {  // Need at least 2 chars for G6 plus parameter
+        // Direct parameter provided (e.g., "G6"50/100")
+        cline = args + 1;  // Skip past "G6"
+      } else {
+        // Interactive mode
+        configPrint("Enter pair A/B: "); 
+        char buf[96];
+        size_t cn = readLine(buf, sizeof(buf)); 
+        cline = trimInPlace(buf);
+      }
+      
       bool s0=false, s1=false; int64_t v0=0, v1=0; 
       if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { 
         configPrint("Invalid\r\n"); Serial.flush(); 
@@ -457,9 +524,18 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
 
   // B) Wrap digits
   if (cmd == 'B') {
-    configPrint("Wrap digits (0..10): "); 
-    char buf[96];
-    size_t n = readLine(buf, sizeof(buf)); char *line = trimInPlace(buf);
+    char *line;
+    if (strlen(args) >= 1) {
+      // Direct parameter provided (e.g., "B5")
+      line = args;
+    } else {
+      // Interactive mode
+      configPrint("Wrap digits (0..10): "); 
+      char buf[96];
+      size_t n = readLine(buf, sizeof(buf)); 
+      line = trimInPlace(buf);
+    }
+    
     int64_t wrap; if (parseInt64Simple(line, &wrap) && wrap >= 0 && wrap <= 10) { 
       int16_t old=pConfigInfo->WRAP; pConfigInfo->WRAP = (int16_t)wrap; 
       MARK_CONFIG_CHANGED();
@@ -471,9 +547,18 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
   
   // C) Output decimal places
   if (cmd == 'C') {
-    configPrint("Output decimal places (0..12): "); 
-    char buf[96];
-    size_t n = readLine(buf, sizeof(buf)); char *line = trimInPlace(buf);
+    char *line;
+    if (strlen(args) >= 1) {
+      // Direct parameter provided (e.g., "C6")
+      line = args;
+    } else {
+      // Interactive mode
+      configPrint("Output decimal places (0..12): "); 
+      char buf[96];
+      size_t n = readLine(buf, sizeof(buf)); 
+      line = trimInPlace(buf);
+    }
+    
     int64_t places; if (parseInt64Simple(line, &places) && places >= 0 && places <= 12) { 
       int16_t old=pConfigInfo->PLACES; pConfigInfo->PLACES = (int16_t)places; 
       MARK_CONFIG_CHANGED();
@@ -485,9 +570,18 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
   
   // D) Trigger edges
   if (cmd == 'D') {
-    configPrint("Enter edges A/B (R/F): "); 
-    char buf[96];
-    size_t n = readLine(buf, sizeof(buf)); char *ln = trimInPlace(buf);
+    char *ln;
+    if (strlen(args) >= 3) {
+      // Direct parameter provided (e.g., "DR/F")
+      ln = args;
+    } else {
+      // Interactive mode
+      configPrint("Enter edges A/B (R/F): "); 
+      char buf[96];
+      size_t n = readLine(buf, sizeof(buf)); 
+      ln = trimInPlace(buf);
+    }
+    
     if (ln[0] && ln[1] == '/' && ln[2]) {
       char e0 = toupper(ln[0]), e1 = toupper(ln[2]);
       if ((e0 == 'R' || e0 == 'F') && (e1 == 'R' || e1 == 'F')) {
@@ -503,9 +597,18 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
   
   // E) Sync mode
   if (cmd == 'E') {
-    configPrint("Enter M or C: "); 
-    char buf[96];
-    size_t n = readLine(buf, sizeof(buf)); char *line = trimInPlace(buf);
+    char *line;
+    if (strlen(args) >= 1) {
+      // Direct parameter provided (e.g., "EM")
+      line = args;
+    } else {
+      // Interactive mode
+      configPrint("Enter M or C: "); 
+      char buf[96];
+      size_t n = readLine(buf, sizeof(buf)); 
+      line = trimInPlace(buf);
+    }
+    
     char c = toupper(line[0]); 
     if (c == 'M' || c == 'C') { 
       char old=pConfigInfo->SYNC_MODE; pConfigInfo->SYNC_MODE=c; 
@@ -518,9 +621,18 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
   
   // F) Channel names
   if (cmd == 'F') {
-    configPrint("Enter names A/B: "); 
-    char buf[96];
-    size_t n = readLine(buf, sizeof(buf)); char *ln = trimInPlace(buf);
+    char *ln;
+    if (strlen(args) >= 3) {
+      // Direct parameter provided (e.g., "FAB")
+      ln = args;
+    } else {
+      // Interactive mode
+      configPrint("Enter names A/B: "); 
+      char buf[96];
+      size_t n = readLine(buf, sizeof(buf)); 
+      ln = trimInPlace(buf);
+    }
+    
     if (ln[0] && ln[1] == '/' && ln[2]) {
       char o0=pConfigInfo->NAME[0], o1=pConfigInfo->NAME[1]; 
       pConfigInfo->NAME[0]=ln[0]; pConfigInfo->NAME[1]=ln[2];
@@ -533,10 +645,20 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
 
   // G) Poll char
   if (cmd == 'G') {
+    char *line;
+    if (strlen(args) >= 1) {
+      // Direct parameter provided (e.g., "Gx")
+      line = args;
+    } else {
+      // Interactive mode
+      char old = pConfigInfo->POLL_CHAR;
+      configPrint("Enter poll character (space to clear): ");
+      char buf[96];
+      size_t n = readLine(buf, sizeof(buf)); 
+      line = trimInPlace(buf);
+    }
+    
     char old = pConfigInfo->POLL_CHAR;
-    configPrint("Enter poll character (space to clear): ");
-    char buf[96];
-    size_t n = readLine(buf, sizeof(buf)); char *line = trimInPlace(buf);
     pConfigInfo->POLL_CHAR = (line[0] == '\0' || line[0] == ' ') ? 0x00 : line[0];
     MARK_CONFIG_CHANGED();
     char msg[64]; 

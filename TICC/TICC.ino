@@ -99,25 +99,6 @@ extern const char SW_TAG[6] = "BETA";
 //#define FAST_WRAP_TEST
 //#define FAST_WRAP_MULTIPLIER 1000000L
 
-// SIM_MODE: software simulation harness (default off)
-// - Synthesizes INTB and PICstop so the core read→math→pairing pathsi
-//   run without TDC hardware attached. SPI access is short-circuited.
-// - Uses buffered single-write printing (same text format) and
-//   periodically reports pairs/sec over a timed window to estimate
-//   throughput.
-// - SIM_BAUD controls the serial speed used during SIM; set it to a value
-//   your terminal supports. Normal builds still use 115200.
-// - To use: uncomment the define below; to return to hardware operation,
-//   keep it commented.
-//#define SIM_MODE
-
-#ifdef SIM_MODE
-#ifndef SIM_BAUD
-#define SIM_BAUD 115200
-#endif
-static uint32_t sim_pairs = 0;
-static uint32_t sim_last = 0;
-#endif
 
 // DETAIL_TIMING: per-hit processing time (default off)
 // - When enabled, measures time spent handling a single event (from
@@ -274,11 +255,7 @@ void ticc_setup() {
 
   // start the serial library
   Serial.end();  // first close in case we've come here from a break
-#ifdef SIM_MODE
-  Serial.begin(SIM_BAUD);
-#else
   Serial.begin(115200);
-#endif
   // Allow host CDC/TTY stack to settle to avoid buffered prompts on reconnect
   delay(1500);
   Serial.flush();
@@ -448,7 +425,6 @@ void loop() {
       while (Serial.available()) (void)Serial.read();
     }
 
-#ifndef SIM_MODE
     // Ref Clock indicator:
     // Test every 2.5 coarse tick periods for PICcount changes,
     // and turn on EXT_LED_CLK if changes are detected
@@ -481,29 +457,18 @@ void loop() {
         }
       }
     }
-#endif
 
-#ifdef SIM_MODE
-    // Synthesize INTB low and PICstop increments for both channels
-    PICcount += 1;  // advance coarse count artificially
-#endif
 
     size_t i;
     for (i = 0; i < ARRAY_SIZE(channels); ++i) {
 
       // No work to do unless intb is low
-#ifndef SIM_MODE
       if (digitalRead(channels[i].INTB) == 0) {
-#else
-      if (true) {
-        channels[i].PICstop = PICcount;
-#endif
 #ifdef DETAIL_TIMING
         start_micros = micros();
 #endif
 
         // turn LED on -- use board.h macro for speed
-#ifndef SIM_MODE
         if (i == 0) {
           SET_LED_0;
           SET_EXT_LED_0;
@@ -512,7 +477,6 @@ void loop() {
           SET_LED_1;
           SET_EXT_LED_1;
         };
-#endif
 
         /* See the top-of-file rationale block for details on timestamp math,
          * signed 64-bit usage, overflow considerations, and formatting. */
@@ -646,7 +610,6 @@ void loop() {
 
         }  // print result
 
-#ifndef SIM_MODE
         // turn LED off
         if (i == 0) {
           CLR_LED_0;
@@ -656,7 +619,6 @@ void loop() {
           CLR_LED_1;
           CLR_EXT_LED_1;
         };
-#endif
 
 #ifdef DETAIL_TIMING
         end_micros = micros() - start_micros;
@@ -739,22 +701,6 @@ void loop() {
         if ((Serial.available() > 0) && (Serial.read() == config.POLL_CHAR)) ok = true;
       }
       if (ok) {
-#ifdef SIM_MODE
-        // Count pairs for rate reporting even in Timestamp mode
-        if (config.MODE == Timestamp) { sim_pairs++; }
-        // Report every 10 seconds; exclude the 2s pause from the timing window
-        uint32_t now = micros();
-        if ((now - sim_last) >= 10000000UL) {
-          uint32_t elapsed = now - sim_last;  // microseconds over the last window
-          Serial.print("\n# pairs: ");
-          Serial.println(sim_pairs);
-          Serial.print("# avg pairs/sec: ");
-          Serial.println((uint32_t)((uint64_t)sim_pairs * 1000000UL / elapsed));
-          delay(2000);
-          sim_pairs = 0;
-          sim_last = micros();  // restart window after the pause so delay is excluded
-        }
-#endif
         switch (config.MODE) {
           case Interval:
             {
@@ -765,9 +711,6 @@ void loop() {
                 n += sprintf(line + n, " TI(A->B)");
                 writeln64(line, n);
               }
-#ifdef SIM_MODE
-              sim_pairs++;
-#endif
               channels[0].new_ts_ready = 0;
               channels[1].new_ts_ready = 0;
               break;
@@ -792,9 +735,6 @@ void loop() {
                 n += sprintf(line + n, " chC (B - A)");
                 writeln64(line, n);
               }
-#ifdef SIM_MODE
-              sim_pairs++;
-#endif
               channels[0].new_ts_ready = 0;
               channels[1].new_ts_ready = 0;
               break;
@@ -858,12 +798,10 @@ void loop() {
 
   }  // while (1) loop
 
-#ifndef SIM_MODE
   Serial.println("# ");
   Serial.println("# Got break character... exiting loop");
   Serial.println("# ");
   delay(100);
-#endif
 
 }  // main loop()
 

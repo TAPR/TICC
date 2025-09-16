@@ -520,7 +520,7 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
     return true;
   }
 
-  if (cmd == '?' || cmd == 'M') { *showMenu = true; configPrint("\r\n"); return true; }
+  if (cmd == 'M') { *showMenu = true; configPrint("\r\n"); return true; }
 
   // B) Wrap digits
   if (cmd == 'B') {
@@ -677,8 +677,8 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
     return true;
   }
 
-  // X) Write changes to EEPROM (without restart)
-  if (cmd == 'X') {
+  // W) Write changes to EEPROM (without restart)
+  if (cmd == 'W') {
     EEPROM_writeAnything(CONFIG_START, *pConfigInfo);
     configPrint("Changes written to EEPROM (will persist across restarts)\r\n");
     return true;
@@ -880,9 +880,9 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
       // H) Advanced settings
       configPrint("H - Advanced settings\r\n");
       configPrint("\r\n");
-      configPrint("? - Show this menu again\r\n");
+      configPrint("M - Show this menu again\r\n");
       configPrint("I - Show startup info\r\n");
-      configPrint("X - Write changes to EEPROM (persist across restarts)\r\n");
+      configPrint("W - Write changes to EEPROM (persist across restarts)\r\n");
       configPrint("\r\n");
       configPrint("1 - Discard changes and exit\r\n");
       configPrint("2 - Apply changes and restart\r\n");

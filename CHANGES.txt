@@ -26,6 +26,8 @@ configuration menus.
 7.  Configuration menus are heavily reworked and now support multiple
 commands per line, to simplify scripting.
 
+8.  TICC User Guide completely rewritten and much expanded.
+
 ++++
 Version 20200412.1 has the following significant changes, as well as
 cosmetic and bug fixes:

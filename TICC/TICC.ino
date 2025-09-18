@@ -7,8 +7,8 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-// 15 September 2025 - version 1
-extern const char SW_VERSION[17] = "20250915.1";
+// 16 September 2025 - version 2
+extern const char SW_VERSION[17] = "20250916.1";
 extern const char SW_TAG[6] = "BETA";
 
 /*
@@ -90,25 +90,6 @@ extern const char SW_TAG[6] = "BETA";
 #include "misc.h"             // random functions
 #include "board.h"            // Arduino pin definitions
 #include "tdc7200.h"          // TDC registers and structures
-
-/* DEBUG OPTIONS */
-
-// FAST_WRAP_TEST:Increment counters at a fast rate to test
-// overflow behavior.  It's not used in normal operation.
-// Multiplier is how many ticks to increment per interrupt.
-//#define FAST_WRAP_TEST
-//#define FAST_WRAP_MULTIPLIER 1000000L
-
-
-// DETAIL_TIMING: per-hit processing time (default off)
-// - When enabled, measures time spent handling a single event (from
-//   the start of channel processing to completion) using micros(), and
-//   prints the elapsed microseconds as a bare number for each processed
-//   hit.
-// - This produces one extra numeric line per hit and will significantly
-//   impact throughput; enable only for profiling/troubleshooting.
-//#define DETAIL_TIMING
-
 
 volatile int64_t PICcount;
 int64_t CLOCK_HZ;
@@ -546,7 +527,7 @@ void loop() {
                 SplitTime p = diffSplit(channels[i].ts_split, channels[i].last_ts_split);
                 char line[64];
                 size_t n = 0;
-                n = formatSignedSplitTo(line, sizeof(line), p, config.PLACES);
+                n = formatTimeDifference(line, sizeof(line), p, config.PLACES);
                 n += sprintf(line + n, " ch%c", (char)channels[i].name);
                 writeln64(line, n);
               }
@@ -694,7 +675,7 @@ void loop() {
               SplitTime d = diffSplit(channels[1].ts_split, channels[0].ts_split);
               {
                 char line[64];
-                size_t n = formatSignedSplitTo(line, sizeof(line), d, config.PLACES);
+                size_t n = formatTimeDifference(line, sizeof(line), d, config.PLACES);
                 n += sprintf(line + n, " TI(A->B)");
                 writeln64(line, n);
               }
@@ -715,11 +696,36 @@ void loop() {
                 n = formatTimestampSplitTo(line, sizeof(line), channels[1].ts_split, config.PLACES, WRAP);
                 n += sprintf(line + n, " ch%c", (char)channels[1].name);
                 writeln64(line, n);
-                // chC synthesized (B - A)
+                // chC synthesized = int(chB) + (chB - chA) - properly handle negative differences
                 SplitTime d = diffSplit(channels[1].ts_split, channels[0].ts_split);
-                SplitTime c = { (int32_t)(channels[1].ts_split.sec + d.sec), d.frac_hi, d.frac_lo };
+                SplitTime c;
+                
+                // Synthesize chC = int(chB) + (chB - chA)
+                // chC uses the integer seconds from chB, plus the fractional difference
+                c.sec = channels[1].ts_split.sec;  // int(chB) - integer seconds from chB
+                c.frac_hi = d.frac_hi;             // (chB - chA) fractional part
+                c.frac_lo = d.frac_lo;             // (chB - chA) fractional part
+                
+                // Handle negative fractional differences (d.sec < 0 means negative difference)
+                if (d.sec < 0) {
+                  // The fractional part is in complement representation, convert to normal
+                  if (d.frac_hi != 0 || d.frac_lo != 0) {
+                    c.frac_lo = 1000000UL - d.frac_lo;
+                    c.frac_hi = (d.frac_hi == 0) ? 999999UL : (1000000UL - d.frac_hi - 1UL);
+                    // Since we're subtracting from the integer seconds, borrow if needed
+                    if (c.frac_lo >= 1000000) {
+                      c.frac_lo -= 1000000;
+                      c.frac_hi += 1;
+                    }
+                    if (c.frac_hi >= 1000000) {
+                      c.frac_hi -= 1000000;
+                      c.sec += 1;
+                    }
+                  }
+                }
+                
                 n = formatTimestampSplitTo(line, sizeof(line), c, config.PLACES, WRAP);
-                n += sprintf(line + n, " chC (B - A)");
+                n += sprintf(line + n, " chC (int(B) + (B - A))");
                 writeln64(line, n);
               }
               channels[0].new_ts_ready = 0;

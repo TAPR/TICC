@@ -40,6 +40,7 @@ void print_signed_sec_frac(int64_t sec, int64_t frac_ps, int places);
 // Buffer-formatting helpers (no Serial; return bytes written)
 size_t formatTimestampSplitTo(char *buf, size_t cap, const SplitTime &t, int places, int32_t wrap);
 size_t formatSignedSplitTo(char *buf, size_t cap, const SplitTime &t, int places);
+size_t formatTimeDifference(char *buf, size_t cap, const SplitTime &diff, int places);
 
 // Append CRLF to a buffer (capped at 64 total) and write via Serial.write()
 void writeln64(char *buf, size_t n);

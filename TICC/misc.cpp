@@ -212,6 +212,55 @@ size_t formatSignedSplitTo(char *buf, size_t cap, const SplitTime &t, int places
   return (size_t)(p - buf);
 }
 
+// Format time differences with proper handling of negative values
+// The diffSplit function returns negative differences in complement representation:
+// - Positive differences: sec >= 0, frac_hi and frac_lo are normal values
+// - Negative differences: sec < 0, frac_hi and frac_lo are in complement form
+// This function converts complement representation to absolute values for display
+size_t formatTimeDifference(char *buf, size_t cap, const SplitTime &diff, int places) {
+  char *p = buf; const char *end = buf + cap;
+  
+  // Check if the difference is negative (only when sec < 0)
+  bool is_negative = (diff.sec < 0);
+  
+  if (is_negative) {
+    if (p < end) *p++ = '-';
+    
+    // Convert complement representation to absolute value
+    // When diffSplit returns a negative result, it uses complement representation:
+    // - diff.sec is negative (e.g., -1)
+    // - diff.frac_hi and diff.frac_lo are in complement form
+    // We need to convert this back to the actual absolute difference
+    int32_t sec = -diff.sec;
+    uint32_t hi = diff.frac_hi;
+    uint32_t lo = diff.frac_lo;
+    
+    if (hi != 0 || lo != 0) {
+      sec -= 1;  // We borrowed one second in the complement representation
+      lo = 1000000UL - lo;  // Convert frac_lo from complement to absolute
+      hi = (hi == 0) ? 999999UL : (1000000UL - hi - 1UL);  // Convert frac_hi from complement to absolute
+    }
+    
+    // Format seconds
+    {
+      char tmp[12]; uint8_t n=0; uint32_t s=(uint32_t)sec; 
+      do { tmp[n++] = (char)('0'+(s%10)); s/=10; } while (s);
+      while (n--) { if (p < end) *p++ = tmp[n]; }
+    }
+    
+    // Format fractional part
+    p = bufAppendChar(p, end, '.');
+    p = bufAppendFrac(p, end, hi, lo, (uint8_t)places);
+    
+  } else {
+    // Positive difference - format normally using existing function
+    return formatTimestampSplitTo(buf, cap, diff, places, 0);
+  }
+  
+  if (p < end) *p = '\0';
+  return (size_t)(p - buf);
+}
+
 
 void print_timestamp_sec_frac(int64_t sec, int64_t frac_ps, int places, int32_t wrap) {
   bool neg = (sec < 0);
@@ -287,8 +336,19 @@ SplitTime diffSplit(const SplitTime &b, const SplitTime &a) {
   r.sec = (int32_t)(b.sec - a.sec);
   int32_t lo = (int32_t)b.frac_lo - (int32_t)a.frac_lo;
   int32_t hi = (int32_t)b.frac_hi - (int32_t)a.frac_hi;
-  if (lo < 0) { lo += 1000000; hi -= 1; }
-  if (hi < 0) { hi += 1000000; r.sec -= 1; }
+  
+  // Handle borrow from lo to hi
+  if (lo < 0) { 
+    lo += 1000000; 
+    hi -= 1; 
+  }
+  
+  // Handle borrow from hi to sec
+  if (hi < 0) { 
+    hi += 1000000; 
+    r.sec -= 1; 
+  }
+  
   r.frac_lo = (uint32_t)lo;
   r.frac_hi = (uint32_t)hi;
   return r;

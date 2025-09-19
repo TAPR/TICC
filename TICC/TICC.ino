@@ -370,15 +370,6 @@ void ticc_setup() {
       break;
   }  // switch
 
-#ifdef FAST_WRAP_TEST
-  Serial.println("# FAST_WRAP_TEST ENABLED: accelerating PICcount increments");
-  Serial.print("# FAST_WRAP_MULTIPLIER: ");
-#ifdef FAST_WRAP_MULTIPLIER
-  Serial.println((int32_t)FAST_WRAP_MULTIPLIER);
-#else
-  Serial.println("(default 1)");
-#endif
-#endif
 
   // turn the LEDs off
   CLR_LED_0;
@@ -805,15 +796,7 @@ void loop() {
 
 // ISR for timer. Capture PICcount on each channel's STOP 0->1 transition.
 void coarseTimer() {
-#ifdef FAST_WRAP_TEST
-#ifdef FAST_WRAP_MULTIPLIER
-  PICcount += FAST_WRAP_MULTIPLIER;
-#else
-  PICcount += 1;
-#endif
-#else
   PICcount++;
-#endif
 }
 
 void catch_stop0() {

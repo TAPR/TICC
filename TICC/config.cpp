@@ -807,6 +807,9 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
   if (cmd == '2') { 
     // Apply changes and restart
     configPrint("Applying changes and restarting...\r\n"); 
+    // Force a restart by setting a flag that will cause main loop to exit
+    extern volatile uint8_t request_restart;
+    request_restart = 1;
     return false; 
   }
   if (cmd == '3') { 
@@ -818,6 +821,9 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
     // Reset all to defaults and restart
     eeprom_write_config_default(CONFIG_START); 
     configPrint("Defaults written. Restarting...\r\n"); 
+    // Force a restart by setting a flag that will cause main loop to exit
+    extern volatile uint8_t request_restart;
+    request_restart = 1;
     return false; 
   }
 

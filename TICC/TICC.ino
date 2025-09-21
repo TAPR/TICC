@@ -780,6 +780,13 @@ void loop() {
       config_changed = 0;
     }
 
+    // Check if restart was requested (option '2' from config menu)
+    if (request_restart) {
+      request_restart = 0;  // Clear the flag
+      Serial.println("# Restart requested, reinitializing system...");
+      return;  // Exit loop to trigger fresh ticc_setup() call
+    }
+
   }  // while (1) loop
 
   Serial.println("# ");

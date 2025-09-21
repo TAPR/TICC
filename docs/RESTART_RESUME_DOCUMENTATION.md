@@ -82,7 +82,7 @@ Determines if hardware reinitialization is needed:
 - `PICTICK_PS` - Coarse tick period changes  
 - `CAL_PERIODS` - TDC calibration periods
 - `START_EDGE` - Trigger edge configuration
-- `SYNC_MODE` - Master/client sync mode
+- `SYNC_MODE` - Primary/secondary sync mode
 
 **Can Resume** (software-only):
 - `MODE` - Measurement mode

@@ -56,7 +56,7 @@ improvements
   - Setting 3: wrap at 1000 seconds, etc.
 - **Channel Naming**: New "I" command allows custom channel names instead
   of default "A" and "B"
-- **Terminology Update**: "Master/Slave" changed to "Host/Client"
+- **Terminology Update**: "Master/Slave" changed to "Primary/Secondary"
 
 ### Configuration Changes
 - **Menu Restructure**: Commands now identified by sequential letters (ran

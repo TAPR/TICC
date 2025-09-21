@@ -30,7 +30,7 @@ enum MeasureMode : unsigned char {Timestamp, Interval, Period, timeLab, Debug, N
 #define DEFAULT_TIMEOUT           (int16_t) 0x05        // measurement timeout
 #define DEFAULT_WRAP              (int16_t) 2           // timestamp rollover in 100 us ticks; max 2^63 - 1
 #define DEFAULT_PLACES            (int16_t) 11          // decimal places for output (0-12, default 11)
-#define DEFAULT_SYNC_MODE         (char)    'M'         // (M)aster or (C)lient
+#define DEFAULT_SYNC_MODE         (char)    'P'         // (P)rimary or (S)econdary
 #define DEFAULT_NAME_0            (char)    'A'
 #define DEFAULT_NAME_1            (char)    'B'
 #define DEFAULT_PROP_DELAY_0      (int64_t)  0
@@ -62,7 +62,7 @@ struct config_t {
   int16_t    TIMEOUT;                   // timeout for measurement in hex (default 0x05)
   int16_t    WRAP;                      // wraparound value for PICcount
   int16_t    PLACES;                    // decimal places for output (0-12, default 11)
-  char       SYNC_MODE;                 // one byte:  'M' for master,  'C' for client
+  char       SYNC_MODE;                 // one byte:  'P' for primary, 'S' for secondary
   
   // per-channel settings, arrays of 2 for channels 0 and 1:
   char       START_EDGE[2];            // (R)ising (default) or (F)alling edge 

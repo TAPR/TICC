@@ -23,7 +23,7 @@ This document describes the implementation of configurable decimal places for TI
 - **B** - Timestamp Wrap digits (unchanged)
 - **C** - Output Decimal Places (NEW)
 - **D** - Trigger Edge A/B (was C)
-- **E** - Master/Client (was D)
+- **E** - Primary/Secondary (was D)
 - **F** - Channel Names (was E)
 - **G** - Poll Character (was F)
 - **H** - Advanced settings (was G)

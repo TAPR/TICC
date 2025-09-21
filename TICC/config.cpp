@@ -610,7 +610,7 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
     }
     
     char c = toupper(line[0]); 
-    if (c == 'M' || c == 'C') { 
+    if (c == 'P' || c == 'S') { 
       char old=pConfigInfo->SYNC_MODE; pConfigInfo->SYNC_MODE=c; 
       MARK_CONFIG_CHANGED();
       char m[64]; sprintf(m, "OK -- Sync %c -> %c\r\n", old, c); configPrint(m); 
@@ -870,7 +870,7 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
       }
       // E) Sync mode
       {
-      char tmp[48]; sprintf(tmp, "E - Master/Client (currently: %c)\r\n", pConfigInfo->SYNC_MODE);
+      char tmp[48]; sprintf(tmp, "E - Primary/Secondary (currently: %c)\r\n", pConfigInfo->SYNC_MODE);
         configPrint(tmp);
       }
       // F) Channel names

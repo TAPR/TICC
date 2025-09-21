@@ -307,7 +307,7 @@ void ticc_setup() {
   /*******************************************
    * Synchronize multiple TICCs sharing common 10 MHz and 10 kHz clocks.
   *******************************************/
-  if (config.SYNC_MODE == 'M') {                  // if we are master, send sync by sending CLIENT_SYNC (A8) high
+  if (config.SYNC_MODE == 'P') {                  // if we are primary, send sync by sending CLIENT_SYNC (A8) high
     delay(2000);                                  // but first sleep to allow client boards to get ready
     pinMode(CLIENT_SYNC, OUTPUT);                 // set CLIENT_SYNC as output (defaults to input)
     digitalWrite(CLIENT_SYNC, LOW);               // make sure it's low
@@ -328,10 +328,10 @@ void ticc_setup() {
   } else {
     Serial.println("# ");
     Serial.println("# ");
-    Serial.println("# In client mode and waiting for sync...");
+    Serial.println("# In secondary mode and waiting for sync...");
   }
 
-  while (!digitalRead(CLIENT_SYNC)) {}               // whether master or client, spin until CLIENT_SYNC asserts
+  while (!digitalRead(CLIENT_SYNC)) {}               // whether primary or secondary, spin until CLIENT_SYNC asserts
   PICcount = 0;                                      // initialize counter
   enableInterrupt(COARSEint, coarseTimer, FALLING);  // enable counter interrupt
   enableInterrupt(STOP_0, catch_stop0, RISING);      // enable interrupt to catch channel A

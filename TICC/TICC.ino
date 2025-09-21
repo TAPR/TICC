@@ -716,7 +716,7 @@ void loop() {
                 }
                 
                 n = formatTimestampSplitTo(line, sizeof(line), c, config.PLACES, WRAP);
-                n += sprintf(line + n, " chC (int(B) + (B - A))");
+                n += sprintf(line + n, " chC");
                 writeln64(line, n);
               }
               channels[0].new_ts_ready = 0;

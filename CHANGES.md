@@ -11,6 +11,10 @@ improvements
   behavioral change that may affect existing workflows and data analysis.
   Users who rely on continuous timestamps without wrapping should set the
   wrap value to 0 in the configuration menu.
+- **Many Configuration Menu Changes**: The configuration menu structure
+  has changed and most parameter IDs are now different.  Also, a few
+  parameter values have changed -- e.g., SYNC_MODE is now
+  [P]rimary/[S]econdary instead of [M]ain/[C]lient.
 
 ### New Features
 - **Timestamp Wraparound Configuration**: Timestamp wraparound can now be

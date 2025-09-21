@@ -603,7 +603,7 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
       line = args;
     } else {
       // Interactive mode
-      configPrint("Enter M or C: "); 
+      configPrint("Enter P or S: "); 
       char buf[96];
       size_t n = readLine(buf, sizeof(buf)); 
       line = trimInPlace(buf);

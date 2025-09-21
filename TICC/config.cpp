@@ -846,7 +846,16 @@ void doSetupMenu(struct config_t *pConfigInfo)      // line-oriented, robust ser
       serialPrintImmediate(")\r\n");
       // B) Wrap digits
       {
-        char tmp[48]; sprintf(tmp, "B - Timestamp Wrap digits (currently: %d)\r\n", (int)pConfigInfo->WRAP);
+        char tmp[64]; 
+        if (pConfigInfo->WRAP <= 0) {
+          sprintf(tmp, "B - Timestamp Wrap digits (currently: %d - no wrap)\r\n", (int)pConfigInfo->WRAP);
+        } else if (pConfigInfo->WRAP <= 9) {
+          uint32_t wrap_seconds = 1;
+          for (int i = 0; i < pConfigInfo->WRAP; i++) wrap_seconds *= 10;
+          sprintf(tmp, "B - Timestamp Wrap digits (currently: %d - wraps at %lu seconds)\r\n", (int)pConfigInfo->WRAP, (unsigned long)wrap_seconds);
+        } else {
+          sprintf(tmp, "B - Timestamp Wrap digits (currently: %d - wraps at 1e%d seconds)\r\n", (int)pConfigInfo->WRAP, (int)pConfigInfo->WRAP);
+        }
         configPrint(tmp);
       }
       // C) Output decimal places
@@ -1011,7 +1020,23 @@ void print_config (config_t x) {
   Serial.print("# Measurement Mode: ");print_MeasureMode(MeasureMode(x.MODE));
   
   // Timestamp Wrap
-  Serial.print("# Timestamp Wrap: ");Serial.println(x.WRAP);
+  Serial.print("# Timestamp Wrap: ");
+  if (x.WRAP <= 0) {
+    Serial.print(x.WRAP);
+    Serial.println(" (no wrap)");
+  } else if (x.WRAP <= 9) {
+    uint32_t wrap_seconds = 1;
+    for (int i = 0; i < x.WRAP; i++) wrap_seconds *= 10;
+    Serial.print(x.WRAP);
+    Serial.print(" (wraps at ");
+    Serial.print((unsigned long)wrap_seconds);
+    Serial.println(" seconds)");
+  } else {
+    Serial.print(x.WRAP);
+    Serial.print(" (wraps at 1e");
+    Serial.print(x.WRAP);
+    Serial.println(" seconds)");
+  }
   
   // Output Decimal Places
   Serial.print("# Output Decimal Places: ");Serial.println(x.PLACES);

@@ -229,7 +229,7 @@ char modeToChar(unsigned char mode)
 
 struct config_t defaultConfig() {
   struct config_t x;
-  x.VERSION == EEPROM_VERSION;
+  x.VERSION = EEPROM_VERSION;
   strncpy(x.SW_VERSION,SW_VERSION,sizeof(SW_VERSION));
   x.BOARD_REV = BOARD_REVISION;
   strncpy(x.SER_NUM,SER_NUM,sizeof(SER_NUM));

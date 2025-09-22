@@ -14,7 +14,12 @@ improvements
 - **Many Configuration Menu Changes**: The configuration menu structure
   has changed and most parameter IDs are now different.  Also, a few
   parameter values have changed -- e.g., SYNC_MODE is now
-  [P]rimary/[S]econdary instead of [M]ain/[C]lient.
+  [P]rimary/[S]econdary instead of [M]aster/[C]lient.
+- **New EEPROM Layout**: The layout of configuration values stored in
+  EEPROM has been updated from version 10 to version 11.  On first
+  execution the EEPROM will be updated to the new version.  All config 
+  values will be reset to defaults, but the board serial number will 
+  be retained.
 
 ### New Features
 - **Timestamp Wraparound Configuration**: Timestamp wraparound can now be

@@ -5,7 +5,10 @@ Arduino Mega 2560.
 NOTE: Going forward, "main" branch is current development branch.
 Each release is in its own branch named with version number.
 
-11 September 2025: New firmware version (beta) that adds/fixes:
+See the CHANGES.md file for more details about versions.  This
+is just a short summary:
+
+September 2025: New firmware version (beta) that adds/fixes:
 * Timestamps don't overflow for 68 years
 * Fix to bug in printing long timestamps (misplaced "-" sign)
 * Fully rework menu system with submenus and multiple command
@@ -15,7 +18,8 @@ Each release is in its own branch named with version number.
   * Changed most 64 bit arithmetic to 32 bit for speed
   * Reworked print routines for speed
   (Together, these should improve the maximum number of measurements
-  per second, but that hasn't been benchmarked yet)
+  per second.  Initial tests show at least 200 measurements/second
+  across both channels (i.e., 100 PPS on both ch0 and ch1.)
 
 12 April 2020: New firmware version that adds:
 

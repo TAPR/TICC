@@ -84,6 +84,19 @@ void get_serial_number();
 void eeprom_clear();
 void ticc_setup();
 
+// Configuration management functions
+void backup_config();
+uint8_t config_change_requires_restart();
+void apply_config_changes();
+void handle_config_change_exit();
+
+// Parsing helper functions (from config_core.cpp)
+bool parseInt64Simple(const char *s, int64_t *out);
+bool parseDecimalScaled(const char *s, int64_t scale, int64_t *out);
+bool parseInt64Pair(const char *s, bool *set0, int64_t *v0, bool *set1, int64_t *v1);
+bool parseDecimalScaledPair(const char *s, int64_t scale, bool *set0, int64_t *v0, bool *set1, int64_t *v1);
+char* getInputOrPrompt(const char* args, const char* prompt, char* buffer, size_t bufferSize);
+
 /*****************************************************************/
 // These allow us to read/write struct in eeprom
 template <class T> int EEPROM_writeAnything(int ee, const T& value)

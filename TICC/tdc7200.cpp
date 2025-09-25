@@ -312,3 +312,26 @@ void tdc7200Channel::start_measurements() {
   // Start measurement by setting START_MEAS bit
   write(CONFIG1, config_byte1);
 }
+
+// Global channel management functions (moved from TICC.ino)
+
+// Flush all channels and reset their state
+void flush_all_channels() {
+  for (size_t i = 0; i < 2; ++i) {  // 2 channels: A and B
+    channels[i].flush_and_reset();
+  }
+}
+
+// Stop measurements on all channels
+void stop_all_measurements() {
+  for (size_t i = 0; i < 2; ++i) {  // 2 channels: A and B
+    channels[i].stop_measurements();
+  }
+}
+
+// Start measurements on all channels
+void start_all_measurements() {
+  for (size_t i = 0; i < 2; ++i) {  // 2 channels: A and B
+    channels[i].start_measurements();
+  }
+}

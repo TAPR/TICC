@@ -97,4 +97,12 @@ private:
   void tdc_ack_int();
 };
 
+// Global channel management functions
+void flush_all_channels();
+void stop_all_measurements();
+void start_all_measurements();
+
+// External channel array (defined in TICC.ino)
+extern tdc7200Channel channels[];
+
 #endif /* TDC7200_H */

@@ -261,10 +261,7 @@ struct config_t defaultConfig() {
   return x;
 }
 
-void eeprom_write_config_default (uint16_t offset) {
-  struct config_t x = defaultConfig();
-  EEPROM_writeAnything(offset,x);
-}
+// eeprom_write_config_default moved to config_eeprom.cpp
 
 void print_config (config_t x) {
   char tmpbuf[8];
@@ -356,44 +353,9 @@ void print_config (config_t x) {
   Serial.print(" (ch0), ");Serial.print((int32_t)x.FUDGE0[1]);Serial.println(" (ch1)");
 }
 
-void get_serial_number() { 
+// get_serial_number moved to config_eeprom.cpp
 
-  // Serial number is 8 bytes.  On first run,
-  // check location and if not found, use random()
-  // to generate.  If found, just read, format as string,
-  // and set config.SER_NUM
-  
-  int32_t x,y;  // 2 longs because sprintf can't handle uint64
-  
-  EEPROM_readAnything(SER_NUM_START,x);
-  EEPROM_readAnything(SER_NUM_START+4,y);
-
-  // New Ardiuno has all EEPROM set to 0xFF; example
-  // clear routine sets to 0x00.  Test for both
-  // If no serial number, make one
-  if ( ((x == 0xFFFFFFFF) && (y == 0xFFFFFFFF)) ||
-       ((x == 0x00000000) && (y == 0x00000000)) ) {
-    Serial.println("No serial number found... making one");
-    randomSeed(analogRead(A0));  // seed with noise from A0
-    x = random(0xFFFF);
-    randomSeed(analogRead(A3));  // seed with noise from A3
-    y = random(0xFFFF);
-    EEPROM_writeAnything(SER_NUM_START,x);
-    EEPROM_writeAnything(SER_NUM_START+4,y);
-    sprintf(SER_NUM, "%04lX%04lX", x,y); 
-    Serial.print("Serial Number: ");
-    Serial.println(SER_NUM);
-    delay(7500);
-  }
-  sprintf(SER_NUM, "%04lX%04lX", x,y);
-}
-
-void eeprom_clear() {
-  // write 0xFF (factory default) to entire eeprom area
-  for (int i = 0 ; i < EEPROM.length() ; i++) {
-  EEPROM.write(i, 0xFF);
-  } 
-}
+// eeprom_clear moved to config_eeprom.cpp
 
 void print_MeasureMode(MeasureMode x) {
   switch (x) {

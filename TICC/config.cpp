@@ -491,7 +491,7 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
 
   // W) Write changes to EEPROM (without restart)
   if (cmd == 'W') {
-    EEPROM_writeAnything(CONFIG_START, *pConfigInfo);
+    eeprom_write_config();
     configPrint("Changes written to EEPROM (will persist across restarts)\r\n");
     return true;
   }

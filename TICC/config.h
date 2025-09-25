@@ -82,6 +82,10 @@ void print_MeasureMode(MeasureMode x);
 void printHzAsMHz(int64_t x);
 void get_serial_number();
 void eeprom_clear();
+void eeprom_write_config_default(uint16_t offset);
+void eeprom_write_config();
+void eeprom_read_config();
+struct config_t defaultConfig();
 void ticc_setup();
 
 // Configuration management functions

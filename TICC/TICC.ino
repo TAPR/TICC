@@ -168,7 +168,7 @@ void ticc_setup() {
   }
 
   // read config and set global vars
-  EEPROM_readAnything(CONFIG_START, config);
+  eeprom_read_config();
   lastMODE = config.MODE;
 
   // print banner -- all non-data output lines begin with "#" so they're seen as comments

@@ -186,11 +186,6 @@ void ticc_setup() {
   Serial.println("# Copyright 2016-2025 N8UR, K9TRV, NH6Z, WA8YWQ");
   Serial.println("# ");
   
-  // Test the optimized print64.cpp functions
-  test_print64_function();
-  
-  // Test the optimized timestamp calculation
-  test_optimized_calculation();
   
   Serial.println("#####################");
   Serial.println("# TICC Configuration: ");
@@ -393,54 +388,41 @@ void loop() {
          * signed 64-bit usage, overflow considerations, and formatting. */
 
         channels[i].last_tof = channels[i].tof;  // preserve last value
-        channels[i].last_ts_split = channels[i].ts_split;
+        channels[i].last_ts_opt = channels[i].ts_opt;  // preserve last optimized timestamp
         channels[i].tof = channels[i].read();  // get data from chip
 
-        // Derive coarse seconds and remainder ticks using incremental method
-        // Incremental coarse-time decomposition to avoid 64-bit div/mod per hit
-        // Assumption: at most one second of ticks elapsed since last sample.
-        // We handle a single carry into seconds when delta ≤ ticksPerSecond.
-        // If delta is negative or requires more than one carry (delta > ticksPerSecond),
-        // the incremental state (cached_sec/cached_rem_ticks) would drift, so we realign
-        // by recomputing sec and remainder directly from PICstop (fallback path below).
-        int64_t sec;
-        int32_t remTicks32;
-        int64_t delta = channels[i].PICstop - channels[i].last_picstop;
+        // OPTIMIZED: Direct calculation using Timestamp64 structure
+        // Based on calc_loop.txt - eliminates complex incremental decomposition
+        // delta ticks since previous event on this channel
+        int64_t dcount = (int64_t)(channels[i].PICstop - channels[i].last_picstop);
         channels[i].last_picstop = channels[i].PICstop;
-        if (delta >= 0 && delta <= ticksPerSecond) {
-          int32_t rem = channels[i].cached_rem_ticks + (int32_t)delta;
-          if (rem >= (int32_t)ticksPerSecond) {
-            rem -= (int32_t)ticksPerSecond;
-            channels[i].cached_sec++;
-          }
-          channels[i].cached_rem_ticks = rem;
-        } else {
-          // Fallback for startup/large jumps: recompute from absolute PICstop
-          channels[i].cached_sec = (int32_t)(channels[i].PICstop / ticksPerSecond);
-          channels[i].cached_rem_ticks = (int32_t)(channels[i].PICstop % ticksPerSecond);
-        }
-        sec = channels[i].cached_sec;
-        remTicks32 = channels[i].cached_rem_ticks;
 
-        // Original ps-path: compute remPs and subtract in ps
-        int64_t remPs = (int64_t)remTicks32 * PICTICK_PS;
-        // Subtract fine time-of-flight with borrow if needed
-        if (remPs >= channels[i].tof) {
-          remPs -= channels[i].tof;
+        // delta_ps = dcount * PICTICK_PS - tof - fudge
+        // Note: fudge combines prop_delay and FUDGE0 from config
+        int64_t delta_ps = dcount * (int64_t)PICTICK_PS - (int64_t)channels[i].tof - channels[i].fudge;
+
+        // With TICC hardware, delta_ps should be >= 0 typically.
+        if (delta_ps >= 0) {
+          channels[i].ts_opt.sub_ps += (uint64_t)delta_ps;
+
+          // Carry to seconds (usually 0 or 1)
+          if (channels[i].ts_opt.sub_ps >= PS_PER_SEC) {
+            channels[i].ts_opt.sub_ps -= PS_PER_SEC;
+            channels[i].ts_opt.seconds += 1u;
+          }
         } else {
-          remPs = (remPs + PS_PER_SEC) - channels[i].tof;
-          sec -= 1;
+          // Defensive rare case (in case tof + fudge slightly exceeds dcount*PICTICK_PS)
+          uint64_t m = (uint64_t)(-delta_ps);
+          if (m <= channels[i].ts_opt.sub_ps) {
+            channels[i].ts_opt.sub_ps -= m;
+          } else {
+            m -= channels[i].ts_opt.sub_ps;
+            uint64_t borrow_sec = 1 + (m / PS_PER_SEC);
+            uint64_t rem = m % PS_PER_SEC;
+            channels[i].ts_opt.seconds -= (uint32_t)borrow_sec;
+            channels[i].ts_opt.sub_ps = PS_PER_SEC - rem;
+          }
         }
-        // Subtract propagation delay similarly
-        if (remPs >= channels[i].prop_delay) {
-          remPs -= channels[i].prop_delay;
-        } else {
-          remPs = (remPs + PS_PER_SEC) - channels[i].prop_delay;
-          sec -= 1;
-        }
-        channels[i].ts_split.sec = (int32_t)sec;
-        channels[i].ts_split.frac_hi = (uint32_t)(remPs / 1000000LL);
-        channels[i].ts_split.frac_lo = (uint32_t)(remPs % 1000000LL);
         channels[i].new_ts_ready = 1;
         channels[i].totalize++;    // increment number of events
         channels[i].ready_next();  // Re-arm for next measurement, clear TDC INTB
@@ -461,14 +443,8 @@ void loop() {
               break;
 
             case Period:
-              {
-                SplitTime p = diffSplit(channels[i].ts_split, channels[i].last_ts_split);
-                char line[64];
-                size_t n = 0;
-                n = formatTimeDifference(line, sizeof(line), p, config.PLACES);
-                n += sprintf(line + n, " ch%c", (char)channels[i].name);
-                writeln64(line, n);
-              }
+              // TODO: Update Period mode to use Timestamp64
+              // For now, skip Period mode until Timestamp mode is working
               break;
 
             case timeLab:
@@ -476,42 +452,8 @@ void loop() {
               break;
 
             case Debug:
-              {
-                char line[128];
-                size_t n = 0;
-                
-                // Raw TDC7200 values (6 digits each)
-                n += sprintf(line + n, "%06lu ", (unsigned long)channels[i].time1Result);
-                n += sprintf(line + n, "%06lu ", (unsigned long)channels[i].time2Result);
-                n += sprintf(line + n, "%06lu ", (unsigned long)channels[i].clock1Result);
-                n += sprintf(line + n, "%06lu ", (unsigned long)channels[i].cal1Result);
-                n += sprintf(line + n, "%06lu ", (unsigned long)channels[i].cal2Result);
-                
-                // PICstop (int64_t - need special handling)
-                char pic_buf[32];
-                size_t pic_len = format_int64_to_buffer(pic_buf, sizeof(pic_buf), channels[i].PICstop);
-                memcpy(line + n, pic_buf, pic_len);
-                n += pic_len;
-                line[n++] = ' ';
-                
-                // tof (int64_t - need special handling) 
-                char tof_buf[32];
-                size_t tof_len = format_int64_to_buffer(tof_buf, sizeof(tof_buf), channels[i].tof);
-                memcpy(line + n, tof_buf, tof_len);
-                n += tof_len;
-                line[n++] = ' ';
-                
-                // timestamp (SplitTime - use existing function)
-                char ts_buf[32];
-                size_t ts_len = formatTimestampSplitTo(ts_buf, sizeof(ts_buf), channels[i].ts_split, config.PLACES, WRAP);
-                memcpy(line + n, ts_buf, ts_len);
-                n += ts_len;
-                
-                // Channel name
-                n += sprintf(line + n, " ch%c", (char)channels[i].name);
-                
-                writeln64(line, n);
-              }
+              // TODO: Update Debug mode to use Timestamp64
+              // For now, skip Debug mode until Timestamp mode is working
               break;
 
             case Null:
@@ -541,7 +483,7 @@ void loop() {
       // present print chA then chB; if both are the same channel, print that
       // channel twice.
       struct PairSlot {
-        SplitTime t;
+        Timestamp64 t;
         uint8_t ch;
       };
       static PairSlot ts_pair[2];
@@ -551,7 +493,7 @@ void loop() {
       for (int ci = 0; ci < 2; ++ci) {
         if (channels[ci].new_ts_ready && (channels[ci].totalize > 2)) {
           if (ts_pair_count < 2) {
-            ts_pair[ts_pair_count].t = channels[ci].ts_split;
+            ts_pair[ts_pair_count].t = channels[ci].ts_opt;
             ts_pair[ts_pair_count].ch = (uint8_t)ci;
             ts_pair_count++;
           }
@@ -573,15 +515,17 @@ void loop() {
             const PairSlot *B = (ts_pair[0].ch == 1) ? &ts_pair[0] : &ts_pair[1];
             {
               char line[64];
-              size_t n = formatTimestampSplitTo(line, sizeof(line), A->t, config.PLACES, WRAP);
-              n += sprintf(line + n, " ch%c", (char)channels[0].name);
-              writeln64(line, n);
+              int n = format_timestamp_line(line, sizeof(line), &A->t, (char)channels[0].name);
+              if (n > 0) {
+                writeln64(line, n);
+              }
             }
             {
               char line[64];
-              size_t n = formatTimestampSplitTo(line, sizeof(line), B->t, config.PLACES, WRAP);
-              n += sprintf(line + n, " ch%c", (char)channels[1].name);
-              writeln64(line, n);
+              int n = format_timestamp_line(line, sizeof(line), &B->t, (char)channels[1].name);
+              if (n > 0) {
+                writeln64(line, n);
+              }
             }
           } else {
             // Same channel twice: print both with that channel's name
@@ -589,9 +533,10 @@ void loop() {
             char cname = channels[ci].name;
             for (int k = 0; k < 2; ++k) {
               char line[64];
-              size_t n = formatTimestampSplitTo(line, sizeof(line), ts_pair[k].t, config.PLACES, WRAP);
-              n += sprintf(line + n, " ch%c", cname);
-              writeln64(line, n);
+              int n = format_timestamp_line(line, sizeof(line), &ts_pair[k].t, cname);
+              if (n > 0) {
+                writeln64(line, n);
+              }
             }
           }
           ts_pair_count = 0;  // clear pair buffer after printing
@@ -599,6 +544,9 @@ void loop() {
       }
     }
 
+    // TODO: Update Interval and timeLab pairing logic to use Timestamp64
+    // For now, skip Interval and timeLab modes until Timestamp mode is working
+    /*
     // After processing both channels, pair and print once per matched sample for Interval and TimeLab
     if ((channels[0].new_ts_ready && channels[1].new_ts_ready) && (channels[0].totalize > 2) && (channels[1].totalize > 2)) {
       // Optional poll gating
@@ -674,6 +622,7 @@ void loop() {
         }
       }
     }
+    */
 
     // Check if config was requested during this loop iteration
     if (config_requested) {
@@ -763,43 +712,6 @@ void catch_stop1() {
   channels[1].PICstop = PICcount;
 }
 
-// Forward declaration
-void update_timestamp_optimized(tdc7200Channel &ch, uint64_t picstop_snapshot, int64_t tof_ps);
-
-// Optimized timestamp calculation based on calc_loop.txt
-// Updates the timestamp using the new Timestamp64 structure
-void update_timestamp_optimized(tdc7200Channel &ch, uint64_t picstop_snapshot, int64_t tof_ps) {
-  // delta ticks since previous event on this channel
-  int64_t dcount = (int64_t)(picstop_snapshot - ch.last_picstop);
-  ch.last_picstop = picstop_snapshot;
-
-  // delta_ps = dcount * PICTICK_PS - tof - fudge
-  // Note: fudge combines prop_delay and FUDGE0 from config
-  int64_t delta_ps = dcount * (int64_t)PICTICK_PS - (int64_t)tof_ps - ch.fudge;
-
-  // With TICC hardware, delta_ps should be >= 0 typically.
-  if (delta_ps >= 0) {
-    ch.ts_opt.sub_ps += (uint64_t)delta_ps;
-
-    // Carry to seconds (usually 0 or 1)
-    if (ch.ts_opt.sub_ps >= PS_PER_SEC) {
-      ch.ts_opt.sub_ps -= PS_PER_SEC;
-      ch.ts_opt.seconds += 1u;
-    }
-  } else {
-    // Defensive rare case (in case tof + fudge slightly exceeds dcount*PICTICK_PS)
-    uint64_t m = (uint64_t)(-delta_ps);
-    if (m <= ch.ts_opt.sub_ps) {
-      ch.ts_opt.sub_ps -= m;
-    } else {
-      m -= ch.ts_opt.sub_ps;
-      uint64_t borrow_sec = 1 + (m / PS_PER_SEC);
-      uint64_t rem = m % PS_PER_SEC;
-      ch.ts_opt.seconds -= (uint32_t)borrow_sec;
-      ch.ts_opt.sub_ps = PS_PER_SEC - rem;
-    }
-  }
-}
 
 // Test function for optimized timestamp calculation
 void test_optimized_calculation() {
@@ -853,8 +765,30 @@ void test_optimized_calculation() {
     test_ch.ts_opt.sub_ps = 0;
     test_ch.last_picstop = 0;
     
-    // Run the optimized calculation
-    update_timestamp_optimized(test_ch, tc->picstop, tc->tof);
+    // Run the optimized calculation (inline version)
+    int64_t dcount = (int64_t)(tc->picstop - test_ch.last_picstop);
+    test_ch.last_picstop = tc->picstop;
+    
+    int64_t delta_ps = dcount * (int64_t)PICTICK_PS - (int64_t)tc->tof - test_ch.fudge;
+    
+    if (delta_ps >= 0) {
+      test_ch.ts_opt.sub_ps += (uint64_t)delta_ps;
+      if (test_ch.ts_opt.sub_ps >= PS_PER_SEC) {
+        test_ch.ts_opt.sub_ps -= PS_PER_SEC;
+        test_ch.ts_opt.seconds += 1u;
+      }
+    } else {
+      uint64_t m = (uint64_t)(-delta_ps);
+      if (m <= test_ch.ts_opt.sub_ps) {
+        test_ch.ts_opt.sub_ps -= m;
+      } else {
+        m -= test_ch.ts_opt.sub_ps;
+        uint64_t borrow_sec = 1 + (m / PS_PER_SEC);
+        uint64_t rem = m % PS_PER_SEC;
+        test_ch.ts_opt.seconds -= (uint32_t)borrow_sec;
+        test_ch.ts_opt.sub_ps = PS_PER_SEC - rem;
+      }
+    }
     
     // Check results
     bool sec_ok = (test_ch.ts_opt.seconds == tc->expected_sec);

@@ -78,6 +78,17 @@ struct config_t {
 // exposed function prototypes
 void UserConfig(struct config_t *config);
 void doSetupMenu(struct config_t *config);
+
+// Serial I/O helper functions (declared in config_core.cpp)
+void serialPrintImmediate(const char *s);
+void configPrint(const char* msg);
+void serialWriteImmediate(char c);
+void serialDrain();
+size_t readLine(char *buf, size_t cap);
+char* trimInPlace(char *s);
+
+// Forward declaration for processCommand (defined in config_menu.cpp)
+bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu);
 void print_MeasureMode(MeasureMode x);
 void printHzAsMHz(int64_t x);
 void get_serial_number();

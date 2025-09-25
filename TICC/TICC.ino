@@ -84,6 +84,7 @@ extern "C" void _putchar(char character) {
 #include <stdint.h>  // define unint16_t, uint32_t
 
 // CRITICAL: Include printf BEFORE Arduino.h to override Arduino's printf functions
+// The mpaland printf library must be included first to replace Arduino's limited printf
 #include "printf.h"           // mpaland printf library for 64-bit support
 
 #include <SPI.h>     // SPI support
@@ -95,6 +96,7 @@ extern "C" void _putchar(char character) {
 #include "board.h"            // LED macros and Arduino pin definitions
 #include "config.h"           // config and eeprom
 #include "misc.h"             // random functions
+#include "print64.h"          // optimized 64-bit printing routines
 #include "tdc7200.h"          // TDC registers and structures
 
 volatile int64_t PICcount;
@@ -183,6 +185,9 @@ void ticc_setup() {
   Serial.println("# TAPR TICC Timestamping Counter");
   Serial.println("# Copyright 2016-2025 N8UR, K9TRV, NH6Z, WA8YWQ");
   Serial.println("# ");
+  
+  // Test the optimized print64.cpp functions
+  test_print64_function();
   
   Serial.println("#####################");
   Serial.println("# TICC Configuration: ");

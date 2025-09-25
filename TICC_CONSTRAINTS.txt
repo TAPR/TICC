@@ -1,0 +1,25 @@
+This file includes basic information about the TICC system and
+system constraints.
+
+-- PICcount is int64_t incremented by an external clock at 100 us interval
+-- PICstop is int64_t and captured from PICcount on hardware interrupt
+-- PICcount and PICstop are never negative and monotonically increase
+
+-- tof is calculated from data provided by external hardware
+-- tof is in picoseconds and will always be in the range 300 ns
+   (300 000 ps) to 100.3 us (100 300 000 ps).
+-- tof is never negative.
+
+-- Timestamps are calculated as (PICstop * 100 us) - tof - fudge
+   (for testing assume "fudge" is 0 picoseconds)
+-- Timestamps can never be negative numbers
+-- Timestamps have 1 picosecond resolution (12 decimal places)
+
+-- Arduino Serial.print() cannot handle 64 bit vars
+-- Arduino printf() cannot handle 64 bit vars
+-- Arduino printf() cannot format floating point
+-- We use a 3rd party printf library that can do these 
+   things (mpaland printf)
+-- Proper #include order is required for mpaland printf to override stdio
+
+

@@ -200,6 +200,21 @@ static bool parseDecimalScaledPair(const char *s, int64_t scale, bool *set0, int
 
 // Legacy getInt64 function removed - replaced by parseInt64Simple() and parseDecimalScaled() in unified menu system
 
+/******************************************************************************
+ * Simple helper functions to reduce repetition in menu code
+ *******************************************************************************/
+
+// Get input either from direct parameter or interactive prompt
+static char* getInputOrPrompt(const char* args, const char* prompt, char* buffer, size_t bufferSize) {
+  if (strlen(args) >= 1) {
+    return (char*)args;  // Direct parameter provided
+  } else {
+    configPrint(prompt);
+    readLine(buffer, bufferSize);
+    return trimInPlace(buffer);
+  }
+}
+
 void printHzAsMHz(int64_t x)
 {
   char str[128];
@@ -305,141 +320,117 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
     char choice = line[1];
     if (choice == '1') {
       // G1) Clock speed MHz
-      char *cline;
-      if (strlen(args) >= 2) {  // Need at least 2 chars for G1 plus parameter
-        // Direct parameter provided (e.g., "G1"10.0")
-        cline = args + 1;  // Skip past "G1"
-      } else {
-        // Interactive mode
-        configPrint("Clock MHz: "); 
-        char buf[96];
-        size_t cn = readLine(buf, sizeof(buf)); 
-        cline = trimInPlace(buf);
-      }
-      
-      int64_t hz; if (parseDecimalScaled(cline, 1000000LL, &hz) && hz > 0) { 
-        int64_t old=pConfigInfo->CLOCK_HZ; pConfigInfo->CLOCK_HZ = hz; 
+      char buf[96];
+      char *input = getInputOrPrompt(args, "Clock MHz: ", buf, sizeof(buf));
+      int64_t hz; 
+      if (parseDecimalScaled(input, 1000000LL, &hz) && hz > 0) { 
+        int64_t old = pConfigInfo->CLOCK_HZ; 
+        pConfigInfo->CLOCK_HZ = hz; 
         MARK_CONFIG_CHANGED();
-        char m[64]; sprintf(m, "OK -- Clock %ld.%06ld -> %ld.%06ld\r\n", (int32_t)(old/1000000LL),(int32_t)(old%1000000LL),(int32_t)(hz/1000000LL),(int32_t)(hz%1000000LL)); configPrint(m); 
-      } else configPrint("Invalid\r\n");
+        char m[64]; 
+        sprintf(m, "OK -- Clock %ld.%06ld -> %ld.%06ld\r\n", 
+                (int32_t)(old/1000000LL), (int32_t)(old%1000000LL),
+                (int32_t)(hz/1000000LL), (int32_t)(hz%1000000LL)); 
+        configPrint(m); 
+      } else {
+        configPrint("Invalid\r\n");
+      }
       Serial.flush();
     }
     else if (choice == '2') {
       // G2) Coarse tick us
-      char *cline;
-      if (strlen(args) >= 2) {  // Need at least 2 chars for G2 plus parameter
-        // Direct parameter provided (e.g., "G2"100.0")
-        cline = args + 1;  // Skip past "G2"
-      } else {
-        // Interactive mode
-        configPrint("Coarse tick (us): "); 
-        char buf[96];
-        size_t cn = readLine(buf, sizeof(buf)); 
-        cline = trimInPlace(buf);
-      }
-      
-      int64_t ps; if (parseDecimalScaled(cline, 1000000LL, &ps) && ps > 0) { 
-        int64_t old=pConfigInfo->PICTICK_PS; pConfigInfo->PICTICK_PS = ps; 
+      char buf[96];
+      char *input = getInputOrPrompt(args, "Coarse tick (us): ", buf, sizeof(buf));
+      int64_t ps; 
+      if (parseDecimalScaled(input, 1000000LL, &ps) && ps > 0) { 
+        int64_t old = pConfigInfo->PICTICK_PS; 
+        pConfigInfo->PICTICK_PS = ps; 
         MARK_CONFIG_CHANGED();
-        char m[64]; sprintf(m, "OK -- Coarse %ld.%06ld -> %ld.%06ld\r\n", (int32_t)(old/1000000LL),(int32_t)(old%1000000LL),(int32_t)(ps/1000000LL),(int32_t)(ps%1000000LL)); configPrint(m); 
-      } else configPrint("Invalid\r\n");
+        char m[64]; 
+        sprintf(m, "OK -- Coarse %ld.%06ld -> %ld.%06ld\r\n", 
+                (int32_t)(old/1000000LL), (int32_t)(old%1000000LL),
+                (int32_t)(ps/1000000LL), (int32_t)(ps%1000000LL)); 
+        configPrint(m); 
+      } else {
+        configPrint("Invalid\r\n");
+      }
       Serial.flush();
     }
     else if (choice == '3') {
       // G3) Prop delays
-      char *cline;
-      if (strlen(args) >= 2) {  // Need at least 2 chars for G3 plus parameter
-        // Direct parameter provided (e.g., "G3"100/200")
-        cline = args + 1;  // Skip past "G3"
-      } else {
-        // Interactive mode
-        configPrint("Enter pair A/B: "); 
-        char buf[96];
-        size_t cn = readLine(buf, sizeof(buf)); 
-        cline = trimInPlace(buf);
-      }
-      
+      char buf[96];
+      char *input = getInputOrPrompt(args, "Enter pair A/B: ", buf, sizeof(buf));
       bool s0=false, s1=false; int64_t v0=0, v1=0; 
-      if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { 
-        configPrint("Invalid\r\n"); Serial.flush(); 
+      if (!parseInt64Pair(input, &s0, &v0, &s1, &v1)) { 
+        configPrint("Invalid\r\n"); 
       } else { 
         int32_t o0=pConfigInfo->PROP_DELAY[0], o1=pConfigInfo->PROP_DELAY[1]; 
-        if (s0) pConfigInfo->PROP_DELAY[0]=v0; if (s1) pConfigInfo->PROP_DELAY[1]=v1; 
+        if (s0) pConfigInfo->PROP_DELAY[0]=v0; 
+        if (s1) pConfigInfo->PROP_DELAY[1]=v1; 
         MARK_CONFIG_CHANGED();
-        char m[80]; sprintf(m, "OK -- PropDelay %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->PROP_DELAY[0],(long)pConfigInfo->PROP_DELAY[1]); configPrint(m); Serial.flush(); 
+        char m[80]; 
+        sprintf(m, "OK -- PropDelay %ld/%ld -> %ld/%ld\r\n", 
+                (long)o0, (long)o1, (long)pConfigInfo->PROP_DELAY[0], (long)pConfigInfo->PROP_DELAY[1]); 
+        configPrint(m); 
       }
+      Serial.flush();
     }
     else if (choice == '4') {
       // G4) Time dilation
-      char *cline;
-      if (strlen(args) >= 2) {  // Need at least 2 chars for G4 plus parameter
-        // Direct parameter provided (e.g., "G4"1.001/1.002")
-        cline = args + 1;  // Skip past "G4"
-      } else {
-        // Interactive mode
-        configPrint("Enter pair A/B: "); 
-        char buf[96];
-        size_t cn = readLine(buf, sizeof(buf)); 
-        cline = trimInPlace(buf);
-      }
-      
+      char buf[96];
+      char *input = getInputOrPrompt(args, "Enter pair A/B: ", buf, sizeof(buf));
       bool s0=false, s1=false; int64_t v0=0, v1=0; 
-      if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { 
-        configPrint("Invalid\r\n"); Serial.flush(); 
+      if (!parseInt64Pair(input, &s0, &v0, &s1, &v1)) { 
+        configPrint("Invalid\r\n"); 
       } else { 
         int32_t o0=pConfigInfo->TIME_DILATION[0], o1=pConfigInfo->TIME_DILATION[1]; 
-        if (s0) pConfigInfo->TIME_DILATION[0]=v0; if (s1) pConfigInfo->TIME_DILATION[1]=v1; 
+        if (s0) pConfigInfo->TIME_DILATION[0]=v0; 
+        if (s1) pConfigInfo->TIME_DILATION[1]=v1; 
         MARK_CONFIG_CHANGED();
-        char m[80]; sprintf(m, "OK -- TimeDilation %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->TIME_DILATION[0],(long)pConfigInfo->TIME_DILATION[1]); configPrint(m); Serial.flush(); 
+        char m[80]; 
+        sprintf(m, "OK -- TimeDilation %ld/%ld -> %ld/%ld\r\n", 
+                (long)o0, (long)o1, (long)pConfigInfo->TIME_DILATION[0], (long)pConfigInfo->TIME_DILATION[1]); 
+        configPrint(m); 
       }
+      Serial.flush();
     }
     else if (choice == '5') {
       // G5) fixedTime2
-      char *cline;
-      if (strlen(args) >= 2) {  // Need at least 2 chars for G5 plus parameter
-        // Direct parameter provided (e.g., "G5"1000/2000")
-        cline = args + 1;  // Skip past "G5"
-      } else {
-        // Interactive mode
-        configPrint("Enter pair A/B: "); 
-        char buf[96];
-        size_t cn = readLine(buf, sizeof(buf)); 
-        cline = trimInPlace(buf);
-      }
-      
+      char buf[96];
+      char *input = getInputOrPrompt(args, "Enter pair A/B: ", buf, sizeof(buf));
       bool s0=false, s1=false; int64_t v0=0, v1=0; 
-      if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { 
-        configPrint("Invalid\r\n"); Serial.flush(); 
+      if (!parseInt64Pair(input, &s0, &v0, &s1, &v1)) { 
+        configPrint("Invalid\r\n"); 
       } else { 
         int32_t o0=pConfigInfo->FIXED_TIME2[0], o1=pConfigInfo->FIXED_TIME2[1]; 
-        if (s0) pConfigInfo->FIXED_TIME2[0]=v0; if (s1) pConfigInfo->FIXED_TIME2[1]=v1; 
+        if (s0) pConfigInfo->FIXED_TIME2[0]=v0; 
+        if (s1) pConfigInfo->FIXED_TIME2[1]=v1; 
         MARK_CONFIG_CHANGED();
-        char m[80]; sprintf(m, "OK -- fixedTime2 %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->FIXED_TIME2[0],(long)pConfigInfo->FIXED_TIME2[1]); configPrint(m); Serial.flush(); 
+        char m[80]; 
+        sprintf(m, "OK -- fixedTime2 %ld/%ld -> %ld/%ld\r\n", 
+                (long)o0, (long)o1, (long)pConfigInfo->FIXED_TIME2[0], (long)pConfigInfo->FIXED_TIME2[1]); 
+        configPrint(m); 
       }
+      Serial.flush();
     }
     else if (choice == '6') {
       // G6) FUDGE0
-      char *cline;
-      if (strlen(args) >= 2) {  // Need at least 2 chars for G6 plus parameter
-        // Direct parameter provided (e.g., "G6"50/100")
-        cline = args + 1;  // Skip past "G6"
-      } else {
-        // Interactive mode
-        configPrint("Enter pair A/B: "); 
-        char buf[96];
-        size_t cn = readLine(buf, sizeof(buf)); 
-        cline = trimInPlace(buf);
-      }
-      
+      char buf[96];
+      char *input = getInputOrPrompt(args, "Enter pair A/B: ", buf, sizeof(buf));
       bool s0=false, s1=false; int64_t v0=0, v1=0; 
-      if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { 
-        configPrint("Invalid\r\n"); Serial.flush(); 
+      if (!parseInt64Pair(input, &s0, &v0, &s1, &v1)) { 
+        configPrint("Invalid\r\n"); 
       } else { 
         int32_t o0=pConfigInfo->FUDGE0[0], o1=pConfigInfo->FUDGE0[1]; 
-        if (s0) pConfigInfo->FUDGE0[0]=v0; if (s1) pConfigInfo->FUDGE0[1]=v1; 
+        if (s0) pConfigInfo->FUDGE0[0]=v0; 
+        if (s1) pConfigInfo->FUDGE0[1]=v1; 
         MARK_CONFIG_CHANGED();
-        char m[80]; sprintf(m, "OK -- FUDGE0 %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->FUDGE0[0],(long)pConfigInfo->FUDGE0[1]); configPrint(m); Serial.flush(); 
+        char m[80]; 
+        sprintf(m, "OK -- FUDGE0 %ld/%ld -> %ld/%ld\r\n", 
+                (long)o0, (long)o1, (long)pConfigInfo->FUDGE0[0], (long)pConfigInfo->FUDGE0[1]); 
+        configPrint(m); 
       }
+      Serial.flush();
     }
     else {
       configPrint("Invalid advanced choice\r\n");
@@ -524,146 +515,117 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
 
   // B) Wrap digits
   if (cmd == 'B') {
-    char *line;
-    if (strlen(args) >= 1) {
-      // Direct parameter provided (e.g., "B5")
-      line = args;
-    } else {
-      // Interactive mode
-      configPrint("Wrap digits (0..10): "); 
-      char buf[96];
-      size_t n = readLine(buf, sizeof(buf)); 
-      line = trimInPlace(buf);
-    }
-    
-    int64_t wrap; if (parseInt64Simple(line, &wrap) && wrap >= 0 && wrap <= 10) { 
-      int16_t old=pConfigInfo->WRAP; pConfigInfo->WRAP = (int16_t)wrap; 
+    char buf[96];
+    char *input = getInputOrPrompt(args, "Wrap digits (0..10): ", buf, sizeof(buf));
+    int64_t wrap; 
+    if (parseInt64Simple(input, &wrap) && wrap >= 0 && wrap <= 10) { 
+      int16_t old = pConfigInfo->WRAP; 
+      pConfigInfo->WRAP = (int16_t)wrap; 
       MARK_CONFIG_CHANGED();
-      char m[64]; sprintf(m, "OK -- Wrap %d -> %d\r\n", (int)old, (int)pConfigInfo->WRAP); configPrint(m); 
-    } else configPrint("Invalid\r\n");
+      char m[64]; 
+      sprintf(m, "OK -- Wrap %d -> %d\r\n", (int)old, (int)pConfigInfo->WRAP); 
+      configPrint(m); 
+    } else {
+      configPrint("Invalid\r\n");
+    }
     Serial.flush();
     return true;
   }
   
   // C) Output decimal places
   if (cmd == 'C') {
-    char *line;
-    if (strlen(args) >= 1) {
-      // Direct parameter provided (e.g., "C6")
-      line = args;
-    } else {
-      // Interactive mode
-      configPrint("Output decimal places (0..12): "); 
-      char buf[96];
-      size_t n = readLine(buf, sizeof(buf)); 
-      line = trimInPlace(buf);
-    }
-    
-    int64_t places; if (parseInt64Simple(line, &places) && places >= 0 && places <= 12) { 
-      int16_t old=pConfigInfo->PLACES; pConfigInfo->PLACES = (int16_t)places; 
+    char buf[96];
+    char *input = getInputOrPrompt(args, "Output decimal places (0..12): ", buf, sizeof(buf));
+    int64_t places; 
+    if (parseInt64Simple(input, &places) && places >= 0 && places <= 12) { 
+      int16_t old = pConfigInfo->PLACES; 
+      pConfigInfo->PLACES = (int16_t)places; 
       MARK_CONFIG_CHANGED();
-      char m[64]; sprintf(m, "OK -- Places %d -> %d\r\n", (int)old, (int)pConfigInfo->PLACES); configPrint(m); 
-    } else configPrint("Invalid\r\n");
+      char m[64]; 
+      sprintf(m, "OK -- Places %d -> %d\r\n", (int)old, (int)pConfigInfo->PLACES); 
+      configPrint(m); 
+    } else {
+      configPrint("Invalid\r\n");
+    }
     Serial.flush();
     return true;
   }
   
   // D) Trigger edges
   if (cmd == 'D') {
-    char *ln;
-    if (strlen(args) >= 3) {
-      // Direct parameter provided (e.g., "DR/F")
-      ln = args;
-    } else {
-      // Interactive mode
-      configPrint("Enter edges A/B (R/F): "); 
-      char buf[96];
-      size_t n = readLine(buf, sizeof(buf)); 
-      ln = trimInPlace(buf);
-    }
-    
-    if (ln[0] && ln[1] == '/' && ln[2]) {
-      char e0 = toupper(ln[0]), e1 = toupper(ln[2]);
+    char buf[96];
+    char *input = getInputOrPrompt(args, "Enter edges A/B (R/F): ", buf, sizeof(buf));
+    if (input[0] && input[1] == '/' && input[2]) {
+      char e0 = toupper(input[0]), e1 = toupper(input[2]);
       if ((e0 == 'R' || e0 == 'F') && (e1 == 'R' || e1 == 'F')) {
-        char o0=pConfigInfo->START_EDGE[0], o1=pConfigInfo->START_EDGE[1];
-        pConfigInfo->START_EDGE[0]=e0; pConfigInfo->START_EDGE[1]=e1;
+        char o0 = pConfigInfo->START_EDGE[0], o1 = pConfigInfo->START_EDGE[1];
+        pConfigInfo->START_EDGE[0] = e0; 
+        pConfigInfo->START_EDGE[1] = e1;
         MARK_CONFIG_CHANGED();
-        char m[64]; sprintf(m, "OK -- Edges %c/%c -> %c/%c\r\n", o0,o1,e0,e1); configPrint(m);
-      } else configPrint("Invalid\r\n");
-    } else configPrint("Invalid\r\n");
+        char m[64]; 
+        sprintf(m, "OK -- Edges %c/%c -> %c/%c\r\n", o0, o1, e0, e1); 
+        configPrint(m);
+      } else {
+        configPrint("Invalid\r\n");
+      }
+    } else {
+      configPrint("Invalid\r\n");
+    }
     Serial.flush();
     return true;
   }
   
   // E) Sync mode
   if (cmd == 'E') {
-    char *line;
-    if (strlen(args) >= 1) {
-      // Direct parameter provided (e.g., "EM")
-      line = args;
-    } else {
-      // Interactive mode
-      configPrint("Enter P or S: "); 
-      char buf[96];
-      size_t n = readLine(buf, sizeof(buf)); 
-      line = trimInPlace(buf);
-    }
-    
-    char c = toupper(line[0]); 
+    char buf[96];
+    char *input = getInputOrPrompt(args, "Enter P or S: ", buf, sizeof(buf));
+    char c = toupper(input[0]); 
     if (c == 'P' || c == 'S') { 
-      char old=pConfigInfo->SYNC_MODE; pConfigInfo->SYNC_MODE=c; 
+      char old = pConfigInfo->SYNC_MODE; 
+      pConfigInfo->SYNC_MODE = c; 
       MARK_CONFIG_CHANGED();
-      char m[64]; sprintf(m, "OK -- Sync %c -> %c\r\n", old, c); configPrint(m); 
-    } else configPrint("Invalid\r\n");
+      char m[64]; 
+      sprintf(m, "OK -- Sync %c -> %c\r\n", old, c); 
+      configPrint(m); 
+    } else {
+      configPrint("Invalid\r\n");
+    }
     Serial.flush();
     return true;
   }
   
-  // F) Channel names
+  // F) Channel names (preserve case - no uppercasing)
   if (cmd == 'F') {
-    char *ln;
-    if (strlen(args) >= 3) {
-      // Direct parameter provided (e.g., "FAB")
-      ln = args;
-    } else {
-      // Interactive mode
-      configPrint("Enter names A/B: "); 
-      char buf[96];
-      size_t n = readLine(buf, sizeof(buf)); 
-      ln = trimInPlace(buf);
-    }
-    
-    if (ln[0] && ln[1] == '/' && ln[2]) {
-      char o0=pConfigInfo->NAME[0], o1=pConfigInfo->NAME[1]; 
-      pConfigInfo->NAME[0]=ln[0]; pConfigInfo->NAME[1]=ln[2];
+    char buf[96];
+    char *input = getInputOrPrompt(args, "Enter names A/B: ", buf, sizeof(buf));
+    if (input[0] && input[1] == '/' && input[2]) {
+      char o0 = pConfigInfo->NAME[0], o1 = pConfigInfo->NAME[1]; 
+      pConfigInfo->NAME[0] = input[0];  // No toupper() - preserve case
+      pConfigInfo->NAME[1] = input[2];  // No toupper() - preserve case
       MARK_CONFIG_CHANGED();
-      char m[64]; sprintf(m, "OK -- Names %c/%c -> %c/%c\r\n", o0,o1,ln[0],ln[2]); configPrint(m);
-    } else configPrint("Invalid\r\n");
+      char m[64]; 
+      sprintf(m, "OK -- Names %c/%c -> %c/%c\r\n", o0, o1, input[0], input[2]); 
+      configPrint(m);
+    } else {
+      configPrint("Invalid\r\n");
+    }
     Serial.flush();
     return true;
   }
 
   // G) Poll char
   if (cmd == 'G') {
-    char *line;
-    if (strlen(args) >= 1) {
-      // Direct parameter provided (e.g., "Gx")
-      line = args;
-    } else {
-      // Interactive mode
-      char old = pConfigInfo->POLL_CHAR;
-      configPrint("Enter poll character (space to clear): ");
-      char buf[96];
-      size_t n = readLine(buf, sizeof(buf)); 
-      line = trimInPlace(buf);
-    }
-    
+    char buf[96];
+    char *input = getInputOrPrompt(args, "Enter poll character (space to clear): ", buf, sizeof(buf));
     char old = pConfigInfo->POLL_CHAR;
-    pConfigInfo->POLL_CHAR = (line[0] == '\0' || line[0] == ' ') ? 0x00 : line[0];
+    pConfigInfo->POLL_CHAR = (input[0] == '\0' || input[0] == ' ') ? 0x00 : input[0];
     MARK_CONFIG_CHANGED();
     char msg[64]; 
-    if (old) sprintf(msg, "OK -- Poll Char %c -> %c\r\n", old, pConfigInfo->POLL_CHAR ? pConfigInfo->POLL_CHAR : ' '); 
-    else sprintf(msg, "OK -- Poll Char none -> %c\r\n", pConfigInfo->POLL_CHAR ? pConfigInfo->POLL_CHAR : ' '); 
+    if (old) {
+      sprintf(msg, "OK -- Poll Char %c -> %c\r\n", old, pConfigInfo->POLL_CHAR ? pConfigInfo->POLL_CHAR : ' '); 
+    } else {
+      sprintf(msg, "OK -- Poll Char none -> %c\r\n", pConfigInfo->POLL_CHAR ? pConfigInfo->POLL_CHAR : ' '); 
+    }
     configPrint(msg);
     Serial.flush();
     return true;
@@ -794,6 +756,27 @@ static bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *sh
           else { configPrint("Invalid\r\n"); Serial.flush(); }
         }
       }
+    }
+    return true;
+  }
+
+  // X) Developer EEPROM clear (undocumented)
+  if (cmd == 'X') {
+    configPrint("WARNING: This will completely erase the entire EEPROM including serial number!\r\n");
+    configPrint("Type 'YES' to confirm: ");
+    char buf[96];
+    size_t n = readLine(buf, sizeof(buf));
+    char *input = trimInPlace(buf);
+    if (strcmp(input, "YES") == 0) {
+      configPrint("Clearing entire EEPROM...\r\n");
+      eeprom_clear();
+      configPrint("EEPROM cleared. Restarting...\r\n");
+      // Force a restart by setting a flag that will cause main loop to exit
+      extern volatile uint8_t request_restart;
+      request_restart = 1;
+      return false;
+    } else {
+      configPrint("EEPROM clear cancelled.\r\n");
     }
     return true;
   }

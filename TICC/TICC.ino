@@ -11,6 +11,11 @@
 extern const char SW_VERSION[17] = "20250925.1";
 extern const char SW_TAG[6] = "BETA";
 
+// Implementation of _putchar for mpaland printf library
+extern "C" void _putchar(char character) {
+  Serial.write(character);
+}
+
 /*
  * NOTES FOR FUTURE GENERATIONS
  * 
@@ -77,18 +82,19 @@ extern const char SW_TAG[6] = "BETA";
  */
 
 #include <stdint.h>  // define unint16_t, uint32_t
+
+// CRITICAL: Include printf BEFORE Arduino.h to override Arduino's printf functions
+#include "printf.h"           // mpaland printf library for 64-bit support
+
 #include <SPI.h>     // SPI support
 #include <EEPROM.h>  // eeprom library
 
-// install EnableInterrupt from the .zip file in the main TICC folder
-// or download from https://github.com/GreyGnome/EnableInterrupt
-// use "Sketch/Include Library/Add .ZIP Library" to install
-#include <EnableInterrupt.h>  // use faster interrupt library
+// EnableInterrupt library - must be included after printf
+#include "EnableInterrupt.h"  // use faster interrupt library
 
-#include "board.h"            // LED macros#include "board.h"            // LED macros
+#include "board.h"            // LED macros and Arduino pin definitions
 #include "config.h"           // config and eeprom
 #include "misc.h"             // random functions
-#include "board.h"            // Arduino pin definitions
 #include "tdc7200.h"          // TDC registers and structures
 
 volatile int64_t PICcount;
@@ -177,6 +183,10 @@ void ticc_setup() {
   Serial.println("# TAPR TICC Timestamping Counter");
   Serial.println("# Copyright 2016-2025 N8UR, K9TRV, NH6Z, WA8YWQ");
   Serial.println("# ");
+  
+  // Test printf library with 64-bit support
+  int64_t test_val = 123456789012345LL;
+  printf("# printf test: 64-bit value = %lld\n", test_val);
   Serial.println("#####################");
   Serial.println("# TICC Configuration: ");
   print_config(config);

@@ -21,17 +21,13 @@
 // Include TICC headers for constants and external variables
 #include "config.h"
 #include "misc.h"
+#include "tdc7200.h"          // For Timestamp64 definition
 
 // mpaland printf should be linked so snprintf here supports 64-bit integers.
 
 // External references to global config
 extern config_t config;
 
-// Optimized timestamp structure (mixed-radix) - will replace SplitTime
-typedef struct {
-  uint32_t seconds;   // integer seconds, monotonic
-  uint64_t sub_ps;    // 0..(1e12 - 1) picoseconds within the second
-} Timestamp64;
 
 // Constants - using TICC's actual constants
 static const uint64_t ONE_T_PS   = PS_PER_SEC;  // 1e12 picoseconds per second

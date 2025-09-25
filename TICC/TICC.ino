@@ -96,8 +96,8 @@ extern "C" void _putchar(char character) {
 #include "board.h"            // LED macros and Arduino pin definitions
 #include "config.h"           // config and eeprom
 #include "misc.h"             // random functions
-#include "print64.h"          // optimized 64-bit printing routines
 #include "tdc7200.h"          // TDC registers and structures
+#include "print64.h"          // optimized 64-bit printing routines
 
 volatile int64_t PICcount;
 int64_t CLOCK_HZ;
@@ -189,6 +189,9 @@ void ticc_setup() {
   // Test the optimized print64.cpp functions
   test_print64_function();
   
+  // Test the optimized timestamp calculation
+  test_optimized_calculation();
+  
   Serial.println("#####################");
   Serial.println("# TICC Configuration: ");
   print_config(config);
@@ -215,6 +218,12 @@ void ticc_setup() {
     channels[i].totalize = 0;
     channels[i].PICstop = 0;
     channels[i].tof = 0;
+    
+    // Initialize optimized timestamp structure
+    channels[i].ts_opt.seconds = 0;
+    channels[i].ts_opt.sub_ps = 0;
+    channels[i].last_ts_opt.seconds = 0;
+    channels[i].last_ts_opt.sub_ps = 0;
 
     channels[i].name = config.NAME[i];
     channels[i].prop_delay = config.PROP_DELAY[i];
@@ -752,5 +761,126 @@ void catch_stop0() {
 
 void catch_stop1() {
   channels[1].PICstop = PICcount;
+}
+
+// Forward declaration
+void update_timestamp_optimized(tdc7200Channel &ch, uint64_t picstop_snapshot, int64_t tof_ps);
+
+// Optimized timestamp calculation based on calc_loop.txt
+// Updates the timestamp using the new Timestamp64 structure
+void update_timestamp_optimized(tdc7200Channel &ch, uint64_t picstop_snapshot, int64_t tof_ps) {
+  // delta ticks since previous event on this channel
+  int64_t dcount = (int64_t)(picstop_snapshot - ch.last_picstop);
+  ch.last_picstop = picstop_snapshot;
+
+  // delta_ps = dcount * PICTICK_PS - tof - fudge
+  // Note: fudge combines prop_delay and FUDGE0 from config
+  int64_t delta_ps = dcount * (int64_t)PICTICK_PS - (int64_t)tof_ps - ch.fudge;
+
+  // With TICC hardware, delta_ps should be >= 0 typically.
+  if (delta_ps >= 0) {
+    ch.ts_opt.sub_ps += (uint64_t)delta_ps;
+
+    // Carry to seconds (usually 0 or 1)
+    if (ch.ts_opt.sub_ps >= PS_PER_SEC) {
+      ch.ts_opt.sub_ps -= PS_PER_SEC;
+      ch.ts_opt.seconds += 1u;
+    }
+  } else {
+    // Defensive rare case (in case tof + fudge slightly exceeds dcount*PICTICK_PS)
+    uint64_t m = (uint64_t)(-delta_ps);
+    if (m <= ch.ts_opt.sub_ps) {
+      ch.ts_opt.sub_ps -= m;
+    } else {
+      m -= ch.ts_opt.sub_ps;
+      uint64_t borrow_sec = 1 + (m / PS_PER_SEC);
+      uint64_t rem = m % PS_PER_SEC;
+      ch.ts_opt.seconds -= (uint32_t)borrow_sec;
+      ch.ts_opt.sub_ps = PS_PER_SEC - rem;
+    }
+  }
+}
+
+// Test function for optimized timestamp calculation
+void test_optimized_calculation() {
+  Serial.println("# ");
+  Serial.println("# Testing optimized timestamp calculation...");
+  Serial.println("# ");
+  
+  // Create a test channel structure
+  tdc7200Channel test_ch('T', 0, 0, 0, 0, 0);  // Test channel
+  
+  // Initialize test channel
+  test_ch.ts_opt.seconds = 0;
+  test_ch.ts_opt.sub_ps = 0;
+  test_ch.last_ts_opt.seconds = 0;
+  test_ch.last_ts_opt.sub_ps = 0;
+  test_ch.last_picstop = 0;
+  test_ch.fudge = 0;  // No fudge for testing
+  
+  struct TestCase {
+    uint64_t picstop;
+    int64_t tof;
+    const char* description;
+    uint32_t expected_sec;
+    uint64_t expected_sub_ps;
+  };
+  
+  TestCase test_cases[] = {
+    // Basic tests
+    {10000, 1000000000, "1 second (10000 ticks @ 100µs) + 1ns TOF", 0, 1000000000},
+    {10000, 500000000000, "1 second + 500µs TOF", 0, 500000000000},
+    {10000, 999999999999, "1 second + 999.999µs TOF", 0, 999999999999},
+    
+    // Carry tests
+    {10000, 0, "1 second exactly (should carry to seconds)", 1, 0},
+    {10000, 1000000, "1 second + 1µs (should carry)", 1, 1000000},
+    
+    // Multiple second tests
+    {50000, 0, "5 seconds exactly", 5, 0},
+    {50000, 123456789012, "5 seconds + fractional", 5, 123456789012},
+    
+    // Edge cases
+    {1, 999999999999, "1 tick (100µs) + max fractional", 0, 999999999999},
+    {0, 0, "Zero case", 0, 0},
+  };
+  
+  for (int i = 0; i < sizeof(test_cases) / sizeof(test_cases[0]); i++) {
+    TestCase* tc = &test_cases[i];
+    
+    // Reset test channel
+    test_ch.ts_opt.seconds = 0;
+    test_ch.ts_opt.sub_ps = 0;
+    test_ch.last_picstop = 0;
+    
+    // Run the optimized calculation
+    update_timestamp_optimized(test_ch, tc->picstop, tc->tof);
+    
+    // Check results
+    bool sec_ok = (test_ch.ts_opt.seconds == tc->expected_sec);
+    bool sub_ok = (test_ch.ts_opt.sub_ps == tc->expected_sub_ps);
+    
+    Serial.print("# Test ");
+    Serial.print(i + 1);
+    Serial.print(" (");
+    Serial.print(tc->description);
+    Serial.print("): ");
+    
+    if (sec_ok && sub_ok) {
+      char result_buf[64];
+      sprintf(result_buf, "PASS - %u.%llu seconds", test_ch.ts_opt.seconds, test_ch.ts_opt.sub_ps);
+      Serial.println(result_buf);
+    } else {
+      char result_buf[128];
+      sprintf(result_buf, "FAIL - Expected %u.%llu, got %u.%llu", 
+              tc->expected_sec, tc->expected_sub_ps, 
+              test_ch.ts_opt.seconds, test_ch.ts_opt.sub_ps);
+      Serial.println(result_buf);
+    }
+  }
+  
+  Serial.println("# ");
+  Serial.println("# Optimized calculation test complete.");
+  Serial.println("# ");
 }
 /****************************************************************/

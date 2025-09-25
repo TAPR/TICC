@@ -1,0 +1,291 @@
+#include <Arduino.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <string.h>
+#include <stdio.h>
+
+// mpaland printf should be linked so snprintf here supports 64-bit integers.
+
+// Timestamp structure (mixed-radix)
+typedef struct {
+  uint32_t seconds;   // integer seconds, monotonic
+  uint64_t sub_ps;    // 0..(1e12 - 1) picoseconds within the second
+} Timestamp;
+
+// Constants
+static const uint64_t ONE_T_PS   = 1000000000000ULL; // 1e12
+static const uint32_t POW10_U32[10] = {
+  1u, 10u, 100u, 1000u, 10000u,
+  100000u, 1000000u, 10000000u, 100000000u, 1000000000u
+};
+static const uint64_t POW10_U64[13] = {
+  1ULL,
+  10ULL,
+  100ULL,
+  1000ULL,
+  10000ULL,
+  100000ULL,
+  1000000ULL,
+  10000000ULL,
+  100000000ULL,
+  1000000000ULL,
+  10000000000ULL,
+  100000000000ULL,
+  1000000000000ULL
+};
+
+// Helper: clamp PLACES to [0,12]
+static inline uint8_t clamp_places(uint8_t p) {
+  return (p > 12) ? 12 : p;
+}
+
+// Helper: returns 10^k as uint32_t for k<=9, else 0
+static inline uint32_t pow10_u32_or0(uint8_t k) {
+  if (k <= 9) return POW10_U32[k];
+  return 0u;
+}
+
+// Format function
+// out: output buffer
+// out_size: size of output buffer
+// t: timestamp (seconds, sub_ps normalized 0..1e12-1)
+// PLACES: decimal digits to print after the dot (0..12)
+// WRAP_SECONDS: 0 = no wrap; else wrap at 10^WRAP_SECONDS with zero-padding width WRAP_SECONDS
+// ch_label: e.g., "chA"; may be NULL or empty to omit
+// Returns number of bytes written (without terminating NUL) or -1 on error.
+int format_timestamp_line(
+  char* out,
+  size_t out_size,
+  const Timestamp* t,
+  uint8_t PLACES,
+  uint8_t WRAP_SECONDS,
+  const char* ch_label
+) {
+  if (!out || out_size == 0 || !t) return -1;
+
+  // Clamp PLACES and WRAP_SECONDS
+  PLACES = clamp_places(PLACES);
+  if (WRAP_SECONDS > 12) WRAP_SECONDS = 12;
+
+  // Prepare seconds for printing (wrapped or full)
+  // For performance, prefer WRAP_SECONDS <= 9 (32-bit).
+  uint32_t wrap_mod_u32 = pow10_u32_or0(WRAP_SECONDS);
+  uint64_t wrap_mod_u64 = (WRAP_SECONDS > 9) ? POW10_U64[WRAP_SECONDS] : 0ULL;
+
+  // Compute displayed seconds
+  uint32_t disp_seconds_u32 = t->seconds; // default (no wrap)
+  uint64_t disp_seconds_u64 = t->seconds; // for WRAP >= 10
+
+  if (WRAP_SECONDS != 0) {
+    if (wrap_mod_u32) {
+      disp_seconds_u32 = t->seconds % wrap_mod_u32;
+    } else {
+      // WRAP 10..12: modulo by up to 1e12; seconds is 32-bit so this is cheap enough
+      disp_seconds_u64 = ((uint64_t)t->seconds) % wrap_mod_u64;
+    }
+  }
+
+  // Prepare fractional part with rounding to PLACES digits
+  // We need to print exactly PLACES digits after the dot, rounded.
+  // sub_ps has 12 digits max. To round to PLACES:
+  //   if PLACES == 12: use sub_ps as-is.
+  //   else:
+  //     base = 10^(12-PLACES)
+  //     frac_rounded = (sub_ps + base/2) / base
+  //     if frac_rounded == 10^PLACES, carry 1 second and set frac to 0.
+  uint64_t frac_ps = t->sub_ps; // 0..999,999,999,999
+  uint64_t frac_out = 0ULL;
+  uint32_t carry_to_seconds = 0u;
+
+  if (PLACES == 0) {
+    // Round to integer seconds
+    if (frac_ps >= 500000000000ULL) carry_to_seconds = 1u;
+    frac_out = 0ULL;
+  } else if (PLACES == 12) {
+    frac_out = frac_ps;
+  } else {
+    uint8_t drop_digits = (uint8_t)(12 - PLACES);
+    uint64_t base = POW10_U64[drop_digits];     // 10^(12-PLACES)
+    uint64_t half = base >> 1;                   // base/2
+    uint64_t rounded = (frac_ps + half) / base;  // rounded PLACES digits
+
+    uint64_t full_scale = POW10_U64[PLACES];
+    if (rounded >= full_scale) {
+      // e.g., 0.999999999999 rounded to fewer places overflowed
+      rounded = 0ULL;
+      carry_to_seconds = 1u;
+    }
+    frac_out = rounded;
+  }
+
+  // Apply carry to seconds (after wrap decision)
+  // For WRAP_SECONDS == 0, we can safely add carry to full seconds.
+  // For WRAP_SECONDS > 0:
+  //  - If <= 9: do wrap on disp_seconds_u32 only for displayed seconds (no need to alter t->seconds).
+  //  - If > 9: do wrap on the disp_seconds_u64 similarly.
+  uint32_t print_sec_u32 = 0;
+  uint64_t print_sec_u64 = 0;
+
+  if (WRAP_SECONDS == 0) {
+    uint32_t s = t->seconds + carry_to_seconds;
+    print_sec_u32 = s;
+  } else if (wrap_mod_u32) {
+    uint32_t s = disp_seconds_u32 + carry_to_seconds;
+    if (s >= wrap_mod_u32) s -= wrap_mod_u32;
+    print_sec_u32 = s;
+  } else {
+    uint64_t s = disp_seconds_u64 + (uint64_t)carry_to_seconds;
+    if (s >= wrap_mod_u64) s -= wrap_mod_u64;
+    print_sec_u64 = s;
+  }
+
+  // Build output with CRLF. Ensure the buffer is large enough.
+  // Worst-case sizes:
+  // - Seconds: up to 10 digits (uint32_t) or up to 12 digits when wrapped with WRAP_SECONDS=12
+  // - Dot + fractional: 1 + PLACES (<=12)
+  // - Space + channel (e.g., " chA"): up to, say, 6 chars (depends on your labels)
+  // - CRLF: 2
+  // - NUL: 1
+  // Use a safe line length like 48 in your caller, as you already do.
+  int n = 0;
+  if (WRAP_SECONDS == 0) {
+    // No wrap: seconds as %lu, fractional as %.PLACES with zero-padding via width
+    if (PLACES == 0) {
+      if (ch_label && ch_label[0]) {
+        n = snprintf(out, out_size, "%lu%s%s", (unsigned long)print_sec_u32, " ", ch_label);
+      } else {
+        n = snprintf(out, out_size, "%lu", (unsigned long)print_sec_u32);
+      }
+    } else if (PLACES <= 9) {
+      // For PLACES <= 9, frac_out fits in uint32_t
+      if (ch_label && ch_label[0]) {
+        n = snprintf(out, out_size, "%lu.%0*u %s",
+                     (unsigned long)print_sec_u32,
+                     (int)PLACES, (unsigned int)frac_out,
+                     ch_label);
+      } else {
+        n = snprintf(out, out_size, "%lu.%0*u",
+                     (unsigned long)print_sec_u32,
+                     (int)PLACES, (unsigned int)frac_out);
+      }
+    } else {
+      // PLACES 10..12: use 64-bit for fractional
+      // Build width via fixed formats to avoid %.* with 64-bit if you prefer;
+      // mpaland supports %0*llu, so we can use width as int.
+      if (ch_label && ch_label[0]) {
+        n = snprintf(out, out_size, "%lu.%0*llu %s",
+                     (unsigned long)print_sec_u32,
+                     (int)PLACES, (unsigned long long)frac_out,
+                     ch_label);
+      } else {
+        n = snprintf(out, out_size, "%lu.%0*llu",
+                     (unsigned long)print_sec_u32,
+                     (int)PLACES, (unsigned long long)frac_out);
+      }
+    }
+  } else {
+    // With wrap: seconds printed zero-padded to WRAP_SECONDS digits
+    if (wrap_mod_u32) {
+      if (PLACES == 0) {
+        if (ch_label && ch_label[0]) {
+          n = snprintf(out, out_size, "%0*u %s",
+                       (int)WRAP_SECONDS, (unsigned int)print_sec_u32, ch_label);
+        } else {
+          n = snprintf(out, out_size, "%0*u",
+                       (int)WRAP_SECONDS, (unsigned int)print_sec_u32);
+        }
+      } else if (PLACES <= 9) {
+        if (ch_label && ch_label[0]) {
+          n = snprintf(out, out_size, "%0*u.%0*u %s",
+                       (int)WRAP_SECONDS, (unsigned int)print_sec_u32,
+                       (int)PLACES,       (unsigned int)frac_out,
+                       ch_label);
+        } else {
+          n = snprintf(out, out_size, "%0*u.%0*u",
+                       (int)WRAP_SECONDS, (unsigned int)print_sec_u32,
+                       (int)PLACES,       (unsigned int)frac_out);
+        }
+      } else {
+        if (ch_label && ch_label[0]) {
+          n = snprintf(out, out_size, "%0*u.%0*llu %s",
+                       (int)WRAP_SECONDS, (unsigned int)print_sec_u32,
+                       (int)PLACES,       (unsigned long long)frac_out,
+                       ch_label);
+        } else {
+          n = snprintf(out, out_size, "%0*u.%0*llu",
+                       (int)WRAP_SECONDS, (unsigned int)print_sec_u32,
+                       (int)PLACES,       (unsigned long long)frac_out);
+        }
+      }
+    } else {
+      // WRAP 10..12: seconds modulo up to 1e12 and zero-padded to WRAP_SECONDS
+      // Use 64-bit printing for seconds
+      if (PLACES == 0) {
+        if (ch_label && ch_label[0]) {
+          // e.g., %012llu for WRAP_SECONDS=12
+          char fmt[16];
+          // Build format like "%0XXllu %s"
+          snprintf(fmt, sizeof(fmt), "%%0%ullu %%s", (unsigned long long)WRAP_SECONDS);
+          // mpaland does not support dynamic field width in this constructed way,
+          // so instead, branch explicitly by WRAP_SECONDS for 10..12:
+          if (WRAP_SECONDS == 10)
+            n = snprintf(out, out_size, "%010llu %s",
+                         (unsigned long long)print_sec_u64, ch_label);
+          else if (WRAP_SECONDS == 11)
+            n = snprintf(out, out_size, "%011llu %s",
+                         (unsigned long long)print_sec_u64, ch_label);
+          else
+            n = snprintf(out, out_size, "%012llu %s",
+                         (unsigned long long)print_sec_u64, ch_label);
+        } else {
+          if (WRAP_SECONDS == 10)
+            n = snprintf(out, out_size, "%010llu",
+                         (unsigned long long)print_sec_u64);
+          else if (WRAP_SECONDS == 11)
+            n = snprintf(out, out_size, "%011llu",
+                         (unsigned long long)print_sec_u64);
+          else
+            n = snprintf(out, out_size, "%012llu",
+                         (unsigned long long)print_sec_u64);
+        }
+      } else {
+        if (ch_label && ch_label[0]) {
+          if (WRAP_SECONDS == 10)
+            n = snprintf(out, out_size, "%010llu.%0*llu %s",
+                         (unsigned long long)print_sec_u64,
+                         (int)PLACES, (unsigned long long)frac_out, ch_label);
+          else if (WRAP_SECONDS == 11)
+            n = snprintf(out, out_size, "%011llu.%0*llu %s",
+                         (unsigned long long)print_sec_u64,
+                         (int)PLACES, (unsigned long long)frac_out, ch_label);
+          else
+            n = snprintf(out, out_size, "%012llu.%0*llu %s",
+                         (unsigned long long)print_sec_u64,
+                         (int)PLACES, (unsigned long long)frac_out, ch_label);
+        } else {
+          if (WRAP_SECONDS == 10)
+            n = snprintf(out, out_size, "%010llu.%0*llu",
+                         (unsigned long long)print_sec_u64,
+                         (int)PLACES, (unsigned long long)frac_out);
+          else if (WRAP_SECONDS == 11)
+            n = snprintf(out, out_size, "%011llu.%0*llu",
+                         (unsigned long long)print_sec_u64,
+                         (int)PLACES, (unsigned long long)frac_out);
+          else
+            n = snprintf(out, out_size, "%012llu.%0*llu",
+                         (unsigned long long)print_sec_u64,
+                         (int)PLACES, (unsigned long long)frac_out);
+        }
+      }
+    }
+  }
+
+  if (n < 0) return -1;
+
+  // Append CRLF
+  if ((size_t)n + 2 >= out_size) return -1;
+  out[n++] = '\r';
+  out[n++] = '\n';
+  out[n] = '\0';
+  return n;
+}

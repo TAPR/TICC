@@ -1,6 +1,9 @@
 #ifndef TDC7200_H
 #define TDC7200_H
 
+#include <stdint.h>
+#include "config.h"
+
 // TICC Time interval Counter based on TICC Shield using TDC7200
 //
 // Copyright John Ackermann N8UR 2016-2025
@@ -8,6 +11,11 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
+// Optimized timestamp structure (mixed-radix) - replaces SplitTime
+typedef struct {
+  uint32_t seconds;   // integer seconds, monotonic
+  uint64_t sub_ps;    // 0..(1e12 - 1) picoseconds within the second
+} Timestamp64;
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
 #define SPI_SPEED         (int32_t)  20000000 // 20MHz maximum
@@ -62,10 +70,10 @@ public:
   int64_t tof;
   int64_t last_tof;
   int64_t totalize;
-  // removed ts_frac_ps; represented via SplitTime chunks
+  // Optimized timestamp using Timestamp64 (int32_t sec + int64_t frac)
   volatile uint8_t new_ts_ready; // set when a fresh ts_* is available for pairing
-  SplitTime ts_split;       // unified split timestamp (sec, frac_hi, frac_lo)
-  SplitTime last_ts_split;  // previous split timestamp
+  Timestamp64 ts_opt;       // optimized timestamp (sec, sub_ps)
+  Timestamp64 last_ts_opt;  // previous optimized timestamp
   int64_t prop_delay;
   int64_t time_dilation;
   int64_t fixed_time2;

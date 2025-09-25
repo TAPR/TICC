@@ -1,0 +1,89 @@
+#include <Arduino.h>
+#include <stdint.h>
+
+typedef struct {
+  uint32_t seconds;   // integer seconds
+  uint64_t sub_ps;    // 0..(1e12-1)
+} Timestamp;
+
+static const uint64_t ONE_T_PS   = 1000000000000ULL; // 1e12 ps
+static const uint64_t PICTICK_PS = 10000000ULL;      // 100 us = 10,000,000 ps
+
+// Hardware-provided volatile counters/values
+volatile uint64_t PICcount = 0;          // incremented in ISR every 100 us
+volatile uint64_t latest_tof_ps_ch0 = 0; // absolute per-event tof (ps) for ch0
+volatile uint64_t latest_tof_ps_ch1 = 0; // absolute per-event tof (ps) for ch1
+
+// Event flags (set once PICstop and tof for the event are ready)
+volatile bool event_ready_ch0 = false;
+volatile bool event_ready_ch1 = false;
+
+// Per-channel state
+typedef struct {
+  Timestamp ts;            // accumulator
+  uint64_t last_picstop;   // last latched PICstop (ticks)
+  uint64_t picstop_latched;// latest PICstop latched in ISR
+  char name;
+} ChannelState;
+
+static ChannelState ch[2] = {
+  { .ts = {0,0}, .last_picstop = 0, .picstop_latched = 0, .name = '0' },
+  { .ts = {0,0}, .last_picstop = 0, .picstop_latched = 0, .name = '1' },
+};
+
+// ISRs (as you have)
+void coarseTimer() {
+  PICcount++;
+}
+void catch_stop0() {
+  ch[0].picstop_latched = PICcount; // latch tick count for ch0
+  // ensure latest_tof_ps_ch0 is set when the measurement completes
+}
+void catch_stop1() {
+  ch[1].picstop_latched = PICcount; // latch tick count for ch1
+  // ensure latest_tof_ps_ch1 is set when the measurement completes
+}
+
+// Initialize timestamp state (call in setup)
+static void init_timestamp_state() {
+  noInterrupts();
+  ch[0].last_picstop = ch[0].picstop_latched = PICcount;
+  ch[1].last_picstop = ch[1].picstop_latched = PICcount;
+  interrupts();
+
+  ch[0].ts.seconds = 0; ch[0].ts.sub_ps = 0;
+  ch[1].ts.seconds = 0; ch[1].ts.sub_ps = 0;
+}
+
+// Core per-event updater: uses absolute tof per event
+static inline void update_timestamp_from_event(ChannelState &C, uint64_t picstop_snapshot, uint64_t tof_ps) {
+  // delta ticks since previous event on this channel
+  int64_t dcount = (int64_t)(picstop_snapshot - C.last_picstop);
+  C.last_picstop = picstop_snapshot;
+
+  // delta_ps = dcount * 10,000,000 − tof (fudge = 0)
+  int64_t delta_ps = dcount * (int64_t)PICTICK_PS - (int64_t)tof_ps;
+
+  // With your hardware, delta_ps should be >= 0 typically.
+  if (delta_ps >= 0) {
+    C.ts.sub_ps += (uint64_t)delta_ps;
+
+    // Carry to seconds (usually 0 or 1)
+    if (C.ts.sub_ps >= ONE_T_PS) {
+      C.ts.sub_ps -= ONE_T_PS;
+      C.ts.seconds += 1u;
+    }
+  } else {
+    // Defensive rare case (in case tof slightly exceeds dcount*PICTICK_PS)
+    uint64_t m = (uint64_t)(-delta_ps);
+    if (m <= C.ts.sub_ps) {
+      C.ts.sub_ps -= m;
+    } else {
+      m -= C.ts.sub_ps;
+      uint64_t borrow_sec = 1 + (m / ONE_T_PS);
+      uint64_t rem = m % ONE_T_PS;
+      C.ts.seconds -= (uint32_t)borrow_sec;
+      C.ts.sub_ps = ONE_T_PS - rem;
+    }
+  }
+}

@@ -11,12 +11,7 @@
 #define PRINT64_H
 
 #include <stdint.h>
-
-// Optimized timestamp structure (mixed-radix) - will replace SplitTime
-typedef struct {
-  uint32_t seconds;   // integer seconds, monotonic
-  uint64_t sub_ps;    // 0..(1e12 - 1) picoseconds within the second
-} Timestamp64;
+#include "tdc7200.h"  // For Timestamp64 typedef
 
 // Format timestamp using global config settings
 // out: output buffer

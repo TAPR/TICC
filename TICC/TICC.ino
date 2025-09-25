@@ -103,6 +103,7 @@ config_t config;
 MeasureMode MODE, lastMODE;
 static uint8_t skip_config_prompt_once = 0;
 volatile uint8_t request_restart = 0;
+static uint8_t just_restarted = 1;  // Flag to track if we just restarted
 
 // Configuration change tracking
 static config_t config_backup;  // Backup of config before changes
@@ -314,6 +315,16 @@ void loop() {
     static uint32_t last_micros = 0;    // Loop watchdog timestamp
     static int64_t last_PICcount = 0;   // Counter state memory
     static uint8_t ext_clk_led_on = 0;  // LED state cache to avoid redundant writes
+
+    // Reset static variables if we just restarted to prevent false "Reference lost" messages
+    if (just_restarted) {
+      last_micros = 0;
+      last_PICcount = PICcount;  // Initialize with current PICcount value
+      ext_clk_led_on = 0;
+      just_restarted = 0;  // Clear the flag
+      // Small delay to allow coarseTimer ISR to start firing
+      delay(100);
+    }
 
     {
       uint32_t now = micros();
@@ -679,6 +690,7 @@ void loop() {
         // If restart required, exit loop to reinitialize
         if (config_change_requires_restart()) {
           skip_config_prompt_once = 1;
+          just_restarted = 1;  // Set flag for next loop iteration
           return; // reinitialize via ticc_setup() on next loop entry
         }
         // Otherwise continue in the same loop with new settings
@@ -698,6 +710,7 @@ void loop() {
     // Check if restart was requested (option '2' from config menu)
     if (request_restart) {
       request_restart = 0;  // Clear the flag
+      just_restarted = 1;   // Set flag for next loop iteration
       Serial.println("# Restart requested, reinitializing system...");
       return;  // Exit loop to trigger fresh ticc_setup() call
     }

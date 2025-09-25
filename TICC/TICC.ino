@@ -184,9 +184,6 @@ void ticc_setup() {
   Serial.println("# Copyright 2016-2025 N8UR, K9TRV, NH6Z, WA8YWQ");
   Serial.println("# ");
   
-  // Test printf library with 64-bit support
-  int64_t test_val = 123456789012345LL;
-  printf("# printf test: 64-bit value = %lld\n", test_val);
   Serial.println("#####################");
   Serial.println("# TICC Configuration: ");
   print_config(config);

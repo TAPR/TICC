@@ -14,12 +14,11 @@
     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
     See the License for the specific language governing permissions and
     limitations under the License.
-*/ 
+*/
 
 // Many definitions in /usr/avr/include/avr/io.h
 
 #ifndef EnableInterrupt_h
-#pragma message("NOTICE: *** EnableInterrupt library PRIOR TO version 0.9.6. This is not a problem. Keep calm, and carry on. ***")
 #define EnableInterrupt_h
 #include <Arduino.h>
 
@@ -37,7 +36,7 @@
 // Arduino Due (not Duemilanove) and Zero macros. Easy-peasy.
 // Zero uses the __SAMD21G18A__ processor macro (2015-10-13) but we will use this handy macro, to
 // avoid breaking the library over tiny changes.
-#if defined __SAM3U4E__ || defined __SAM3X8E__ || defined __SAM3X8H__ || defined ARDUINO_SAMD_ZERO/*{{{*/
+#if defined __SAM3U4E__ || defined __SAM3X8E__ || defined __SAM3X8H__ || defined ARDUINO_SAMD_ZERO || defined __SAMD21G18A__  || defined __SAMD21J18A__ /*{{{*/
 #ifdef NEEDFORSPEED
 #error Due and Zero are already fast; the NEEDFORSPEED definition does not make sense on it.
 #endif
@@ -49,7 +48,7 @@
 /* enableInterrupt- Sets up an interrupt on a selected Arduino pin.
  * or
  * enableInterruptFast- When used with the NEEDFORSPEED macro, sets up an interrupt on a selected Arduino pin.
- * 
+ *
  * Usage:
  * enableInterrupt(uint8_t pinNumber, void (*userFunction)(void), uint8_t mode);
  * or
@@ -78,11 +77,11 @@
  * to specify that you want to use a Pin Change Interrupt type of interrupt on those pins that
  * support both Pin Change and External Interrupts. Otherwise, the library will choose whatever
  * interrupt type (External, or Pin Change) normally applies to that pin, with priority to
- * External Interrupt. 
+ * External Interrupt.
  *
  * The interruptDesignator is required because on the ATmega328 processor pins 2 and 3 support
  * ''either'' pin change or * external interrupts. On 644/1284-based systems, pin change interrupts
- * are supported on all pins and external interruptsare supported on pins 2, 10, and 11. 
+ * are supported on all pins and external interrupts are supported on pins 2, 10, and 11.
  * Otherwise, each pin only supports a single type of interrupt and the
  * PINCHANGEINTERRUPT scheme changes nothing. This means you can ignore this whole discussion
  * for ATmega2560- or ATmega32U4-based Arduinos. You can probably safely ignore it for
@@ -304,11 +303,10 @@ static volatile uint8_t portSnapshotD;
 #define PORTC_VECT PCINT1_vect
 #define PORTD_VECT PCINT2_vect/*}}}*/
 
-/* MEGA SERIES ************************************************************************/
-/* MEGA SERIES ************************************************************************/
-/* MEGA SERIES ************************************************************************/
-#elif defined __AVR_ATmega640__ || defined __AVR_ATmega2560__ || defined __AVR_ATmega1280__ || \
-  defined __AVR_ATmega1281__ || defined __AVR_ATmega2561__
+/* MEGA2560/1280/640 SERIES ************************************************************************/
+/* MEGA2560/1280/640 SERIES ************************************************************************/
+/* MEGA2560/1280/640 SERIES ************************************************************************/
+#elif defined __AVR_ATmega640__ || defined __AVR_ATmega2560__ || defined __AVR_ATmega1280__
 #define ARDUINO_MEGA /*{{{*/
 #define EI_NOTPORTA
 #define EI_NOTPORTC
@@ -529,6 +527,124 @@ static volatile uint8_t portSnapshotK;
 #define PORTK_VECT PCINT2_vect
 /*}}}*/
 
+/* MEGA2561/1281 SERIES ************************************************************************/
+/* MEGA2561/1281 SERIES ************************************************************************/
+/* MEGA2561/1281 SERIES ************************************************************************/
+#elif defined __AVR_ATmega1281__ || defined __AVR_ATmega2561__
+#define ARDUINO_MEGA /*{{{*/
+#define EI_NOTPORTA
+#define EI_NOTPORTC
+#define EI_NOTPORTD
+#define EI_NOTPORTJ
+#define EI_NOTPORTK /*}}}*/
+
+#if defined EI_NOTPINCHANGE/*{{{*/
+#ifndef EI_NOTPORTB
+#define EI_NOTPORTB
+#endif
+#endif
+
+#ifndef NEEDFORSPEED
+// Pin change interrupts
+#define ARDUINO_PIN_B0 8
+#define ARDUINO_PIN_B1 9
+#define ARDUINO_PIN_B2 10
+#define ARDUINO_PIN_B3 11
+#define ARDUINO_PIN_B4 12
+#define ARDUINO_PIN_B5 13
+#define ARDUINO_PIN_B6 14
+#define ARDUINO_PIN_B7 15
+
+const uint8_t PROGMEM digital_pin_to_port_bit_number_PGM[] = {
+  0, // PE0  pin: 0
+  1, // PE1  pin: 1
+  2, // PE2  pin: 2
+  3, // PE3  pin: 3
+  4, // PE4  pin: 4
+  5, // PE5  pin: 5
+  6, // PE6  pin: 6
+  7, // PE7  pin: 7
+  0, // PB0  pin: 8
+  1, // PB1  pin: 9
+  2, // PB2  pin: 10
+  3, // PB3  pin: 11
+  4, // PB4  pin: 12
+  5, // PB5  pin: 13
+  6, // PB6  pin: 14
+  7, // PB7  pin: 15
+  3, // PG3  pin: 16
+  4, // PG4  pin: 17
+  0, // PD0  pin: 18
+  1, // PD1  pin: 19
+  2, // PD2  pin: 20
+  3, // PD3  pin: 21
+  4, // PD4  pin: 22
+  5, // PD5  pin: 23
+  6, // PD6  pin: 24
+  7, // PD7  pin: 25
+  0, // PG0  pin: 26
+  1, // PG1  pin: 27
+  0, // PC0  pin: 28
+  1, // PC1  pin: 29
+  2, // PC2  pin: 30
+  3, // PC3  pin: 31
+  4, // PC4  pin: 32
+  5, // PC5  pin: 33
+  6, // PC6  pin: 34
+  7, // PC7  pin: 35
+  2, // PG2  pin: 36
+  7, // PA7  pin: 37
+  6, // PA6  pin: 38
+  5, // PA5  pin: 39
+  4, // PA4  pin: 40
+  3, // PA3  pin: 41
+  2, // PA2  pin: 42
+  1, // PA1  pin: 43
+  0, // PA0  pin: 44
+  0, // PF0  pin: 45
+  1, // PF1  pin: 46
+  2, // PF2  pin: 47
+  3, // PF3  pin: 48
+  4, // PF4  pin: 49
+  5, // PF5  pin: 50
+  6, // PF6  pin: 51
+  7, // PF7  pin: 52
+  5  // PG5  pin: 53
+};
+
+#if ! defined(EI_NOTEXTERNAL) && ! defined(EI_NOTINT0) && ! defined(EI_NOTINT1) && ! defined(EI_NOTINT2) && ! defined(EI_NOTINT3) && ! defined(EI_NOTINT4) && ! defined(EI_NOTINT5) && ! defined(EI_NOTINT6) && ! defined(EI_NOTINT7)
+interruptFunctionType functionPointerArrayEXTERNAL[8];
+#endif
+
+#ifndef EI_NOTPORTB
+struct functionPointersPortB {
+  interruptFunctionType pinZero;
+  interruptFunctionType pinOne;
+  interruptFunctionType pinTwo;
+  interruptFunctionType pinThree;
+  interruptFunctionType pinFour;
+  interruptFunctionType pinFive;
+  interruptFunctionType pinSix;
+  interruptFunctionType pinSeven;
+};
+typedef struct functionPointersPortB functionPointersPortB;
+
+functionPointersPortB portBFunctions = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
+#endif
+
+#endif // ifndef NEEDFORSPEED
+
+// For Pin Change Interrupts; since we're duplicating FALLING and RISING in software,
+// we have to know how we were defined.
+#ifndef EI_NOTPORTB
+volatile uint8_t risingPinsPORTB=0;
+volatile uint8_t fallingPinsPORTB=0;
+static volatile uint8_t portSnapshotB;
+#endif
+
+#define PORTB_VECT PCINT0_vect
+/*}}}*/
+
 /* LEONARDO ***************************************************************************/
 /* LEONARDO ***************************************************************************/
 /* LEONARDO ***************************************************************************/
@@ -562,7 +678,7 @@ static volatile uint8_t portSnapshotK;
 #define ARDUINO_PIN_D3 1
 #define ARDUINO_PIN_E6 7
 
-/* To derive this list: 
+/* To derive this list:
    sed -n -e '1,/digital_pin_to_port_PGM/d' -e '/^}/,$d' -e '/P/p' \
        /usr/share/arduino/hardware/arduino/variants/leonardo/pins_arduino.h | \
        awk '{print "  ", $5 ", // " $5 "  pin: " $3}'
@@ -654,6 +770,79 @@ static volatile uint8_t portSnapshotB;
 #endif
 
 #ifndef NEEDFORSPEED
+#if defined BOBUINO_PINOUT
+#define ARDUINO_PIN_A0 21
+#define ARDUINO_PIN_A1 20
+#define ARDUINO_PIN_A2 19
+#define ARDUINO_PIN_A3 18
+#define ARDUINO_PIN_A4 17
+#define ARDUINO_PIN_A5 16
+#define ARDUINO_PIN_A6 15
+#define ARDUINO_PIN_A7 14
+#define ARDUINO_PIN_B0 4
+#define ARDUINO_PIN_B1 5
+#define ARDUINO_PIN_B2 6  // INT2
+#define ARDUINO_PIN_B3 7
+#define ARDUINO_PIN_B4 10
+#define ARDUINO_PIN_B5 11
+#define ARDUINO_PIN_B6 12
+#define ARDUINO_PIN_B7 13
+#define ARDUINO_PIN_C0 22
+#define ARDUINO_PIN_C1 23
+#define ARDUINO_PIN_C2 24
+#define ARDUINO_PIN_C3 25
+#define ARDUINO_PIN_C4 26
+#define ARDUINO_PIN_C5 27
+#define ARDUINO_PIN_C6 28
+#define ARDUINO_PIN_C7 29
+#define ARDUINO_PIN_D0 0
+#define ARDUINO_PIN_D1 1
+#define ARDUINO_PIN_D2 2  // INT0
+#define ARDUINO_PIN_D3 3  // INT1
+#define ARDUINO_PIN_D4 30
+#define ARDUINO_PIN_D5 8
+#define ARDUINO_PIN_D6 9
+#define ARDUINO_PIN_D7 31
+
+const uint8_t PROGMEM digital_pin_to_port_bit_number_PGM[] = {
+  0, // PD0
+  1, // PD1
+  2, // PD2
+  3, // PD3
+  0, // PB0
+  1, // PB1
+  2, // PB2
+  3, // PB3
+  5, // PD5
+  6, // PD6
+
+  4, // PB4
+  5, // PB5
+  6, // PB6
+  7, // PB7
+  7, // PA7
+  6, // PA6
+  5, // PA5
+  4, // PA4
+  3, // PA3
+  2, // PA2
+
+  1, // PA1
+  0, // PA0
+  0, // PC0
+  1, // PC1
+  2, // PC2
+  3, // PC3
+  4, // PC4
+  5, // PC5
+  6, // PC6
+  7, // PC7
+
+  4, // PD4
+  7, // PD7
+};
+
+#else
 #define ARDUINO_PIN_A0 24
 #define ARDUINO_PIN_A1 25
 #define ARDUINO_PIN_A2 26
@@ -662,14 +851,6 @@ static volatile uint8_t portSnapshotB;
 #define ARDUINO_PIN_A5 29
 #define ARDUINO_PIN_A6 30
 #define ARDUINO_PIN_A7 31
-#define ARDUINO_PIN_B0 0
-#define ARDUINO_PIN_B1 1
-#define ARDUINO_PIN_B2 2
-#define ARDUINO_PIN_B3 3
-#define ARDUINO_PIN_B4 4
-#define ARDUINO_PIN_B5 5
-#define ARDUINO_PIN_B6 6
-#define ARDUINO_PIN_B7 7
 #define ARDUINO_PIN_C0 16
 #define ARDUINO_PIN_C1 17
 #define ARDUINO_PIN_C2 18
@@ -678,14 +859,44 @@ static volatile uint8_t portSnapshotB;
 #define ARDUINO_PIN_C5 21
 #define ARDUINO_PIN_C6 22
 #define ARDUINO_PIN_C7 23
+
+// For boards with the 44 pin options:  vectors B & D are reversed
+// Thanks to Sara Damiano for these updates!!!
+#if defined ARDUINO_AVR_ENVIRODIY_MAYFLY || defined ARDUINO_AVR_SODAQ_MBILI
+#define ARDUINO_PIN_B0 8
+#define ARDUINO_PIN_B1 9
+#define ARDUINO_PIN_B2 10  // INT2
+#define ARDUINO_PIN_B3 11
+#define ARDUINO_PIN_B4 12
+#define ARDUINO_PIN_B5 13
+#define ARDUINO_PIN_B6 14
+#define ARDUINO_PIN_B7 15
+#define ARDUINO_PIN_D0 0
+#define ARDUINO_PIN_D1 1
+#define ARDUINO_PIN_D2 2  // INT0
+#define ARDUINO_PIN_D3 3  // INT1
+#define ARDUINO_PIN_D4 4
+#define ARDUINO_PIN_D5 5
+#define ARDUINO_PIN_D6 6
+#define ARDUINO_PIN_D7 7
+#else
+#define ARDUINO_PIN_B0 0
+#define ARDUINO_PIN_B1 1
+#define ARDUINO_PIN_B2 2  // INT2
+#define ARDUINO_PIN_B3 3
+#define ARDUINO_PIN_B4 4
+#define ARDUINO_PIN_B5 5
+#define ARDUINO_PIN_B6 6
+#define ARDUINO_PIN_B7 7
 #define ARDUINO_PIN_D0 8
 #define ARDUINO_PIN_D1 9
-#define ARDUINO_PIN_D2 10
-#define ARDUINO_PIN_D3 11
+#define ARDUINO_PIN_D2 10  // INT0
+#define ARDUINO_PIN_D3 11  // INT1
 #define ARDUINO_PIN_D4 12
 #define ARDUINO_PIN_D5 13
 #define ARDUINO_PIN_D6 14
 #define ARDUINO_PIN_D7 15
+#endif
 
 const uint8_t PROGMEM digital_pin_to_port_bit_number_PGM[] = {
   0, // 0 == port B, 0
@@ -721,6 +932,7 @@ const uint8_t PROGMEM digital_pin_to_port_bit_number_PGM[] = {
   6,
   7
 };
+#endif
 
 
 #if ! defined(EI_NOTEXTERNAL) && ! defined(EI_NOTINT0) && ! defined(EI_NOTINT1) && ! defined(EI_NOTINT2)
@@ -776,7 +988,7 @@ static volatile uint8_t portSnapshotB;
 volatile uint8_t risingPinsPORTC=0;
 volatile uint8_t fallingPinsPORTC=0;
 static volatile uint8_t portSnapshotC;
-#endif 
+#endif
 
 #ifndef EI_NOTPORTD
 volatile uint8_t risingPinsPORTD=0;
@@ -987,7 +1199,7 @@ static volatile uint8_t portSnapshotB;
 #define EI_printPSTR(x) EI_SerialPrint_P(PSTR(x))
 void EI_SerialPrint_P(const char *str) {
   for (uint8_t c; (c = pgm_read_byte(str)); str++) Serial.write(c);
-} 
+}
 #endif
 
 
@@ -1018,8 +1230,8 @@ void enableInterrupt(uint8_t interruptDesignator, interruptFunctionType userFunc
 #if defined ARDUINO_328
   if ( (interruptDesignator & PINCHANGEINTERRUPT) || (arduinoPin != 2 && arduinoPin != 3) ) {
 #elif defined MIGHTY1284
-  if ( (interruptDesignator & PINCHANGEINTERRUPT) || (arduinoPin != 2 && arduinoPin != 10 &&
-                                                      arduinoPin != 11) ) {
+  if ( (interruptDesignator & PINCHANGEINTERRUPT) ||
+     (arduinoPin != ARDUINO_PIN_B2 && arduinoPin != ARDUINO_PIN_D2 && arduinoPin != ARDUINO_PIN_D3) ) {
 #elif defined ARDUINO_LEONARDO
   if ( (arduinoPin > 3) && (arduinoPin != 7) ) {
 #elif defined EI_ATTINY24
@@ -1044,6 +1256,7 @@ void enableInterrupt(uint8_t interruptDesignator, interruptFunctionType userFunc
       portNumber=pgm_read_byte(&digital_pin_to_port_PGM[arduinoPin]);
     }
 #elif defined ARDUINO_MEGA
+#if defined __AVR_ATmega640__ || defined __AVR_ATmega2560__ || defined __AVR_ATmega1280__
   // NOTE: PJ2-6 and PE6 & 7 are not exposed on the Arduino, but they are supported here
   // for software interrupts and support of non-Arduino platforms which expose more pins.
   // PJ2-6 are called pins 70-74, PE6 is pin 75, PE7 is pin 76.
@@ -1057,6 +1270,11 @@ void enableInterrupt(uint8_t interruptDesignator, interruptFunctionType userFunc
       portMask=pgm_read_byte(&digital_pin_to_bit_mask_PGM[arduinoPin]);
       portNumber=pgm_read_byte(&digital_pin_to_port_PGM[arduinoPin]);
     }
+#elif defined __AVR_ATmega1281__ || defined __AVR_ATmega2561__
+  if (!(((arduinoPin >= 4) && (arduinoPin <= 7)) || ((arduinoPin >= 18) && (arduinoPin <=21)))) {
+      portMask=pgm_read_byte(&digital_pin_to_bit_mask_PGM[arduinoPin]);
+      portNumber=pgm_read_byte(&digital_pin_to_port_PGM[arduinoPin]);
+#endif
 #else
 #error Unsupported Arduino platform
 #endif
@@ -1190,8 +1408,8 @@ void disableInterrupt (uint8_t interruptDesignator) {
 #if defined ARDUINO_328
   if ( (interruptDesignator & PINCHANGEINTERRUPT) || (arduinoPin != 2 && arduinoPin != 3) ) {
 #elif defined MIGHTY1284
-  if ( (interruptDesignator & PINCHANGEINTERRUPT) || (arduinoPin != 2 && arduinoPin != 10 &&
-                                                      arduinoPin != 11) ) {
+  if ( (interruptDesignator & PINCHANGEINTERRUPT) ||
+   (arduinoPin != ARDUINO_PIN_B2 && arduinoPin != ARDUINO_PIN_D2 && arduinoPin != ARDUINO_PIN_D3) ) {
 #elif defined EI_ATTINY24
   if ( (interruptDesignator & PINCHANGEINTERRUPT) || (arduinoPin != 8) ) {
 #elif defined EI_ATTINY25
@@ -1304,7 +1522,9 @@ ISR(INT0_vect) {/*{{{*/
   externalFunctionPointer();
 #endif
 #else
-#if defined MIGHTY1284
+#if defined ARDUINO_AVR_ENVIRODIY_MAYFLY || defined ARDUINO_AVR_SODAQ_MBILI
+  INTERRUPT_FLAG_PIN2++;
+#elif defined MIGHTY1284
   INTERRUPT_FLAG_PIN10++;
 #endif
 #if defined ARDUINO_MEGA
@@ -1355,7 +1575,9 @@ ISR(INT1_vect) {/*{{{*/
 #endif // EI_ARDUINO_INTERRUPTED_PIN
   (*functionPointerArrayEXTERNAL[1])();
 #else
-#if defined MIGHTY1284
+#if defined ARDUINO_AVR_ENVIRODIY_MAYFLY || defined ARDUINO_AVR_SODAQ_MBILI
+  INTERRUPT_FLAG_PIN3++;
+#elif defined MIGHTY1284
   INTERRUPT_FLAG_PIN11++;
 #endif
 #if defined ARDUINO_MEGA
@@ -1393,7 +1615,9 @@ ISR(INT2_vect) {/*{{{*/
 #endif // EI_ARDUINO_INTERRUPTED_PIN
   (*functionPointerArrayEXTERNAL[2])();
 #else
-#if defined MIGHTY1284
+#if defined ARDUINO_AVR_ENVIRODIY_MAYFLY || defined ARDUINO_AVR_SODAQ_MBILI
+  INTERRUPT_FLAG_PIN10++;
+#elif defined MIGHTY1284
   INTERRUPT_FLAG_PIN2++;
 #endif
 #if defined ARDUINO_MEGA

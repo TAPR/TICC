@@ -95,9 +95,10 @@ extern "C" void _putchar(char character) {
 
 #include "board.h"            // LED macros and Arduino pin definitions
 #include "config.h"           // config and eeprom
-#include "misc.h"             // random functions
+// misc.h removed - no longer needed
 #include "tdc7200.h"          // TDC registers and structures
-#include "print64.h"          // optimized 64-bit printing routines
+#include "timestamp_utils.h"  // timestamp utility functions
+#include "timestamp_print.h"  // optimized 64-bit printing routines
 
 volatile int64_t PICcount;
 int64_t CLOCK_HZ;

@@ -10,7 +10,7 @@
 #include <stdint.h>           // define unint16_t, uint32_t
 #include <SPI.h>              // SPI support
 
-#include "misc.h"             // random functions
+// misc.h removed - no longer needed
 #include "board.h"            // Arduino pin definitions
 #include "config.h"           // config and eeprom
 #include "tdc7200.h"          // TDC registers and structures

@@ -13,11 +13,11 @@
 #include <SPI.h>
 #include <string.h>
 
-#include "misc.h"
+// misc.h removed - no longer needed
 #include "config.h"
 #include "board.h"
 #include "tdc7200.h"
-#include "print64.h"
+#include "timestamp_print.h"
 
 extern const char SW_VERSION[17]; // set in TICC.ino
 extern const char SW_TAG[6];      // set in TICC.ino

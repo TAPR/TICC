@@ -17,6 +17,7 @@
 #include "config.h"
 #include "board.h"
 #include "tdc7200.h"
+#include "print64.h"
 
 extern const char SW_VERSION[17]; // set in TICC.ino
 extern const char SW_TAG[6];      // set in TICC.ino
@@ -417,6 +418,9 @@ void apply_config_changes() {
   CAL_PERIODS = config.CAL_PERIODS;
   WRAP = config.WRAP;
   ticksPerSecond = PS_PER_SEC / PICTICK_PS;
+  
+  // Update cached print parameters for maximum performance
+  update_cached_config();
 
   // Update channel-specific settings (2 channels: A and B)
   for (size_t i = 0; i < 2; ++i) {

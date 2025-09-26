@@ -17,4 +17,7 @@ int format_timestamp_line_direct_memory(
 // Test function for verifying the optimized print routine
 void test_optimized_print();
 
+// Function to update cached config parameters (call when config changes)
+void update_cached_config();
+
 #endif // PRINT64_H

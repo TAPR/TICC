@@ -222,8 +222,6 @@ void ticc_setup() {
     
     // Initialize last_picstop to 0 (will be updated after first measurement)
     channels[i].last_picstop = 0;
-    
-
     channels[i].name = config.NAME[i];
     channels[i].prop_delay = config.PROP_DELAY[i];
     channels[i].time_dilation = config.TIME_DILATION[i];
@@ -240,9 +238,12 @@ void ticc_setup() {
     channels[i].ready_next();
   }
 
+  // Initialize cached config parameters for maximum print performance
+  update_cached_config();
+
   /*******************************************
    * Synchronize multiple TICCs sharing common 10 MHz and 10 kHz clocks.
-  *******************************************/
+   *******************************************/
   if (config.SYNC_MODE == 'P') {                  // if we are primary, send sync by sending CLIENT_SYNC (A8) high
     delay(2000);                                  // but first sleep to allow client boards to get ready
     pinMode(CLIENT_SYNC, OUTPUT);                 // set CLIENT_SYNC as output (defaults to input)

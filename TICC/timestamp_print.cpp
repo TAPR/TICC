@@ -1,7 +1,6 @@
 // timestamp_print.cpp -- optimized 64-bit printing routines for TICC
 // Based on advisor's fast 64-bit to decimal conversion algorithm
 
-#include "printf.h"  // Must be before Arduino.h to override printf functions
 #include <Arduino.h>
 #include "config.h"
 // misc.h removed - no longer needed

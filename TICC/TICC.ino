@@ -11,10 +11,6 @@
 extern const char SW_VERSION[17] = "20250925.1";
 extern const char SW_TAG[6] = "BETA";
 
-// Implementation of _putchar for mpaland printf library
-extern "C" void _putchar(char character) {
-  Serial.write(character);
-}
 
 /*
  * NOTES FOR FUTURE GENERATIONS
@@ -83,14 +79,10 @@ extern "C" void _putchar(char character) {
 
 #include <stdint.h>  // define unint16_t, uint32_t
 
-// CRITICAL: Include printf BEFORE Arduino.h to override Arduino's printf functions
-// The mpaland printf library must be included first to replace Arduino's limited printf
-#include "printf.h"           // mpaland printf library for 64-bit support
 
 #include <SPI.h>     // SPI support
 #include <EEPROM.h>  // eeprom library
 
-// EnableInterrupt library - must be included after printf
 #include "EnableInterrupt.h"  // use faster interrupt library
 
 #include "board.h"            // LED macros and Arduino pin definitions

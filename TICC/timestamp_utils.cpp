@@ -7,7 +7,6 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-#include "printf.h"  // Must be before Arduino.h to override printf functions
 #include <Arduino.h>
 #include "tdc7200.h"
 #include "timestamp_utils.h"

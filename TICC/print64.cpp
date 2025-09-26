@@ -68,7 +68,7 @@ static inline uint32_t pow10_u32_or0(uint8_t k) {
 // t: timestamp (seconds, sub_ps normalized 0..1e12-1)
 // ch_name: channel name character (e.g., 'A', 'B', '0', '1') - will be formatted as "chA", "chB", etc.
 // Returns number of bytes written (without terminating NUL) or -1 on error.
-int format_timestamp_line(
+int format_timestamp_line_complex(
   char* out,
   size_t out_size,
   const Timestamp64* t,
@@ -238,12 +238,579 @@ int format_timestamp_line(
 
   if (n < 0) return -1;
 
-  // Append CRLF
+  // Complete the line with CRLF and output directly
   if ((size_t)n + 2 >= out_size) return -1;
   out[n++] = '\r';
   out[n++] = '\n';
   out[n] = '\0';
+  
+  // Output directly to Serial - no need for writeln64
+  Serial.write((const uint8_t*)out, n);
   return n;
+}
+
+// Ultra-minimal baseline function - avoid all printf functions
+int format_timestamp_line(
+  char* out,
+  size_t out_size,
+  const Timestamp64* t,
+  char ch_name
+) {
+  if (!out || out_size == 0 || !t) return -1;
+
+  // Ultra-simple: just print a fixed string to test if printf is the bottleneck
+  // Format: "123.000000000000 chA"
+  const char* test_line = "123.000000000000 chA\r\n";
+  int len = strlen(test_line);
+  
+  if (len < (int)out_size) {
+    memcpy(out, test_line, len);
+    // Output directly to Serial
+    Serial.write((const uint8_t*)out, len);
+    return len;
+  }
+  return -1;
+}
+
+// Alternative 1: Manual string building with 32-bit operations (with debug)
+int format_timestamp_line_manual32(
+  char* out,
+  size_t out_size,
+  const Timestamp64* t,
+  char ch_name
+) {
+  if (!out || out_size == 0 || !t) return -1;
+  
+  char* p = out;
+  char* end = out + out_size - 1;
+  
+  
+  // Print seconds (uint32_t - fast)
+  p += sprintf(p, "%u.", t->seconds);
+  
+  // Print fractional part as 12-digit zero-padded value
+  // sub_ps is already in picoseconds (0 to 999,999,999,999)
+  p += sprintf(p, "%012llu ch%c\r\n", (unsigned long long)t->sub_ps, ch_name);
+  
+  if (p < end) {
+    Serial.write((const uint8_t*)out, p - out);
+    return p - out;
+  }
+  return -1;
+}
+
+// Alternative 2: Pure manual string building (no sprintf at all)
+int format_timestamp_line_pure_manual(
+  char* out,
+  size_t out_size,
+  const Timestamp64* t,
+  char ch_name
+) {
+  if (!out || out_size < 32 || !t) return -1;
+  
+  char* p = out;
+  
+  // Convert seconds to string manually (simple case: assume < 10000)
+  uint32_t sec = t->seconds;
+  if (sec >= 1000) {
+    *p++ = '0' + (sec / 1000);
+    sec %= 1000;
+  }
+  if (sec >= 100) {
+    *p++ = '0' + (sec / 100);
+    sec %= 100;
+  }
+  if (sec >= 10) {
+    *p++ = '0' + (sec / 10);
+    sec %= 10;
+  }
+  *p++ = '0' + sec;
+  
+  // Add decimal point and fractional part (12 digits from sub_ps)
+  *p++ = '.';
+  
+  // Convert sub_ps to 12-digit string using sprintf for now (safer)
+  // TODO: Optimize this later once we verify the calculation is correct
+  char frac_str[16];
+  sprintf(frac_str, "%012llu", (unsigned long long)t->sub_ps);
+  for (int i = 0; i < 12; i++) {
+    *p++ = frac_str[i];
+  }
+  
+  // Add channel
+  *p++ = ' '; *p++ = 'c'; *p++ = 'h'; *p++ = ch_name;
+  *p++ = '\r'; *p++ = '\n';
+  
+  Serial.write((const uint8_t*)out, p - out);
+  return p - out;
+}
+
+// Alternative 3: Use old SplitTime-style formatting
+int format_timestamp_line_splittime_style(
+  char* out,
+  size_t out_size,
+  const Timestamp64* t,
+  char ch_name
+) {
+  if (!out || out_size == 0 || !t) return -1;
+  
+  // Convert Timestamp64 to SplitTime-like format
+  uint32_t frac_hi = (uint32_t)(t->sub_ps / 1000000ULL);
+  uint32_t frac_lo = (uint32_t)(t->sub_ps % 1000000ULL);
+  
+  // Use simple sprintf like the old code
+  int n = sprintf(out, "%u.%06u%06u ch%c\r\n", 
+                  t->seconds, frac_hi, frac_lo, ch_name);
+  
+  if (n > 0) {
+    Serial.write((const uint8_t*)out, n);
+    return n;
+  }
+  return -1;
+}
+
+// Alternative 4: Minimal 64-bit with simple formatting
+int format_timestamp_line_simple64(
+  char* out,
+  size_t out_size,
+  const Timestamp64* t,
+  char ch_name
+) {
+  if (!out || out_size == 0 || !t) return -1;
+  
+  // Simple 64-bit formatting without zero-padding
+  int n = sprintf(out, "%u.%llu ch%c\r\n", 
+                  t->seconds, t->sub_ps, ch_name);
+  
+  if (n > 0) {
+    Serial.write((const uint8_t*)out, n);
+    return n;
+  }
+  return -1;
+}
+
+// Alternative 5: Buffer reuse approach (avoid malloc/stack allocation)
+static char format_buffer[64];
+int format_timestamp_line_buffer_reuse(
+  char* out,
+  size_t out_size,
+  const Timestamp64* t,
+  char ch_name
+) {
+  if (!out || out_size == 0 || !t) return -1;
+  
+  // Use static buffer to avoid stack allocation
+  int n = sprintf(format_buffer, "%u.%012llu ch%c\r\n", 
+                  t->seconds, t->sub_ps, ch_name);
+  
+  if (n > 0) {
+    Serial.write((const uint8_t*)format_buffer, n);
+    return n;
+  }
+  return -1;
+}
+
+// Alternative 6: Ultra-fast manual formatting (no sprintf at all)
+int format_timestamp_line_ultra_fast(
+  char* out,
+  size_t out_size,
+  const Timestamp64* t,
+  char ch_name
+) {
+  if (!out || out_size < 32 || !t) return -1;
+  
+  char* p = out;
+  
+  // Convert seconds to string manually (assume < 100000 for speed)
+  uint32_t sec = t->seconds;
+  if (sec >= 10000) {
+    *p++ = '0' + (sec / 10000);
+    sec %= 10000;
+  }
+  if (sec >= 1000) {
+    *p++ = '0' + (sec / 1000);
+    sec %= 1000;
+  }
+  if (sec >= 100) {
+    *p++ = '0' + (sec / 100);
+    sec %= 100;
+  }
+  if (sec >= 10) {
+    *p++ = '0' + (sec / 10);
+    sec %= 10;
+  }
+  *p++ = '0' + sec;
+  
+  // Add decimal point
+  *p++ = '.';
+  
+  // Convert sub_ps to 12-digit string manually (no sprintf)
+  uint64_t frac = t->sub_ps;
+  for (int i = 11; i >= 0; i--) {
+    p[i] = '0' + (frac % 10);
+    frac /= 10;
+  }
+  p += 12;
+  
+  // Add channel name
+  *p++ = ' '; *p++ = 'c'; *p++ = 'h'; *p++ = ch_name;
+  *p++ = '\r'; *p++ = '\n';
+  
+  Serial.write((const uint8_t*)out, p - out);
+  return p - out;
+}
+
+// Alternative 7: Fixed-width formatting (assumes seconds < 100000)
+int format_timestamp_line_fixed_width(
+  char* out,
+  size_t out_size,
+  const Timestamp64* t,
+  char ch_name
+) {
+  if (!out || out_size < 32 || !t) return -1;
+  
+  // Fixed format: "12345.123456789012 chA\r\n" (25 chars)
+  char* p = out;
+  
+  // Seconds (5 digits, zero-padded)
+  uint32_t sec = t->seconds;
+  p[0] = '0' + (sec / 10000);
+  sec %= 10000;
+  p[1] = '0' + (sec / 1000);
+  sec %= 1000;
+  p[2] = '0' + (sec / 100);
+  sec %= 100;
+  p[3] = '0' + (sec / 10);
+  sec %= 10;
+  p[4] = '0' + sec;
+  p += 5;
+  
+  // Decimal point
+  *p++ = '.';
+  
+  // Fractional part (12 digits, zero-padded)
+  uint64_t frac = t->sub_ps;
+  for (int i = 11; i >= 0; i--) {
+    p[i] = '0' + (frac % 10);
+    frac /= 10;
+  }
+  p += 12;
+  
+  // Channel name
+  *p++ = ' '; *p++ = 'c'; *p++ = 'h'; *p++ = ch_name;
+  *p++ = '\r'; *p++ = '\n';
+  
+  Serial.write((const uint8_t*)out, p - out);
+  return p - out;
+}
+
+// Alternative 8: Minimal sprintf (only for fractional part)
+int format_timestamp_line_minimal_sprintf(
+  char* out,
+  size_t out_size,
+  const Timestamp64* t,
+  char ch_name
+) {
+  if (!out || out_size < 32 || !t) return -1;
+  
+  char* p = out;
+  
+  // Manual seconds conversion
+  uint32_t sec = t->seconds;
+  if (sec >= 1000) {
+    *p++ = '0' + (sec / 1000);
+    sec %= 1000;
+  }
+  if (sec >= 100) {
+    *p++ = '0' + (sec / 100);
+    sec %= 100;
+  }
+  if (sec >= 10) {
+    *p++ = '0' + (sec / 10);
+    sec %= 10;
+  }
+  *p++ = '0' + sec;
+  *p++ = '.';
+  
+  // Use sprintf only for the 12-digit fractional part
+  p += sprintf(p, "%012llu ch%c\r\n", (unsigned long long)t->sub_ps, ch_name);
+  
+  Serial.write((const uint8_t*)out, p - out);
+  return p - out;
+}
+
+// Alternative 9: Pre-computed lookup tables for common values
+static const char* digit_lookup[10] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
+
+int format_timestamp_line_lookup_optimized(
+  char* out,
+  size_t out_size,
+  const Timestamp64* t,
+  char ch_name
+) {
+  if (!out || out_size < 32 || !t) return -1;
+  
+  char* p = out;
+  
+  // Convert seconds to string using lookup table
+  uint32_t sec = t->seconds;
+  if (sec >= 1000) {
+    *p++ = '0' + (sec / 1000);
+    sec %= 1000;
+  }
+  if (sec >= 100) {
+    *p++ = '0' + (sec / 100);
+    sec %= 100;
+  }
+  if (sec >= 10) {
+    *p++ = '0' + (sec / 10);
+    sec %= 10;
+  }
+  *p++ = '0' + sec;
+  *p++ = '.';
+  
+  // Convert fractional part using lookup table (12 digits)
+  uint64_t frac = t->sub_ps;
+  for (int i = 11; i >= 0; i--) {
+    p[i] = '0' + (frac % 10);
+    frac /= 10;
+  }
+  p += 12;
+  
+  // Channel name (hardcoded for speed)
+  *p++ = ' '; *p++ = 'c'; *p++ = 'h'; *p++ = ch_name;
+  *p++ = '\r'; *p++ = '\n';
+  
+  Serial.write((const uint8_t*)out, p - out);
+  return p - out;
+}
+
+// Alternative 10: Unrolled loop for fractional part
+int format_timestamp_line_unrolled(
+  char* out,
+  size_t out_size,
+  const Timestamp64* t,
+  char ch_name
+) {
+  if (!out || out_size < 32 || !t) return -1;
+  
+  char* p = out;
+  
+  // Manual seconds conversion
+  uint32_t sec = t->seconds;
+  if (sec >= 1000) {
+    *p++ = '0' + (sec / 1000);
+    sec %= 1000;
+  }
+  if (sec >= 100) {
+    *p++ = '0' + (sec / 100);
+    sec %= 100;
+  }
+  if (sec >= 10) {
+    *p++ = '0' + (sec / 10);
+    sec %= 10;
+  }
+  *p++ = '0' + sec;
+  *p++ = '.';
+  
+  // Unrolled fractional part conversion (12 digits)
+  uint64_t frac = t->sub_ps;
+  p[11] = '0' + (frac % 10); frac /= 10;
+  p[10] = '0' + (frac % 10); frac /= 10;
+  p[9] = '0' + (frac % 10); frac /= 10;
+  p[8] = '0' + (frac % 10); frac /= 10;
+  p[7] = '0' + (frac % 10); frac /= 10;
+  p[6] = '0' + (frac % 10); frac /= 10;
+  p[5] = '0' + (frac % 10); frac /= 10;
+  p[4] = '0' + (frac % 10); frac /= 10;
+  p[3] = '0' + (frac % 10); frac /= 10;
+  p[2] = '0' + (frac % 10); frac /= 10;
+  p[1] = '0' + (frac % 10); frac /= 10;
+  p[0] = '0' + (frac % 10);
+  p += 12;
+  
+  // Channel name
+  *p++ = ' '; *p++ = 'c'; *p++ = 'h'; *p++ = ch_name;
+  *p++ = '\r'; *p++ = '\n';
+  
+  Serial.write((const uint8_t*)out, p - out);
+  return p - out;
+}
+
+// Alternative 11: Direct memory operations (fastest possible)
+int format_timestamp_line_direct_memory(
+  char* out,
+  size_t out_size,
+  const Timestamp64* t,
+  char ch_name
+) {
+  if (!out || out_size < 32 || !t) return -1;
+  
+  // Pre-allocate the entire line in one go
+  // Format: "12345.123456789012 chA\r\n" (25 chars)
+  char* p = out;
+  
+  // Seconds (5 digits, zero-padded)
+  uint32_t sec = t->seconds;
+  p[0] = '0' + (sec / 10000);
+  sec %= 10000;
+  p[1] = '0' + (sec / 1000);
+  sec %= 1000;
+  p[2] = '0' + (sec / 100);
+  sec %= 100;
+  p[3] = '0' + (sec / 10);
+  sec %= 10;
+  p[4] = '0' + sec;
+  
+  // Decimal point
+  p[5] = '.';
+  
+  // Fractional part (12 digits, zero-padded)
+  uint64_t frac = t->sub_ps;
+  p[17] = '0' + (frac % 10); frac /= 10;
+  p[16] = '0' + (frac % 10); frac /= 10;
+  p[15] = '0' + (frac % 10); frac /= 10;
+  p[14] = '0' + (frac % 10); frac /= 10;
+  p[13] = '0' + (frac % 10); frac /= 10;
+  p[12] = '0' + (frac % 10); frac /= 10;
+  p[11] = '0' + (frac % 10); frac /= 10;
+  p[10] = '0' + (frac % 10); frac /= 10;
+  p[9] = '0' + (frac % 10); frac /= 10;
+  p[8] = '0' + (frac % 10); frac /= 10;
+  p[7] = '0' + (frac % 10); frac /= 10;
+  p[6] = '0' + (frac % 10);
+  
+  // Channel name
+  p[18] = ' '; p[19] = 'c'; p[20] = 'h'; p[21] = ch_name;
+  p[22] = '\r'; p[23] = '\n';
+  
+  Serial.write((const uint8_t*)out, 24);
+  return 24;
+}
+
+// Alternative 12: Ultra-minimal - just seconds + fractional (no channel name)
+int format_timestamp_line_ultra_minimal(
+  char* out,
+  size_t out_size,
+  const Timestamp64* t,
+  char ch_name
+) {
+  if (!out || out_size < 32 || !t) return -1;
+  
+  // Format: "12345.123456789012\r\n" (20 chars)
+  char* p = out;
+  
+  // Seconds (5 digits, zero-padded)
+  uint32_t sec = t->seconds;
+  p[0] = '0' + (sec / 10000);
+  sec %= 10000;
+  p[1] = '0' + (sec / 1000);
+  sec %= 1000;
+  p[2] = '0' + (sec / 100);
+  sec %= 100;
+  p[3] = '0' + (sec / 10);
+  sec %= 10;
+  p[4] = '0' + sec;
+  
+  // Decimal point
+  p[5] = '.';
+  
+  // Fractional part (12 digits, zero-padded)
+  uint64_t frac = t->sub_ps;
+  p[17] = '0' + (frac % 10); frac /= 10;
+  p[16] = '0' + (frac % 10); frac /= 10;
+  p[15] = '0' + (frac % 10); frac /= 10;
+  p[14] = '0' + (frac % 10); frac /= 10;
+  p[13] = '0' + (frac % 10); frac /= 10;
+  p[12] = '0' + (frac % 10); frac /= 10;
+  p[11] = '0' + (frac % 10); frac /= 10;
+  p[10] = '0' + (frac % 10); frac /= 10;
+  p[9] = '0' + (frac % 10); frac /= 10;
+  p[8] = '0' + (frac % 10); frac /= 10;
+  p[7] = '0' + (frac % 10); frac /= 10;
+  p[6] = '0' + (frac % 10);
+  
+  // CRLF
+  p[18] = '\r'; p[19] = '\n';
+  
+  Serial.write((const uint8_t*)out, 20);
+  return 20;
+}
+
+// Alternative 13: Pre-allocated static buffer (no stack allocation)
+static char static_format_buffer[32];
+int format_timestamp_line_static_buffer(
+  char* out,
+  size_t out_size,
+  const Timestamp64* t,
+  char ch_name
+) {
+  if (!out || out_size < 32 || !t) return -1;
+  
+  // Use static buffer to avoid stack allocation
+  char* p = static_format_buffer;
+  
+  // Seconds (5 digits, zero-padded)
+  uint32_t sec = t->seconds;
+  p[0] = '0' + (sec / 10000);
+  sec %= 10000;
+  p[1] = '0' + (sec / 1000);
+  sec %= 1000;
+  p[2] = '0' + (sec / 100);
+  sec %= 100;
+  p[3] = '0' + (sec / 10);
+  sec %= 10;
+  p[4] = '0' + sec;
+  
+  // Decimal point
+  p[5] = '.';
+  
+  // Fractional part (12 digits, zero-padded)
+  uint64_t frac = t->sub_ps;
+  p[17] = '0' + (frac % 10); frac /= 10;
+  p[16] = '0' + (frac % 10); frac /= 10;
+  p[15] = '0' + (frac % 10); frac /= 10;
+  p[14] = '0' + (frac % 10); frac /= 10;
+  p[13] = '0' + (frac % 10); frac /= 10;
+  p[12] = '0' + (frac % 10); frac /= 10;
+  p[11] = '0' + (frac % 10); frac /= 10;
+  p[10] = '0' + (frac % 10); frac /= 10;
+  p[9] = '0' + (frac % 10); frac /= 10;
+  p[8] = '0' + (frac % 10); frac /= 10;
+  p[7] = '0' + (frac % 10); frac /= 10;
+  p[6] = '0' + (frac % 10);
+  
+  // Channel name
+  p[18] = ' '; p[19] = 'c'; p[20] = 'h'; p[21] = ch_name;
+  p[22] = '\r'; p[23] = '\n';
+  
+  Serial.write((const uint8_t*)static_format_buffer, 24);
+  return 24;
+}
+
+// Alternative 14: Direct Serial.print calls (no buffer)
+void format_timestamp_line_direct_serial(
+  char* out,
+  size_t out_size,
+  const Timestamp64* t,
+  char ch_name
+) {
+  if (!t) return;
+  
+  // Direct Serial.print calls - fastest possible
+  Serial.print(t->seconds);
+  Serial.print('.');
+  
+  // Print fractional part manually
+  uint64_t frac = t->sub_ps;
+  for (int i = 11; i >= 0; i--) {
+    Serial.print('0' + (frac % 10));
+    frac /= 10;
+  }
+  
+  Serial.print(" ch");
+  Serial.print(ch_name);
+  Serial.print("\r\n");
 }
 
 // Test function for print64.cpp - call this at startup to verify functionality

@@ -83,6 +83,12 @@ public:
   int64_t  last_picstop;
   int32_t  cached_sec;
   int32_t  cached_rem_ticks;
+  
+  // Calibration cache for performance optimization
+  uint32_t cached_cal1;
+  uint32_t cached_cal2;
+  uint32_t cal_cache_counter;
+  static const uint32_t CAL_CACHE_INTERVAL = 100; // Re-read cal every 100 measurements
 
   char      name; // channel name
 
@@ -91,6 +97,7 @@ public:
   
   tdc7200Channel(char id, int enable, int intb, int csb, int stop, int led);
   int64_t read();
+  int64_t read_optimized();  // Optimized version with cached calibration
   void tdc_setup();
   void ready_next();
   void flush_and_reset();  // Clear partial measurements and reset state

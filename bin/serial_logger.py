@@ -1,0 +1,73 @@
+#!/bin/env python3
+
+import serial
+import argparse
+import sys
+import time
+
+def serial_logger(device, output_file, baud_rate=115200, timeout=1, 
+                  echo=False, encoding='latin-1'):
+    """
+    Logs data from a serial port to a file, using a permissive encoding.
+
+    Args:
+        device (str): The serial port device (e.g., 'COM3' on Windows, '/dev/ttyUSB0' on Linux).
+        output_file (str): The name of the file to write the logged data.
+        baud_rate (int): The baud rate for the serial connection (default: 115200).
+        timeout (int): The read timeout in seconds (default: 1).
+        echo (bool):  If true, echo output to console
+        encoding (str): The character encoding to use for decoding serial data and writing to file (default: 'latin-1').
+                        'latin-1' is used for maximum permissiveness as it maps every byte value to a Unicode code point.
+    """
+    print(f"Opening serial port {device} with baud rate {baud_rate}...")
+    try:
+        ser = serial.Serial(
+            port=device,
+            baudrate=baud_rate,
+            bytesize=serial.EIGHTBITS,
+            parity=serial.PARITY_NONE,
+            stopbits=serial.STOPBITS_ONE,
+            timeout=timeout
+        )
+        print(f"Serial port {device} opened successfully.")
+    except serial.SerialException as e:
+        print(f"Error opening serial port {device}: {e}")
+        sys.exit(1)
+
+    print(f"Logging data to {output_file} using encoding '{encoding}'. Press Ctrl-C to stop.")
+
+    try:
+        # Use the specified encoding for the output file as well for consistency
+        with open(output_file, 'w', encoding=encoding) as f:
+            while True:
+                # Read a line of data, decode it with the specified permissive encoding, and remove leading/trailing whitespace
+                line = ser.readline().decode(encoding).strip()
+                if line:
+                    f.write(line + '\n')
+                    if echo:
+                        print(line)  # Optionally print to console as well
+                time.sleep(0.01) # Small delay to prevent busy-waiting
+    except KeyboardInterrupt:
+        print("\nCtrl-C detected. Closing serial port and file.")
+    except Exception as e:
+        print(f"An unexpected error occurred during logging: {e}")
+    finally:
+        if ser.is_open:
+            ser.close()
+            print("Serial port closed.")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Log data from a serial port to a file.")
+    parser.add_argument("device", help="The serial port device (e.g., COM3 or /dev/ttyUSB0).")
+    parser.add_argument("output_file", help="The name of the file to write the logged data.")
+    parser.add_argument("--baud", type=int, default=115200, help="Baud rate for the serial connection (default: 9600).")
+    parser.add_argument("--timeout", type=int, default=1, help="Read timeout in seconds (default: 1).")
+    parser.add_argument("--echo", action="store_true", default=False,         # default is False if not provided (implicit for store_true)
+            help="Enable verbose output")
+    parser.add_argument("--encoding", type=str, default="latin-1", # Changed default to latin-1
+                        help="Character encoding to use for decoding serial data and writing to file (default: 'latin-1'). "
+                             "Use 'latin-1' for maximum permissiveness with single-byte character sets.")
+
+    args = parser.parse_args()
+
+    serial_logger(args.device, args.output_file, args.baud, args.timeout, args.echo, args.encoding)

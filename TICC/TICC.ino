@@ -541,12 +541,13 @@ void loop() {
             // Mixed channels: find A then B
             const PairSlot *A = (ts_pair[0].ch == 0) ? &ts_pair[0] : &ts_pair[1];
             const PairSlot *B = (ts_pair[0].ch == 1) ? &ts_pair[0] : &ts_pair[1];
-            // Print chA timestamp
+            // Print chA timestamp - ADVISOR OPTIMIZED TEST
             {
               char line[64];
               format_timestamp_line_direct_memory(line, sizeof(line), &A->t, (char)channels[0].name);
             }
-            // Print chB timestamp  
+            
+            // Print chB timestamp - ADVISOR OPTIMIZED TEST
             {
               char line[64];
               format_timestamp_line_direct_memory(line, sizeof(line), &B->t, (char)channels[1].name);
@@ -556,6 +557,7 @@ void loop() {
             uint8_t ci = ts_pair[0].ch;
             char cname = channels[ci].name;
             for (int k = 0; k < 2; ++k) {
+              // ADVISOR OPTIMIZED TEST
               char line[64];
               format_timestamp_line_direct_memory(line, sizeof(line), &ts_pair[k].t, cname);
             }

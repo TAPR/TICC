@@ -17,6 +17,7 @@ int print_timestamp(
 
 // Test function for verifying the optimized print routine
 void test_optimized_print();
+void test_places_and_wrap();
 
 // Function to update cached config parameters (call when config changes)
 void update_cached_config();

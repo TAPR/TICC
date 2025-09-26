@@ -8,6 +8,9 @@
 #include "timestamp_utils.h"
 #include "timestamp_print.h"
 
+// External config variable (defined in TICC.ino)
+extern config_t config;
+
 // Fast 64-bit to 12-digit conversion using advisor's optimized approach
 #define M6 1000000UL
 #define RECIP_M6 281474976UL
@@ -214,4 +217,90 @@ void test_optimized_print() {
   }
   
   Serial.println("# Optimized print test complete.");
+}
+
+// Comprehensive test function for PLACES and WRAP options
+void test_places_and_wrap() {
+  Serial.println("# Testing PLACES and WRAP options...");
+  
+  // Test timestamp with known fractional part
+  Timestamp64 test_ts;
+  test_ts.seconds = 1234567;  // Large seconds to test wrapping
+  test_ts.sub_ps = 123456789012ULL;  // Known fractional part
+  
+  // Test all PLACES values (0-12)
+  for (uint8_t places = 0; places <= 12; places++) {
+    // Temporarily set PLACES
+    uint8_t original_places = config.PLACES;
+    config.PLACES = places;
+    update_cached_config();
+    
+    Serial.print("# PLACES=");
+    Serial.print(places);
+    Serial.print(": ");
+    
+    char line[64];
+    print_timestamp(line, sizeof(line), &test_ts, 'A', true);
+    Serial.println(line);
+    
+    // Restore original PLACES
+    config.PLACES = original_places;
+    update_cached_config();
+  }
+  
+  Serial.println();
+  
+  // Test all WRAP values (0-6)
+  for (uint8_t wrap = 0; wrap <= 6; wrap++) {
+    // Temporarily set WRAP
+    uint8_t original_wrap = config.WRAP;
+    config.WRAP = wrap;
+    update_cached_config();
+    
+    Serial.print("# WRAP=");
+    Serial.print(wrap);
+    Serial.print(" (wrap at ");
+    if (wrap == 0) {
+      Serial.print("none");
+    } else {
+      Serial.print("10^");
+      Serial.print(wrap);
+    }
+    Serial.print("): ");
+    
+    char line[64];
+    print_timestamp(line, sizeof(line), &test_ts, 'B', true);
+    Serial.println(line);
+    
+    // Restore original WRAP
+    config.WRAP = original_wrap;
+    update_cached_config();
+  }
+  
+  // Test negative values with PLACES and WRAP
+  Serial.println();
+  Serial.println("# Testing negative values...");
+  
+  test_ts.seconds = -1234567;
+  test_ts.sub_ps = 123456789012ULL;
+  
+  // Test with PLACES=6 and WRAP=3
+  config.PLACES = 6;
+  config.WRAP = 3;
+  update_cached_config();
+  
+  char line[64];
+  print_timestamp(line, sizeof(line), &test_ts, 'C', true);
+  Serial.print("# Negative with PLACES=6, WRAP=3: ");
+  Serial.println(line);
+  
+  // Test with WRAP disabled
+  config.WRAP = 0;
+  update_cached_config();
+  
+  print_timestamp(line, sizeof(line), &test_ts, 'C', false);
+  Serial.print("# Negative with PLACES=6, WRAP=0: ");
+  Serial.println(line);
+  
+  Serial.println("# PLACES and WRAP test complete.");
 }

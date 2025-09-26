@@ -157,6 +157,7 @@ void ticc_setup() {
   SPI.end();  // first close in case we've come here from a break
   SPI.begin();
 
+
   /*******************************************
    * Configuration read/change/store
   *******************************************/

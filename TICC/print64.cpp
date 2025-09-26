@@ -69,62 +69,72 @@ void update_cached_config() {
 // Performance: 548 measurements/second (tested) with PLACES/WRAP support
 // Optimizations: config parameter caching, direct array operations, 
 //                advisor's 64-bit to decimal conversion algorithm
-int format_timestamp_line_direct_memory(
+int print_timestamp(
   char* out,
   size_t out_size,
   const Timestamp64* t,
-  char ch_name
+  char ch_name,
+  bool use_wrap = true
 ) {
   if (!out || out_size < 32 || !t) return -1;
   
   // Use cached config parameters for maximum speed
   uint8_t places = cached_places;
-  uint8_t wrap = cached_wrap;
+  uint8_t wrap = use_wrap ? cached_wrap : 0;  // Only use wrap if requested
   
   // Pre-calculate common values to avoid repeated calculations
-  uint32_t sec = t->seconds;
+  int32_t sec = t->seconds;
   char* p = out;
+  
+  // Handle negative sign if needed
+  bool is_negative = (sec < 0);
+  if (is_negative) {
+    *p++ = '-';
+    sec = -sec;  // Make positive for processing
+  }
   
   // Handle seconds with wrap logic - optimized for common cases
   if (wrap > 0 && wrap <= 9) {
     // Apply wrap: show only last 'wrap' digits using lookup table
     uint32_t mod = POW10_TABLE[wrap];
-    sec = sec % mod;
+    uint32_t sec_u = (uint32_t)sec;  // Convert to unsigned for modulo
+    sec_u = sec_u % mod;
     
     // Zero-pad to wrap width - unrolled for common wrap values
     if (wrap == 2) {
-      p[0] = '0' + (sec / 10);
-      p[1] = '0' + (sec % 10);
+      p[0] = '0' + (sec_u / 10);
+      p[1] = '0' + (sec_u % 10);
       p += 2;
     } else if (wrap == 3) {
-      p[0] = '0' + (sec / 100);
-      p[1] = '0' + ((sec % 100) / 10);
-      p[2] = '0' + (sec % 10);
+      p[0] = '0' + (sec_u / 100);
+      p[1] = '0' + ((sec_u % 100) / 10);
+      p[2] = '0' + (sec_u % 10);
       p += 3;
     } else {
       // General case - unrolled for better performance
       for (int i = wrap - 1; i >= 0; i--) {
-        p[i] = '0' + (sec % 10);
-        sec /= 10;
+        p[i] = '0' + (sec_u % 10);
+        sec_u /= 10;
       }
       p += wrap;
     }
   } else {
     // No wrap: print full seconds - optimized for common cases
-    if (sec < 10) {
-      *p++ = '0' + sec;
-    } else if (sec < 100) {
-      *p++ = '0' + (sec / 10);
-      *p++ = '0' + (sec % 10);
-    } else if (sec < 1000) {
-      *p++ = '0' + (sec / 100);
-      *p++ = '0' + ((sec % 100) / 10);
-      *p++ = '0' + (sec % 10);
+    uint32_t sec_u = (uint32_t)sec;  // Convert to unsigned for processing
+    if (sec_u < 10) {
+      *p++ = '0' + sec_u;
+    } else if (sec_u < 100) {
+      *p++ = '0' + (sec_u / 10);
+      *p++ = '0' + (sec_u % 10);
+    } else if (sec_u < 1000) {
+      *p++ = '0' + (sec_u / 100);
+      *p++ = '0' + ((sec_u % 100) / 10);
+      *p++ = '0' + (sec_u % 10);
     } else {
       // General case for larger numbers - use stack buffer for speed
       char tmp[12];
       int n = 0;
-      uint32_t s = sec;
+      uint32_t s = sec_u;
       do {
         tmp[n++] = '0' + (s % 10);
         s /= 10;
@@ -159,10 +169,15 @@ int format_timestamp_line_direct_memory(
     }
   }
   
-  // Channel name - always 4 characters, write directly to avoid pointer arithmetic
-  p[0] = ' '; p[1] = 'c'; p[2] = 'h'; p[3] = ch_name;
-  p[4] = '\r'; p[5] = '\n';
-  p += 6;
+  // Channel name - only if ch_name is not blank/null
+  if (ch_name && ch_name != ' ') {
+    p[0] = ' '; p[1] = 'c'; p[2] = 'h'; p[3] = ch_name;
+    p[4] = '\r'; p[5] = '\n';
+    p += 6;
+  } else {
+    p[0] = '\r'; p[1] = '\n';
+    p += 2;
+  }
   
   // Write directly with calculated length
   Serial.write((const uint8_t*)out, p - out);
@@ -332,7 +347,7 @@ void test_optimized_print() {
   
   for (int i = 0; i < 6; i++) {
     char line[64];
-    format_timestamp_line_direct_memory(line, sizeof(line), &test_cases[i], test_names[i % 2]);
+    print_timestamp(line, sizeof(line), &test_cases[i], test_names[i % 2]);
   }
   
   Serial.println("# Optimized print test complete.");

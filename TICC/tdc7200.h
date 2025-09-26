@@ -13,7 +13,7 @@
 
 // Optimized timestamp structure (mixed-radix) - replaces SplitTime
 typedef struct {
-  uint32_t seconds;   // integer seconds, monotonic
+  int32_t seconds;    // integer seconds, can be negative for differences
   uint64_t sub_ps;    // 0..(1e12 - 1) picoseconds within the second
 } Timestamp64;
 

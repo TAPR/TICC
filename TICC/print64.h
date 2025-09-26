@@ -6,12 +6,13 @@
 #include "tdc7200.h"  // For Timestamp64 definition
 
 // Ultra-fast timestamp formatting using advisor's optimized approach
-// Performance: 490 measurements/second
-int format_timestamp_line_direct_memory(
+// Performance: 548 measurements/second (tested) with PLACES/WRAP support
+int print_timestamp(
   char* out,
   size_t out_size,
   const Timestamp64* t,
-  char ch_name
+  char ch_name,
+  bool use_wrap = true
 );
 
 // Test function for verifying the optimized print routine

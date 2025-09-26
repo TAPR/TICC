@@ -472,8 +472,16 @@ void loop() {
               break;
 
             case Period:
-              // TODO: Update Period mode to use Timestamp64
-              // For now, skip Period mode until Timestamp mode is working
+              // Period mode: timestamp(n) - timestamp(n-1) for this channel
+              if (channels[i].new_ts_ready) {
+                // Calculate period: current timestamp - previous timestamp
+                Timestamp64 period = timestamp_difference(&channels[i].ts_opt, &channels[i].last_ts_opt);
+                {
+                  char line[64];
+                  print_timestamp(line, sizeof(line), &period, (char)channels[i].name, false);  // No wrap, with channel name
+                }
+                channels[i].new_ts_ready = 0;
+              }
               break;
 
             case timeLab:
@@ -542,25 +550,25 @@ void loop() {
             // Mixed channels: find A then B
             const PairSlot *A = (ts_pair[0].ch == 0) ? &ts_pair[0] : &ts_pair[1];
             const PairSlot *B = (ts_pair[0].ch == 1) ? &ts_pair[0] : &ts_pair[1];
-            // Print chA timestamp - ADVISOR OPTIMIZED TEST
+            // Print chA timestamp - OPTIMIZED
             {
               char line[64];
-              format_timestamp_line_direct_memory(line, sizeof(line), &A->t, (char)channels[0].name);
+              print_timestamp(line, sizeof(line), &A->t, (char)channels[0].name);
             }
             
-            // Print chB timestamp - ADVISOR OPTIMIZED TEST
+            // Print chB timestamp - OPTIMIZED
             {
               char line[64];
-              format_timestamp_line_direct_memory(line, sizeof(line), &B->t, (char)channels[1].name);
+              print_timestamp(line, sizeof(line), &B->t, (char)channels[1].name);
             }
           } else {
             // Same channel twice: print both with that channel's name
             uint8_t ci = ts_pair[0].ch;
             char cname = channels[ci].name;
             for (int k = 0; k < 2; ++k) {
-              // ADVISOR OPTIMIZED TEST
+              // OPTIMIZED
               char line[64];
-              format_timestamp_line_direct_memory(line, sizeof(line), &ts_pair[k].t, cname);
+              print_timestamp(line, sizeof(line), &ts_pair[k].t, cname);
             }
           }
           ts_pair_count = 0;  // clear pair buffer after printing
@@ -568,9 +576,6 @@ void loop() {
       }
     }
 
-    // TODO: Update Interval and timeLab pairing logic to use Timestamp64
-    // For now, skip Interval and timeLab modes until Timestamp mode is working
-    /*
     // After processing both channels, pair and print once per matched sample for Interval and TimeLab
     if ((channels[0].new_ts_ready && channels[1].new_ts_ready) && (channels[0].totalize > 2) && (channels[1].totalize > 2)) {
       // Optional poll gating
@@ -582,12 +587,11 @@ void loop() {
         switch (config.MODE) {
           case Interval:
             {
-              SplitTime d = diffSplit(channels[1].ts_split, channels[0].ts_split);
+              // Calculate time interval A->B using new Timestamp64 functions
+              Timestamp64 interval = timestamp_difference(&channels[1].ts_opt, &channels[0].ts_opt);
               {
                 char line[64];
-                size_t n = formatTimeDifference(line, sizeof(line), d, config.PLACES);
-                n += sprintf(line + n, " TI(A->B)");
-                writeln64(line, n);
+                print_timestamp(line, sizeof(line), &interval, '\0', false);  // No wrap, no channel name
               }
               channels[0].new_ts_ready = 0;
               channels[1].new_ts_ready = 0;
@@ -595,49 +599,45 @@ void loop() {
             }
           case timeLab:
             {
+              // TimeLab mode: chA, chB, and chC (synthesized)
+              // chC = int(chB) + (chB - chA) - properly handle negative differences
+              
+              // Print chA timestamp
               {
                 char line[64];
-                size_t n;
-                // chA
-                n = formatTimestampSplitTo(line, sizeof(line), channels[0].ts_split, config.PLACES, WRAP);
-                n += sprintf(line + n, " ch%c", (char)channels[0].name);
-                writeln64(line, n);
-                // chB
-                n = formatTimestampSplitTo(line, sizeof(line), channels[1].ts_split, config.PLACES, WRAP);
-                n += sprintf(line + n, " ch%c", (char)channels[1].name);
-                writeln64(line, n);
-                // chC synthesized = int(chB) + (chB - chA) - properly handle negative differences
-                SplitTime d = diffSplit(channels[1].ts_split, channels[0].ts_split);
-                SplitTime c;
-                
-                // Synthesize chC = int(chB) + (chB - chA)
-                // chC uses the integer seconds from chB, plus the fractional difference
-                c.sec = channels[1].ts_split.sec;  // int(chB) - integer seconds from chB
-                c.frac_hi = d.frac_hi;             // (chB - chA) fractional part
-                c.frac_lo = d.frac_lo;             // (chB - chA) fractional part
-                
-                // Handle negative fractional differences (d.sec < 0 means negative difference)
-                if (d.sec < 0) {
-                  // The fractional part is in complement representation, convert to normal
-                  if (d.frac_hi != 0 || d.frac_lo != 0) {
-                    c.frac_lo = 1000000UL - d.frac_lo;
-                    c.frac_hi = (d.frac_hi == 0) ? 999999UL : (1000000UL - d.frac_hi - 1UL);
-                    // Since we're subtracting from the integer seconds, borrow if needed
-                    if (c.frac_lo >= 1000000) {
-                      c.frac_lo -= 1000000;
-                      c.frac_hi += 1;
-                    }
-                    if (c.frac_hi >= 1000000) {
-                      c.frac_hi -= 1000000;
-                      c.sec += 1;
-                    }
-                  }
-                }
-                
-                n = formatTimestampSplitTo(line, sizeof(line), c, config.PLACES, WRAP);
-                n += sprintf(line + n, " chC");
-                writeln64(line, n);
+                print_timestamp(line, sizeof(line), &channels[0].ts_opt, (char)channels[0].name);
               }
+              
+              // Print chB timestamp  
+              {
+                char line[64];
+                print_timestamp(line, sizeof(line), &channels[1].ts_opt, (char)channels[1].name);
+              }
+              
+              // Calculate chC = int(chB) + (chB - chA)
+              Timestamp64 interval = timestamp_difference(&channels[1].ts_opt, &channels[0].ts_opt);
+              Timestamp64 chC;
+              
+              // chC uses the integer seconds from chB, plus the fractional difference
+              chC.seconds = channels[1].ts_opt.seconds;  // int(chB) - integer seconds from chB
+              chC.sub_ps = interval.sub_ps;              // (chB - chA) fractional part
+              
+              // Handle negative fractional differences (interval.seconds < 0 means negative difference)
+              if (interval.seconds < 0) {
+                // The fractional part is in complement representation, convert to normal
+                if (interval.sub_ps != 0) {
+                  chC.sub_ps = PS_PER_SEC - interval.sub_ps;
+                  // Since we're subtracting from the integer seconds, borrow if needed
+                  chC.seconds -= 1;
+                }
+              }
+              
+              // Print chC (synthesized)
+              {
+                char line[64];
+                print_timestamp(line, sizeof(line), &chC, 'C');
+              }
+              
               channels[0].new_ts_ready = 0;
               channels[1].new_ts_ready = 0;
               break;
@@ -646,7 +646,6 @@ void loop() {
         }
       }
     }
-    */
 
     // Check if config was requested during this loop iteration
     if (config_requested) {

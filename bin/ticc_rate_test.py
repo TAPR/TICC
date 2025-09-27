@@ -21,19 +21,39 @@ def is_comment_or_blank(s: str) -> bool:
     return i >= n or s[i] == "#"
 
 
-def parse_line(line: str):
-    # Strict: "<float> <channel>"
-    if is_comment_or_blank(line):
+def parse_text_line(s: str):
+    # Supports:
+    #   "<float> <channel>"            e.g., "1.234456 chA"
+    #   "<id> <value> <channel>"       e.g., "000... 60617700 A"
+    if is_comment_or_blank(s):
         return None
-    parts = line.split()
-    if len(parts) != 2:
+    parts = s.split()
+    if len(parts) == 2:
+        val_str, ch = parts
+        try:
+            float(val_str)
+        except ValueError:
+            return None
+        return ch
+    if len(parts) == 3:
+        return parts[2]
+    return None
+
+
+def parse_channel_from_crlf_frame(raw: bytes):
+    """
+    raw is expected to include the entire frame ending with b'\\r\\n'.
+    Take the byte just before CRLF as the channel if it's A–Z/a–z.
+    Return str channel or None.
+    """
+    if len(raw) < 3:
         return None
-    val_str, ch = parts
-    try:
-        float(val_str)
-    except ValueError:
+    if not raw.endswith(b"\r\n"):
         return None
-    return ch
+    ch_byte = raw[-3]  # byte right before the CRLF pair
+    if (65 <= ch_byte <= 90) or (97 <= ch_byte <= 122):  # A-Z or a-z
+        return chr(ch_byte)
+    return None
 
 
 def drain_for_seconds(ser, seconds: float):
@@ -54,21 +74,50 @@ def main():
     p.add_argument("--baud", type=int, default=115200, help="Baud rate")
     p.add_argument("--window", type=float, default=5.0, help="Averaging window seconds")
     p.add_argument("--report-every", type=float, default=1.0, help="Report cadence seconds")
-    p.add_argument("--timeout", type=float, default=1.0, help="Serial readline timeout (s)")
+    p.add_argument("--timeout", type=float, default=1.0, help="Serial read timeout (s)")
     p.add_argument("--encoding", default="utf-8", help="Text encoding")
-    p.add_argument("--debug-drop", type=int, default=0, help="Print up to N dropped non-comment lines after start")
-    p.add_argument("--warmup", type=float, default=None,
-                   help="Seconds to suppress printing after stream becomes active "
-                        "(default: 2×window; use 0 to disable)")
-    p.add_argument("--flush-seconds", type=float, default=1.0,
-                   help="Seconds to actively drain/discard input after opening port (default: 1.0)")
+    p.add_argument(
+        "--debug-drop",
+        type=int,
+        default=0,
+        help="Print up to N dropped frames after start",
+    )
+    p.add_argument(
+        "--warmup",
+        type=float,
+        default=None,
+        help="Seconds to suppress printing after stream becomes active "
+        "(default: 2×window; use 0 to disable)",
+    )
+    p.add_argument(
+        "--flush-seconds",
+        type=float,
+        default=1.0,
+        help="Seconds to actively drain/discard input after opening port (default: 1.0)",
+    )
     # Active stream detection
-    p.add_argument("--active-window", type=float, default=1.0,
-                   help="Seconds used to detect active stream (default: 1.0)")
-    p.add_argument("--min-events-total", type=int, default=150,
-                   help="Total lines within active-window to mark stream active (default: 150)")
+    p.add_argument(
+        "--active-window",
+        type=float,
+        default=1.0,
+        help="Seconds used to detect active stream (default: 1.0)",
+    )
+    p.add_argument(
+        "--min-events-total",
+        type=int,
+        default=150,
+        help="Total lines within active-window to mark stream active (default: 150)",
+    )
+    # Channel whitelist
+    p.add_argument(
+        "--channels",
+        nargs="+",
+        default=["A"],
+        help="Allowed channel labels (default: A). Example: --channels A B C",
+    )
     args = p.parse_args()
 
+    allowed_channels = set(args.channels)
     warmup = 2.0 * args.window if args.warmup is None else max(0.0, args.warmup)
 
     try:
@@ -78,7 +127,7 @@ def main():
             bytesize=serial.EIGHTBITS,
             parity=serial.PARITY_NONE,
             stopbits=serial.STOPBITS_ONE,
-            timeout=args.timeout,  # used by readline
+            timeout=args.timeout,  # used by read_until
         )
     except serial.SerialException as e:
         print(f"Failed to open {args.port}: {e}", file=sys.stderr)
@@ -119,12 +168,12 @@ def main():
 
     def compute_window(now):
         prune_window(now)
-        counts = {ch: len(stamps[ch]) for ch in known_channels}
+        counts = {ch: len(stamps[ch]) for ch in stamps.keys()}
         if not active_seen:
             return {}, {}, 0.0, 0.0
         elapsed = now - run_start
         duration = args.window if elapsed >= args.window else max(elapsed, 1e-6)
-        rates = {ch: counts.get(ch, 0) / duration for ch in known_channels}
+        rates = {ch: counts.get(ch, 0) / duration for ch in counts.keys()}
         return rates, counts, duration, elapsed
 
     def update_active(now):
@@ -143,35 +192,59 @@ def main():
 
     try:
         while True:
-            raw = ser.readline()
-            if raw:
-                # Strip CRLF or LF
-                if raw.endswith(b"\r\n"):
-                    raw = raw[:-2]
-                elif raw.endswith(b"\n"):
-                    raw = raw[:-1]
-                line = raw.decode(args.encoding, errors="ignore")
+            # Read exactly CRLF-terminated frame
+            raw = ser.read_until(b"\r\n")
+            if not raw:
+                continue
 
-                ch = parse_line(line)
-                if ch is not None:
-                    now = time.monotonic()
-                    if not stream_seen:
-                        stream_seen = True
-                        t_first_data = now
-                        print("First data-format line received.")
-                    stamps[ch].append(now)
+            # Fast binary path: channel is the byte before CRLF
+            ch = parse_channel_from_crlf_frame(raw)
+
+            if ch is None:
+                # If not binary letter-ending, try text format on the content before CRLF
+                content = raw[:-2] if raw.endswith(b"\r\n") else raw.rstrip(b"\r\n")
+                text = content.decode(args.encoding, errors="ignore")
+                ch = parse_text_line(text)
+
+            # Apply channel whitelist
+            if ch is not None and ch not in allowed_channels:
+                ch = None
+
+            if ch is not None:
+                now = time.monotonic()
+                if not stream_seen:
+                    stream_seen = True
+                    t_first_data = now
+                    print("First data-format line received.")
+
+                # Record timestamp for windowed rate calculations
+                stamps[ch].append(now)
+
+                # Active detection and whole-run counting
+                recent_events.append(now)
+                update_active(now)
+                if active_seen:
+                    total_counts[ch] += 1
+                    # Only consider channel "known" once it has contributed to totals
                     known_channels.add(ch)
-
-                    # Active detection and whole-run counting
-                    recent_events.append(now)
-                    update_active(now)
-                    if active_seen:
-                        total_counts[ch] += 1
-                else:
-                    # Optional debug for malformed non-comment lines after we started seeing data
-                    if stream_seen and args.debug_drop and not is_comment_or_blank(line) and dropped_preview < args.debug_drop:
-                        print(f"[drop] {repr(line)}")
-                        dropped_preview += 1
+            else:
+                # Optional debug for malformed lines after we started seeing data
+                if stream_seen and args.debug_drop and dropped_preview < args.debug_drop:
+                    # Show tail including CRLF presence check
+                    tail = raw[-8:]
+                    hex_tail = tail.hex(" ")
+                    ascii_tail = "".join(chr(b) if 32 <= b <= 126 else "." for b in tail)
+                    ends_crlf = raw.endswith(b"\r\n")
+                    try:
+                        content = raw[:-2] if raw.endswith(b"\r\n") else raw.rstrip(b"\r\n")
+                        text_preview = content.decode(args.encoding, errors="replace")
+                    except Exception:
+                        text_preview = "<decode error>"
+                    print(
+                        f"[drop] len={len(raw)} ends_crlf={ends_crlf} "
+                        f"tail_hex={hex_tail} tail_ascii={ascii_tail!r} text={text_preview!r}"
+                    )
+                    dropped_preview += 1
 
             if active_seen:
                 now = time.monotonic()
@@ -185,15 +258,16 @@ def main():
                     if not first_print_done:
                         if elapsed < warmup:
                             continue
-                        # Ensure the current window contains at least one sample per channel
-                        if any(len(stamps[ch]) == 0 for ch in known_channels):
+                        # Proceed as soon as there's any event in the window
+                        if sum(counts.values()) == 0:
                             continue
                         first_print_done = True
 
-                    if sum(counts.values()) == 0:
+                    # Build list of channels that actually have samples in this window
+                    ch_list = sorted([ch for ch, cnt in counts.items() if cnt > 0])
+                    if not ch_list:
                         continue
 
-                    ch_list = sorted(known_channels)
                     print(
                         " | ".join(
                             f"{ch}: {rates.get(ch, 0.0):.2f} Hz "
@@ -211,25 +285,32 @@ def main():
 
             if active_seen and run_start is not None:
                 run_seconds = max(1e-6, now - run_start)
-                ch_list = sorted(known_channels)
-                print("Final whole-run averages (from active stream start):")
-                for ch in ch_list:
-                    avg_hz = total_counts[ch] / run_seconds
-                    print(f"  {ch}: {avg_hz:.4f} Hz over {run_seconds:.2f}s (total={total_counts[ch]})")
+                # Only show channels with totals > 0
+                ch_list = sorted([ch for ch, tot in total_counts.items() if tot > 0])
+                if ch_list:
+                    print("Final whole-run averages (from active stream start):")
+                    for ch in ch_list:
+                        avg_hz = total_counts[ch] / run_seconds
+                        print(
+                            f"  {ch}: {avg_hz:.4f} Hz over {run_seconds:.2f}s "
+                            f"(total={total_counts[ch]})"
+                        )
+                else:
+                    print("No channel events recorded during active run.")
             elif stream_seen:
                 print("Data lines were seen, but the stream never reached the active threshold.")
             else:
                 print("No data lines received.")
 
-            # Also print the last-window snapshot for context
-            if known_channels and sum(counts.values()) > 0:
+            # Also print the last-window snapshot for context (only non-empty)
+            window_chs = sorted([ch for ch, cnt in counts.items() if cnt > 0])
+            if window_chs:
                 print("Last window snapshot:")
-                ch_list = sorted(known_channels)
                 print(
                     " | ".join(
                         f"{ch}: {rates.get(ch, 0.0):.2f} Hz "
                         f"(count={counts.get(ch, 0)} over {duration:.2f}s)"
-                        for ch in ch_list
+                        for ch in window_chs
                     )
                 )
         finally:
@@ -238,6 +319,6 @@ def main():
             except Exception:
                 pass
 
-
 if __name__ == "__main__":
     main()
+

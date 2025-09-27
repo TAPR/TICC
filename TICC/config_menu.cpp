@@ -35,11 +35,12 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
     char choice = line[1];
     MeasureMode old = pConfigInfo->MODE;
     if (choice == '1') pConfigInfo->MODE = Timestamp;
-    else if (choice == '2') pConfigInfo->MODE = Interval;
-    else if (choice == '3') pConfigInfo->MODE = Period;
-    else if (choice == '4') pConfigInfo->MODE = timeLab;
-    else if (choice == '5') pConfigInfo->MODE = Debug;
-    else if (choice == '6') pConfigInfo->MODE = Null;
+    else if (choice == '2') pConfigInfo->MODE = Binary;
+    else if (choice == '3') pConfigInfo->MODE = Interval;
+    else if (choice == '4') pConfigInfo->MODE = Period;
+    else if (choice == '5') pConfigInfo->MODE = timeLab;
+    else if (choice == '6') pConfigInfo->MODE = Debug;
+    else if (choice == '7') pConfigInfo->MODE = Null;
     else {
       configPrint("Invalid mode choice\r\n");
       return true;
@@ -53,6 +54,7 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
       case Period: modeName = "Period"; break;
       case timeLab: modeName = "TimeLab"; break;
       case Debug: modeName = "Debug"; break;
+      case Binary: modeName = "Binary"; break;
       case Null: modeName = "Null"; break;
     }
     sprintf(msg, "OK -- Mode set to %s\r\n", modeName); configPrint(msg);
@@ -189,16 +191,18 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
       configPrint("\r\n");
       configPrint("-- Mode --\r\n");
       configPrint("A1 - Timestamps\r\n");
-      configPrint("A2 - Time Interval A -> B\r\n");
-      configPrint("A3 - Period\r\n");
-      configPrint("A4 - TimeLab 3-Cornered Hat\r\n");
-      configPrint("A5 - Debug\r\n");
-      configPrint("A6 - Null Output\r\n");
+      configPrint("A2 - Binary (High-throughput)\r\n");
+      configPrint("A3 - Time Interval A -> B\r\n");
+      configPrint("A4 - Period\r\n");
+      configPrint("A5 - TimeLab 3-Cornered Hat\r\n");
+      configPrint("A6 - Debug\r\n");
+      configPrint("A7 - Null Output\r\n");
       configPrint("\r\n");
       configPrint("Current mode: ");
       
       switch (pConfigInfo->MODE) {
         case Timestamp: serialPrintImmediate("Timestamp"); break;
+        case Binary:    serialPrintImmediate("Binary (High-throughput)"); break;
         case Period:    serialPrintImmediate("Period"); break;
         case Interval:  serialPrintImmediate("Time Interval A->B"); break;
         case timeLab:   serialPrintImmediate("TimeLab 3-Cornered Hat"); break;

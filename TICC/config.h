@@ -12,7 +12,7 @@
 
 #define PS_PER_SEC                (int64_t)  1000000000000   // ps/s
 
-enum MeasureMode : unsigned char {Timestamp, Interval, Period, timeLab, Debug, Null};
+enum MeasureMode : unsigned char {Timestamp, Interval, Period, timeLab, Debug, Binary, Null};
 
 /*****************************************************************/
 // system defines
@@ -54,7 +54,7 @@ struct config_t {
   
   // global settings:
   MeasureMode MODE;                     // (T)imestamp, time (I)nterval
-                                        // Time(L)ab, (P)eriod, (D)ebug (default 'T')
+                                        // Time(L)ab, (P)eriod, (D)ebug, (B)inary (default 'T')
   char       POLL_CHAR;                 // In poll mode, wiat for this before output
   int64_t    CLOCK_HZ;                  // clock in Hz (default 10 000 000)
   int64_t    PICTICK_PS;                // coarse tick (default 100 000 000)

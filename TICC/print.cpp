@@ -1,4 +1,4 @@
-// timestamp_print.cpp -- optimized 64-bit printing routines for TICC
+// print.cpp -- optimized 64-bit printing routines for TICC
 // Based on advisor's fast 64-bit to decimal conversion algorithm
 
 #include <Arduino.h>
@@ -6,7 +6,7 @@
 // misc.h removed - no longer needed
 #include "tdc7200.h"
 #include "timestamp_utils.h"
-#include "timestamp_print.h"
+#include "print.h"
 
 // External config variable (defined in TICC.ino)
 extern config_t config;
@@ -153,18 +153,18 @@ int print_timestamp(
     // Fractional part using advisor's fast method, truncated to places
     if (places == 12) {
       // Full precision - most common case
-      frac12_to_chars_fast(t->sub_ps, p);
+      frac12_to_chars_fast(t->picos, p);
       p += 12;
     } else if (places <= 6) {
       // Use only high 6 digits - common case
       uint32_t hi, lo;
-      split12_fast(t->sub_ps, &hi, &lo);
+      split12_fast(t->picos, &hi, &lo);
       to6digits(hi, p);
       p += places;
     } else {
       // Use high 6 + some of low 6 - avoid calling split12_fast twice
       uint32_t hi, lo;
-      split12_fast(t->sub_ps, &hi, &lo);
+      split12_fast(t->picos, &hi, &lo);
       to6digits(hi, p);
       p += 6;
       to6digits(lo, p);
@@ -226,7 +226,7 @@ void test_places_and_wrap() {
   // Test timestamp with known fractional part
   Timestamp64 test_ts;
   test_ts.seconds = 1234567;  // Large seconds to test wrapping
-  test_ts.sub_ps = 123456789012ULL;  // Known fractional part
+  test_ts.picos = 123456789012ULL;  // Known fractional part
   
   // Test all PLACES values (0-12)
   for (uint8_t places = 0; places <= 12; places++) {
@@ -282,7 +282,7 @@ void test_places_and_wrap() {
   Serial.println("# Testing negative values...");
   
   test_ts.seconds = -1234567;
-  test_ts.sub_ps = 123456789012ULL;
+  test_ts.picos = 123456789012ULL;
   
   // Test with PLACES=6 and WRAP=3
   config.PLACES = 6;
@@ -303,4 +303,48 @@ void test_places_and_wrap() {
   Serial.println(line);
   
   Serial.println("# PLACES and WRAP test complete.");
+}
+
+// Efficient 64-bit integer printing function
+// Based on print_timestamp model but simplified for integers only
+// Handles negative values and large numbers efficiently
+void print_int64(int64_t value, bool add_crlf) {
+  char buffer[32];  // Sufficient for 64-bit signed integers
+  char* p = buffer;
+  
+  // Handle negative values
+  if (value < 0) {
+    *p++ = '-';
+    value = -value;
+  }
+  
+  // Handle zero case
+  if (value == 0) {
+    *p++ = '0';
+  } else {
+    // Convert to string using optimized approach
+    // Build string backwards, then reverse
+    char temp[32];
+    char* temp_p = temp;
+    int64_t v = value;
+    
+    while (v > 0) {
+      *temp_p++ = '0' + (v % 10);
+      v /= 10;
+    }
+    
+    // Copy reversed digits to output buffer
+    while (temp_p > temp) {
+      *p++ = *(--temp_p);
+    }
+  }
+  
+  // Add CRLF if requested
+  if (add_crlf) {
+    *p++ = '\r';
+    *p++ = '\n';
+  }
+  
+  // Write to serial port
+  Serial.write((const uint8_t*)buffer, p - buffer);
 }

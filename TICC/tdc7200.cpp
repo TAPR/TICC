@@ -157,10 +157,10 @@ void tdc7200Channel::reset_channel_state() {
   tof = 0;
   last_tof = 0;
   new_ts_ready = 0;
-  ts_opt.seconds = 0;
-  ts_opt.sub_ps = 0;
-  last_ts_opt.seconds = 0;
-  last_ts_opt.sub_ps = 0;
+  timestamp.seconds = 0;
+  timestamp.picos = 0;
+  last_timestamp.seconds = 0;
+  last_timestamp.picos = 0;
   
   // Reset coarse-time cache
   last_picstop = 0;

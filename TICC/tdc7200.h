@@ -14,7 +14,7 @@
 // Optimized timestamp structure (mixed-radix) - replaces SplitTime
 typedef struct {
   int32_t seconds;    // integer seconds, can be negative for differences
-  uint64_t sub_ps;    // 0..(1e12 - 1) picoseconds within the second
+  uint64_t picos;     // 0..(1e12 - 1) picoseconds within the second
 } Timestamp64;
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
@@ -71,9 +71,9 @@ public:
   int64_t last_tof;
   int64_t totalize;
   // Optimized timestamp using Timestamp64 (int32_t sec + int64_t frac)
-  volatile uint8_t new_ts_ready; // set when a fresh ts_* is available for pairing
-  Timestamp64 ts_opt;       // optimized timestamp (sec, sub_ps)
-  Timestamp64 last_ts_opt;  // previous optimized timestamp
+  volatile uint8_t new_ts_ready; // set when a fresh timestamp is available for pairing
+  Timestamp64 timestamp;       // optimized timestamp (sec, picos)
+  Timestamp64 last_timestamp;  // previous optimized timestamp
   int64_t prop_delay;
   int64_t time_dilation;
   int64_t fixed_time2;

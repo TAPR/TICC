@@ -1,7 +1,7 @@
-// timestamp_print.h -- optimized 64-bit printing routines for TICC
+// print.h -- optimized 64-bit printing routines for TICC
 
-#ifndef TIMESTAMP_PRINT_H
-#define TIMESTAMP_PRINT_H
+#ifndef PRINT_H
+#define PRINT_H
 
 #include "tdc7200.h"  // For Timestamp64 definition
 
@@ -22,6 +22,9 @@ void test_places_and_wrap();
 // Function to update cached config parameters (call when config changes)
 void update_cached_config();
 
+// Efficient 64-bit integer printing function
+void print_int64(int64_t value, bool add_crlf = true);
+
 // Timestamp difference functions moved to timestamp_utils.h
 
-#endif // TIMESTAMP_PRINT_H
+#endif // PRINT_H

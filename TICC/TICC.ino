@@ -7,8 +7,8 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-// 25 September 2025 - version 1
-extern const char SW_VERSION[17] = "20250925.1";
+// 26 September 2025 - version 1
+extern const char SW_VERSION[17] = "20250926.1";
 extern const char SW_TAG[6] = "BETA";
 
 
@@ -26,21 +26,8 @@ extern const char SW_TAG[6] = "BETA";
  *   subtraction simple and avoid underflow surprises. 64-bit range 
  *   (±9.22e18) is ample: with 100 µs ticks, PICcount would take 
  *   ~2.9e11 years to overflow.
- * - We store and print timestamps in split form for efficiency:
- *   SplitTime { sec (int32_t, whole seconds), frac_hi/frac_lo
- *   (two uint32_t 6‑digit chunks, 0..999999) }
- *   This avoids 64‑bit formatting and large intermediates; 
- *   borrow/carry is handled explicitly across
- *   frac_lo → frac_hi → seconds.  The int32_t seconds element 
- *   allows about 68 years of timestamps before overflow.
  *
  * Performance notes:
- * - Coarse time (seconds + remainder ticks) is derived incrementally
- *   per hit, avoiding per-event 64‑bit division/modulo. A fallback 
- *   recomputes directly if a large jump is detected (startup or resync).
- * - Printing is buffered: each output line is assembled into a stack 
- *   buffer and emitted with a single Serial.write(), reducing per-line 
- *   I/O overhead while preserving the exact text format.
  *
  * Pairing logic (two‑channel modes):
  * - Each channel sets new_ts_ready when a fresh timestamp is computed.
@@ -87,10 +74,9 @@ extern const char SW_TAG[6] = "BETA";
 
 #include "board.h"            // LED macros and Arduino pin definitions
 #include "config.h"           // config and eeprom
-// misc.h removed - no longer needed
 #include "tdc7200.h"          // TDC registers and structures
 #include "timestamp_utils.h"  // timestamp utility functions
-#include "timestamp_print.h"  // optimized 64-bit printing routines
+#include "print.h"  // optimized 64-bit printing routines
 
 volatile int64_t PICcount;
 int64_t CLOCK_HZ;
@@ -116,21 +102,9 @@ static tdc7200Channel channels[] = {
   tdc7200Channel('1', ENABLE_1, INTB_1, CSB_1, STOP_1, LED_1),
 };
 
-/****************************************************************
-We don't use the default setup() routine -- see
-ticc_setup() below
-****************************************************************/
-void setup() {}
+void setup() {} // we don't use default setup(), but ticc_setup() below
 
-/****************************************************************
-Configuration change management functions - moved to config_core.cpp
-****************************************************************/
-
-/****************************************************************
-Here is where setup really happens
-****************************************************************/
 void ticc_setup() {
-
   size_t i;
   boolean last_pin;
 
@@ -208,20 +182,19 @@ void ticc_setup() {
     channels[i].PICstop = 0;
     channels[i].tof = 0;
     
-    // Initialize optimized timestamp structure
-    channels[i].ts_opt.seconds = 0;
-    channels[i].ts_opt.sub_ps = 0;
-    channels[i].last_ts_opt.seconds = 0;
-    channels[i].last_ts_opt.sub_ps = 0;
+    // Initialize timestamp structure
+    channels[i].timestamp.seconds = 0;
+    channels[i].timestamp.picos = 0;
+    channels[i].last_timestamp.seconds = 0;
+    channels[i].last_timestamp.picos = 0;
     
-    // Initialize last_picstop to 0 (will be updated after first measurement)
-    channels[i].last_picstop = 0;
+    channels[i].last_picstop = 0; // Initialize to 0 (will be updated after first measurement)
     channels[i].name = config.NAME[i];
     channels[i].prop_delay = config.PROP_DELAY[i];
     channels[i].time_dilation = config.TIME_DILATION[i];
     channels[i].fixed_time2 = config.FIXED_TIME2[i];
-    // For user convenience, we allow two settings that additively determine delay
-    channels[i].fudge = config.PROP_DELAY[i] + config.FUDGE0[i];
+    channels[i].fudge = config.PROP_DELAY[i] + config.FUDGE0[i]; // these config options are additive.
+
     // Initialize coarse-time cache (always enabled)
     channels[i].last_picstop = 0;
     channels[i].cached_sec = 0;
@@ -232,11 +205,11 @@ void ticc_setup() {
     channels[i].ready_next();
   }
 
-  // Initialize cached config parameters for maximum print performance
-  update_cached_config();
+  update_cached_config(); // Initialize cached config parameters for maximum print performance
 
   /*******************************************
-   * Synchronize multiple TICCs sharing common 10 MHz and 10 kHz clocks.
+   * Synchronize multiple TICCs sharing common
+   * 10 MHz and 10 kHz clocks.
    *******************************************/
   if (config.SYNC_MODE == 'P') {                  // if we are primary, send sync by sending CLIENT_SYNC (A8) high
     delay(2000);                                  // but first sleep to allow client boards to get ready
@@ -262,7 +235,7 @@ void ticc_setup() {
     Serial.println("# In secondary mode and waiting for sync...");
   }
 
-  while (!digitalRead(CLIENT_SYNC)) {}               // whether primary or secondary, spin until CLIENT_SYNC asserts
+  while (!digitalRead(CLIENT_SYNC)) {}               // spin until CLIENT_SYNC asserts
   PICcount = 0;                                      // initialize counter
   enableInterrupt(COARSEint, coarseTimer, FALLING);  // enable counter interrupt
   enableInterrupt(STOP_0, catch_stop0, RISING);      // enable interrupt to catch channel A
@@ -289,7 +262,7 @@ void ticc_setup() {
       Serial.println(" decimal places)");
       break;
     case timeLab:
-      Serial.print("# timestamp chA, chB; interval chA->B (seconds with ");
+      Serial.print("# timestamp ch0, ch1; interval chA->B (seconds with ");
       Serial.print(config.PLACES);
       Serial.println(" decimal places)");
       break;
@@ -313,15 +286,12 @@ void ticc_setup() {
 
 /****************************************************************/
 void loop() {
-
   ticc_setup();  // initialize and optionally go to config
+  while (1) {    // this is the actual loop!
 
-  while (1) {
     if ( (Serial.read() == '#') ) {        // direct entry to config menu
-      // Set flag to enter config at end of current loop iteration
-      config_requested = 1;
-      // Clear any remaining characters from the serial buffer (like the <enter> from "#<enter>")
-      while (Serial.available()) (void)Serial.read();
+      config_requested = 1; // Set flag to enter config at end of current loop iteration
+      while (Serial.available()) (void)Serial.read(); // Clear serial buffer (like <enter> from "#<enter>")
     }
 
     // Ref Clock indicator:
@@ -337,8 +307,7 @@ void loop() {
       last_PICcount = PICcount;  // Initialize with current PICcount value
       ext_clk_led_on = 0;
       just_restarted = 0;  // Clear the flag
-      // Small delay to allow coarseTimer ISR to start firing
-      delay(100);
+      delay(100); // Small delay to allow coarseTimer ISR to start firing
     }
 
     {
@@ -365,7 +334,7 @@ void loop() {
           }
         }
       }
-    }
+    } // end of reflock test
 
 
     size_t i;
@@ -384,40 +353,39 @@ void loop() {
         };
 
         /***************************************************************************
-         * OPTIMIZED TIMESTAMP COMPUTATION - MIXED-RADIX ACCUMULATOR
-         * 
-         * This section implements a high-performance mixed-radix accumulator for
-         * timestamp calculation, avoiding expensive 64-bit division/modulo operations
-         * on every measurement. Performance: 935 measurements/second on one channel.
+         * The algorithm to calculate timestamps is entirely new in the 202509xx
+         * firmware.  It uses a mixed-radix accumulator to avoid 64 bit
+         * division/modulo operations, which are very expensive in the Arduino 8
+         * bit architecture.  In tests with a minimal print routine, this
+         * algorithm did 935 measurements/second on one channel.  (Printing
+         * is a major botteneck; see print.cpp for details on how we
+         * optimize that.)
          * 
          * Algorithm:
          * 1. Read TDC7200 measurement data (tof = time-of-flight in picoseconds)
          * 2. Calculate delta time since last measurement using coarse counter (PICstop)
-         * 3. Apply mixed-radix accumulation: seconds + sub_ps (0..1e12-1 picoseconds)
-         * 4. Handle carry/borrow between sub_ps and seconds automatically
+         * 3. Apply mixed-radix accumulation: seconds + picos (0..1e12-1 picoseconds)
+         * 4. Handle carry/borrow between picos and seconds automatically
          * 
-         * Key optimizations:
-         * - Uses Timestamp64 struct (uint32_t seconds + uint64_t sub_ps) instead of
-         *   SplitTime (3x uint32_t) for better performance
+         * - Uses Timestamp64 struct (uint32_t seconds + uint64_t picos) instead of
          * - Incremental delta calculation avoids per-event 64-bit division
          * - Mixed-radix approach eliminates expensive modulo operations
          * - Preserves full picosecond precision (12 decimal places)
          * 
          * Mathematical basis:
          * Absolute timestamp: T_k = PICstop_k * PICTICK_PS - tof_k - fudge
-         * Delta between events: ΔT_k = dcount * PICTICK_PS - (tof_k - tof_{k-1})
-         * Accumulator: timestamp += ΔT_k (with automatic carry/borrow)
+         * dcount = delta PICcount ticks since last event
+         * Delta between events: deltaT_k = dcount * PICTICK_PS - (tof_k - tof_{k-1})
+         * Accumulator: timestamp += deltaT_k (with automatic carry/borrow)
          ***************************************************************************/
 
-        channels[i].last_tof = channels[i].tof;           // preserve last tof
-        channels[i].last_ts_opt = channels[i].ts_opt;     // preserve last timestamp if needed
-        channels[i].tof = channels[i].read();             // get new tof (absolute per event)
+        channels[i].last_tof = channels[i].tof;                 // preserve last tof
+        channels[i].last_timestamp = channels[i].timestamp;     // preserve last timestamp if needed
+        channels[i].tof = channels[i].read();                   // get new tof (absolute per event)
 
         // delta ticks since previous event on this channel
         int64_t dcount = (int64_t)(channels[i].PICstop - channels[i].last_picstop);
 
-        // Correct delta: ΔT = dcount*PICTICK_PS − (tof_k − tof_{k−1})
-        // Rearranged to avoid an extra subtraction later:
         // delta_ps = dcount*PICTICK_PS - (int64_t)channels[i].tof + (int64_t)channels[i].last_tof;
         int64_t delta_ps = dcount * (int64_t)PICTICK_PS
                          - (int64_t)channels[i].tof
@@ -425,74 +393,28 @@ void loop() {
 
         // Mixed-radix accumulation with automatic carry/borrow
         if (delta_ps >= 0) {
-          channels[i].ts_opt.sub_ps += (uint64_t)delta_ps;
-          if (channels[i].ts_opt.sub_ps >= PS_PER_SEC) {
-            channels[i].ts_opt.sub_ps -= PS_PER_SEC;
-            channels[i].ts_opt.seconds += 1u;
+          channels[i].timestamp.picos += (uint64_t)delta_ps;
+          if (channels[i].timestamp.picos >= PS_PER_SEC) {
+            channels[i].timestamp.picos -= PS_PER_SEC;
+            channels[i].timestamp.seconds += 1u;
           }
         } else {
           uint64_t m = (uint64_t)(-delta_ps);
-          if (m <= channels[i].ts_opt.sub_ps) {
-            channels[i].ts_opt.sub_ps -= m;
+          if (m <= channels[i].timestamp.picos) {
+            channels[i].timestamp.picos -= m;
           } else {
-            m -= channels[i].ts_opt.sub_ps;
+            m -= channels[i].timestamp.picos;
             uint64_t borrow_sec = 1 + (m / PS_PER_SEC);
             uint64_t rem = m % PS_PER_SEC;
-            channels[i].ts_opt.seconds -= (uint32_t)borrow_sec;
-            channels[i].ts_opt.sub_ps = PS_PER_SEC - rem;
+            channels[i].timestamp.seconds -= (uint32_t)borrow_sec;
+            channels[i].timestamp.picos = PS_PER_SEC - rem;
           }
         }
 
-        // Update last_picstop for next calculation
-        channels[i].last_picstop = channels[i].PICstop;
-        
+        channels[i].last_picstop = channels[i].PICstop; // Update last_picstop for next calculation
         channels[i].new_ts_ready = 1;
         channels[i].totalize++;    // increment number of events
         channels[i].ready_next();  // Re-arm for next measurement, clear TDC INTB
-
-        // if poll character is not null, only output if we've received that character via serial
-        // NOTE: this may provide random results if measuring timestamp from both channels!
-        if ((channels[i].totalize > 2) &&  // throw away first readings
-            ((!config.POLL_CHAR) ||        // if unset, output everything
-             ((Serial.available() > 0) && (Serial.read() == config.POLL_CHAR)))) {
-
-          switch (config.MODE) {
-            case Timestamp:
-              // Defer Timestamp printing to the post-loop pairing block to enforce ordering
-              break;
-
-            case Interval:
-              // handled after channel loop (pairing logic)
-              break;
-
-            case Period:
-              // Period mode: timestamp(n) - timestamp(n-1) for this channel
-              if (channels[i].new_ts_ready) {
-                // Calculate period: current timestamp - previous timestamp
-                Timestamp64 period = timestamp_difference(&channels[i].ts_opt, &channels[i].last_ts_opt);
-                {
-                  char line[64];
-                  print_timestamp(line, sizeof(line), &period, (char)channels[i].name, false);  // No wrap, with channel name
-                }
-                channels[i].new_ts_ready = 0;
-              }
-              break;
-
-            case timeLab:
-              // handled after channel loop (pairing logic)
-              break;
-
-            case Debug:
-              // TODO: Update Debug mode to use Timestamp64
-              // For now, skip Debug mode until Timestamp mode is working
-              break;
-
-            case Null:
-              break;
-          }  // switch
-
-
-        }  // print result
 
         // turn LED off
         if (i == 0) {
@@ -503,6 +425,74 @@ void loop() {
           CLR_LED_1;
           CLR_EXT_LED_1;
         };
+
+        /******************************/
+        /* Output routines start here */
+        /******************************/
+
+        // if poll character is not null, only output if we've received that character via serial
+        // NOTE: this may provide random results if measuring timestamp from both channels!
+        if ((channels[i].totalize > 2) &&  // throw away first readings
+            ((!config.POLL_CHAR) ||        // if unset, output everything
+             ((Serial.available() > 0) && (Serial.read() == config.POLL_CHAR)))) {
+
+          switch (config.MODE) {
+            case Timestamp: // Defer Timestamp printing to the post-loop pairing block to enforce ordering
+              break;
+
+            case Interval: // handled after channel loop (pairing logic)
+              break;
+
+            case Period: // Period mode: timestamp(n) - timestamp(n-1) for this channel
+              if (channels[i].new_ts_ready) {
+                // Calculate period: current timestamp - previous timestamp
+                Timestamp64 period = timestamp_difference(&channels[i].timestamp, 
+                    &channels[i].last_timestamp);
+                {
+                  char line[64];
+                  print_timestamp(line, sizeof(line), &period, (char)channels[i].name, false);  // No wrap
+                }
+                channels[i].new_ts_ready = 0;
+              }
+              break;
+
+            case timeLab: // handled after channel loop (pairing logic)
+              break;
+
+            case Debug:
+              {
+                char line[128];
+                size_t n = 0;
+                
+                // Raw TDC7200 values (6 digits each)
+                n += sprintf(line + n, "%06lu ", (unsigned long)channels[i].time1Result);
+                n += sprintf(line + n, "%06lu ", (unsigned long)channels[i].time2Result);
+                n += sprintf(line + n, "%06lu ", (unsigned long)channels[i].clock1Result);
+                n += sprintf(line + n, "%06lu ", (unsigned long)channels[i].cal1Result);
+                n += sprintf(line + n, "%06lu ", (unsigned long)channels[i].cal2Result);
+                
+                // Write the line so far
+                Serial.write((const uint8_t*)line, n);
+                
+                // PICstop (int64_t - use new print_int64 function)
+                print_int64(channels[i].PICstop, false);
+                Serial.write(' ');
+                
+                // tof (int64_t - use new print_int64 function) 
+                print_int64(channels[i].tof, false);
+                Serial.write(' ');
+                
+                // timestamp (no WRAP, PLACES=12) with channel name
+                print_timestamp(line, sizeof(line), &channels[i].timestamp, (char)channels[i].name, false);
+              }
+              break;
+
+            case Null:
+              break;
+          }  // switch
+
+
+        }  // print result
 
       }  // if INTB
     }    // for
@@ -524,7 +514,7 @@ void loop() {
       for (int ci = 0; ci < 2; ++ci) {
         if (channels[ci].new_ts_ready && (channels[ci].totalize > 2)) {
           if (ts_pair_count < 2) {
-            ts_pair[ts_pair_count].t = channels[ci].ts_opt;
+            ts_pair[ts_pair_count].t = channels[ci].timestamp;
             ts_pair[ts_pair_count].ch = (uint8_t)ci;
             ts_pair_count++;
           }
@@ -550,7 +540,7 @@ void loop() {
               print_timestamp(line, sizeof(line), &A->t, (char)channels[0].name);
             }
             
-            // Print chB timestamp - OPTIMIZED
+            // Print chB timestamp
             {
               char line[64];
               print_timestamp(line, sizeof(line), &B->t, (char)channels[1].name);
@@ -560,7 +550,6 @@ void loop() {
             uint8_t ci = ts_pair[0].ch;
             char cname = channels[ci].name;
             for (int k = 0; k < 2; ++k) {
-              // OPTIMIZED
               char line[64];
               print_timestamp(line, sizeof(line), &ts_pair[k].t, cname);
             }
@@ -581,8 +570,8 @@ void loop() {
         switch (config.MODE) {
           case Interval:
             {
-              // Calculate time interval A->B using new Timestamp64 functions
-              Timestamp64 interval = timestamp_difference(&channels[1].ts_opt, &channels[0].ts_opt);
+              // Calculate time interval A->B
+              Timestamp64 interval = timestamp_difference(&channels[1].timestamp, &channels[0].timestamp);
               {
                 char line[64];
                 print_timestamp(line, sizeof(line), &interval, '\0', false);  // No wrap, no channel name
@@ -596,31 +585,28 @@ void loop() {
               // TimeLab mode: chA, chB, and chC (synthesized)
               // chC = int(chB) + (chB - chA) - properly handle negative differences
               
-              // Print chA timestamp
               {
                 char line[64];
-                print_timestamp(line, sizeof(line), &channels[0].ts_opt, (char)channels[0].name);
+                print_timestamp(line, sizeof(line), &channels[0].timestamp, (char)channels[0].name);
               }
-              
-              // Print chB timestamp  
               {
                 char line[64];
-                print_timestamp(line, sizeof(line), &channels[1].ts_opt, (char)channels[1].name);
+                print_timestamp(line, sizeof(line), &channels[1].timestamp, (char)channels[1].name);
               }
               
               // Calculate chC = int(chB) + (chB - chA)
-              Timestamp64 interval = timestamp_difference(&channels[1].ts_opt, &channels[0].ts_opt);
+              Timestamp64 interval = timestamp_difference(&channels[1].timestamp, &channels[0].timestamp);
               Timestamp64 chC;
               
               // chC uses the integer seconds from chB, plus the fractional difference
-              chC.seconds = channels[1].ts_opt.seconds;  // int(chB) - integer seconds from chB
-              chC.sub_ps = interval.sub_ps;              // (chB - chA) fractional part
+              chC.seconds = channels[1].timestamp.seconds;  // int(chB) - integer seconds from chB
+              chC.picos = interval.picos;              // (chB - chA) fractional part
               
               // Handle negative fractional differences (interval.seconds < 0 means negative difference)
               if (interval.seconds < 0) {
                 // The fractional part is in complement representation, convert to normal
-                if (interval.sub_ps != 0) {
-                  chC.sub_ps = PS_PER_SEC - interval.sub_ps;
+                if (interval.picos != 0) {
+                  chC.picos = PS_PER_SEC - interval.picos;
                   // Since we're subtracting from the integer seconds, borrow if needed
                   chC.seconds -= 1;
                 }
@@ -740,10 +726,10 @@ void test_optimized_calculation() {
   tdc7200Channel test_ch('T', 0, 0, 0, 0, 0);  // Test channel
   
   // Initialize test channel
-  test_ch.ts_opt.seconds = 0;
-  test_ch.ts_opt.sub_ps = 0;
-  test_ch.last_ts_opt.seconds = 0;
-  test_ch.last_ts_opt.sub_ps = 0;
+  test_ch.timestamp.seconds = 0;
+  test_ch.timestamp.picos = 0;
+  test_ch.last_timestamp.seconds = 0;
+  test_ch.last_timestamp.picos = 0;
   test_ch.last_picstop = 0;
   test_ch.fudge = 0;  // No fudge for testing
   
@@ -752,7 +738,7 @@ void test_optimized_calculation() {
     int64_t tof;
     const char* description;
     uint32_t expected_sec;
-    uint64_t expected_sub_ps;
+    uint64_t expected_picos;
   };
   
   TestCase test_cases[] = {
@@ -778,8 +764,8 @@ void test_optimized_calculation() {
     TestCase* tc = &test_cases[i];
     
     // Reset test channel
-    test_ch.ts_opt.seconds = 0;
-    test_ch.ts_opt.sub_ps = 0;
+    test_ch.timestamp.seconds = 0;
+    test_ch.timestamp.picos = 0;
     test_ch.last_picstop = 0;
     
     // Run the optimized calculation (inline version)
@@ -789,27 +775,27 @@ void test_optimized_calculation() {
     int64_t delta_ps = dcount * (int64_t)PICTICK_PS - (int64_t)tc->tof - test_ch.fudge;
     
     if (delta_ps >= 0) {
-      test_ch.ts_opt.sub_ps += (uint64_t)delta_ps;
-      if (test_ch.ts_opt.sub_ps >= PS_PER_SEC) {
-        test_ch.ts_opt.sub_ps -= PS_PER_SEC;
-        test_ch.ts_opt.seconds += 1u;
+      test_ch.timestamp.picos += (uint64_t)delta_ps;
+      if (test_ch.timestamp.picos >= PS_PER_SEC) {
+        test_ch.timestamp.picos -= PS_PER_SEC;
+        test_ch.timestamp.seconds += 1u;
       }
     } else {
       uint64_t m = (uint64_t)(-delta_ps);
-      if (m <= test_ch.ts_opt.sub_ps) {
-        test_ch.ts_opt.sub_ps -= m;
+      if (m <= test_ch.timestamp.picos) {
+        test_ch.timestamp.picos -= m;
       } else {
-        m -= test_ch.ts_opt.sub_ps;
+        m -= test_ch.timestamp.picos;
         uint64_t borrow_sec = 1 + (m / PS_PER_SEC);
         uint64_t rem = m % PS_PER_SEC;
-        test_ch.ts_opt.seconds -= (uint32_t)borrow_sec;
-        test_ch.ts_opt.sub_ps = PS_PER_SEC - rem;
+        test_ch.timestamp.seconds -= (uint32_t)borrow_sec;
+        test_ch.timestamp.picos = PS_PER_SEC - rem;
       }
     }
     
     // Check results
-    bool sec_ok = (test_ch.ts_opt.seconds == tc->expected_sec);
-    bool sub_ok = (test_ch.ts_opt.sub_ps == tc->expected_sub_ps);
+    bool sec_ok = (test_ch.timestamp.seconds == tc->expected_sec);
+    bool sub_ok = (test_ch.timestamp.picos == tc->expected_picos);
     
     Serial.print("# Test ");
     Serial.print(i + 1);
@@ -819,13 +805,13 @@ void test_optimized_calculation() {
     
     if (sec_ok && sub_ok) {
       char result_buf[64];
-      sprintf(result_buf, "PASS - %u.%llu seconds", test_ch.ts_opt.seconds, test_ch.ts_opt.sub_ps);
+      sprintf(result_buf, "PASS - %u.%llu seconds", test_ch.timestamp.seconds, test_ch.timestamp.picos);
       Serial.println(result_buf);
     } else {
       char result_buf[128];
       sprintf(result_buf, "FAIL - Expected %u.%llu, got %u.%llu", 
-              tc->expected_sec, tc->expected_sub_ps, 
-              test_ch.ts_opt.seconds, test_ch.ts_opt.sub_ps);
+              tc->expected_sec, tc->expected_picos, 
+              test_ch.timestamp.seconds, test_ch.timestamp.picos);
       Serial.println(result_buf);
     }
   }

@@ -17,7 +17,7 @@
 #include "config.h"
 #include "board.h"
 #include "tdc7200.h"
-#include "timestamp_print.h"
+#include "print.h"
 
 extern const char SW_VERSION[17]; // set in TICC.ino
 extern const char SW_TAG[6];      // set in TICC.ino

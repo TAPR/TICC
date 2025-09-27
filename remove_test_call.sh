@@ -8,4 +8,4 @@ sed -i '/Test PLACES and WRAP options (remove this call after testing)/d' TICC/T
 sed -i '/TODO: Remove this line after testing PLACES and WRAP functionality/d' TICC/TICC.ino
 sed -i '/test_places_and_wrap();/d' TICC/TICC.ino
 
-echo "Test function call removed. The test function remains in timestamp_print.cpp for future reference."
+echo "Test function call removed. The test function remains in print.cpp for future reference."

@@ -15,7 +15,7 @@
 bool timestamp_ge(const Timestamp64* a, const Timestamp64* b) {
   if (!a || !b) return false;
   if (a->seconds != b->seconds) return a->seconds > b->seconds;
-  return a->sub_ps >= b->sub_ps;
+  return a->picos >= b->picos;
 }
 
 // Calculate timestamp difference: a - b
@@ -33,24 +33,24 @@ Timestamp64 timestamp_difference(const Timestamp64* a, const Timestamp64* b) {
   uint32_t sec = hi->seconds - lo->seconds;
   uint64_t pico;
   
-  if (hi->sub_ps >= lo->sub_ps) {
-    pico = hi->sub_ps - lo->sub_ps;
+  if (hi->picos >= lo->picos) {
+    pico = hi->picos - lo->picos;
   } else {
-    pico = (hi->sub_ps + PS_PER_SEC) - lo->sub_ps; // borrow 1 second
+    pico = (hi->picos + PS_PER_SEC) - lo->picos; // borrow 1 second
     sec -= 1;
   }
   
   if (positive) {
     result.seconds = sec;
-    result.sub_ps = pico; // already normalized
+    result.picos = pico; // already normalized
   } else {
     // negate (sec, pico) in canonical form
     if (pico == 0) {
       result.seconds = (uint32_t)(-(int32_t)sec);
-      result.sub_ps = 0;
+      result.picos = 0;
     } else {
       result.seconds = (uint32_t)(-(int32_t)sec - 1);
-      result.sub_ps = PS_PER_SEC - pico;
+      result.picos = PS_PER_SEC - pico;
     }
   }
   
@@ -62,7 +62,7 @@ int64_t timestamp_difference_ps(const Timestamp64* a, const Timestamp64* b) {
   if (!a || !b) return 0;
   
   int64_t sec_diff = (int64_t)a->seconds - (int64_t)b->seconds;
-  int64_t pico_diff = (int64_t)a->sub_ps - (int64_t)b->sub_ps;
+  int64_t pico_diff = (int64_t)a->picos - (int64_t)b->picos;
   
   return sec_diff * PS_PER_SEC + pico_diff;
 }
@@ -110,7 +110,7 @@ int format_time_difference(
   if (p < end) *p++ = '.';
   
   // Add fractional part
-  uint64_t frac = diff->sub_ps;
+  uint64_t frac = diff->picos;
   for (int i = 0; i < places && p < end; i++) {
     frac *= 10;
     *p++ = '0' + (char)(frac / PS_PER_SEC);

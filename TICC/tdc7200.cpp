@@ -156,6 +156,7 @@ void tdc7200Channel::reset_channel_state() {
   // Clear timestamp data
   tof = 0;
   last_tof = 0;
+  optimized_tof = 0;
   new_ts_ready = 0;
   timestamp.seconds = 0;
   timestamp.picos = 0;
@@ -172,72 +173,79 @@ void tdc7200Channel::reset_channel_state() {
   // as these should maintain continuity across config changes
 }
 
-// Read TDC
+// Read TDC - optimized inline calculation for maximum throughput
 int64_t tdc7200Channel::read() {
-  int64_t normLSB;
-  int64_t calCount;
-  int64_t ring_ticks;
-  int64_t ring_ps;
-  int64_t tof; 
-
-  //*****************************************************************
-  // Datasheet says:
-  // normLSB = config.CLOCKPERIOD / calCount  // config.CLOCK_PERIOD = 1e5 ps
-  // calCount =  (cal2Result - cal1Result) / (cal2Periods - 1)
-  // tof = normLSB(time1Result - time2Result) + (clock1Result)(config.CLOCK_PERIOD)
-  //
-  // tof is the final result, a value from 0 to 99us 999ns 999ps.
-  // It can never be larger because the STOP signal comes from the
-  // 100us timer and the next edge will terminate the measurement.
-  //
-  // These steps truncate ringps at 1ps resolution. Since normLSB is 
-  // multiplied by up to a few thousand ringticks, the truncation 
-  // error is multiplied as well.  So use mult/div to improve resolution.
- 
-  // For reference, by default:
-  // CLOCK_PERIOD is 1e5 picosecond
-  // FUDGE is 0 
-  // FIX_TIME2 is 0
-  // CAL_PERIODS is 20
-  // time_dilation is 2500 (adjusts for non-linearity)
-  //*****************************************************************
-  
-  // these variables are all int32_t members of the tdc7200Channel class
+  // Read all measurement data once
   time1Result = readReg24(TIME1);         // START to next 100ns tick
   time2Result  = readReg24(TIME2);        // 100ns tick to STOP
   clock1Result = readReg24(CLOCK_COUNT1); // number of 100ns ticks
   cal1Result = readReg24(CALIBRATION1);   // value of 1 cal cycle
   cal2Result = readReg24(CALIBRATION2);   // value of CAL_PERIODS cycle
   
-  tof = (int64_t)(clock1Result * CLOCK_PERIOD);
-  tof -= (int64_t)fudge; // subtract delay due to silicon and prop delay
-  
-  // calCount *= 10e6; divide back later
-  // time_dilation adjusts for non-linearity at 100ns overflow
-  calCount = ((int64_t)(cal2Result - cal1Result) * (int64_t)(1000000 - time_dilation) ) / (int64_t)(CAL_PERIODS - 1); 
+  // Optimized inline TOF calculation for maximum performance
+  // Convert to signed for calculations
+  int32_t time1_s = (int32_t)time1Result;
+  int32_t time2_s = (int32_t)time2Result;
+  int32_t clk1_s  = (int32_t)clock1Result;
+  int32_t cal1_s  = (int32_t)cal1Result;
+  int32_t cal2_s  = (int32_t)cal2Result;
 
-  // if FIXED_TIME2 is set, substitute measured time2Result (which should be a fixed value,
-  // with any variation being noise, with the provided value.  This reduces jitter.
   if (fixed_time2) {
-    time2Result = (int64_t)fixed_time2;
+    time2_s = (int32_t)fixed_time2;
   }
-  
-  // normLSB *= 10e6, but we've already multiplied the divisor
-  // above so we need to do 10e12 here
-  normLSB = ( (int64_t)CLOCK_PERIOD * (int64_t)1000000000000 ) / (int64_t)calCount;
 
-  ring_ticks = (int64_t)time1Result - (int64_t)time2Result;
- 
-  // ring_ps *= 10e-6 to get rid of earlier scaling
-  ring_ps = ((int64_t)normLSB * (int64_t)ring_ticks) / (int64_t)1000000;
-  
-  tof += (int64_t)ring_ps;
+  // Base tof from 100 ns ticks: clk1 * 100,000 ps
+  // clk1 is typically small (33-996 from test data), so fits in int32
+  int32_t tof_base = clk1_s * (int32_t)CLOCK_PERIOD;
 
+  // Apply fudge (typically small)
+  tof_base -= (int32_t)fudge;
+
+  // calCount calculation - use 64-bit only for the large product, then narrow
+  int32_t cal_diff = cal2_s - cal1_s;
+  int32_t scale = 1000000 - time_dilation;  // typically 997500
+  int32_t denom = (int32_t)(CAL_PERIODS - 1);  // typically 19
+
+  if (denom == 0) denom = 1;
+
+  // Only use 64-bit for the product, then divide and narrow
+  int64_t cal_prod = (int64_t)cal_diff * (int64_t)scale;
+  int64_t calCount = (cal_prod + denom / 2) / denom;  // rounded division
+  if (calCount < 1) calCount = 1;
+
+  // ring_ticks = time1 - time2 (32-bit safe)
+  int32_t ring_ticks = time1_s - time2_s;
+
+  // Optimized ring_ps calculation:
+  // Instead of: normLSB = (CLOCK_PERIOD * 10^12) / calCount, then ring_ps = (normLSB * ring_ticks) / 10^6
+  // Use: ring_ps = (ring_ticks * CLOCK_PERIOD * 10^6) / calCount
+  // This avoids the 10^12 intermediate and keeps precision
+  
+  int64_t num = (int64_t)ring_ticks * (int64_t)CLOCK_PERIOD;
+  int64_t ring_ps = 0;
+  if (num != 0) {
+    // Scale by 10^6 first, then divide
+    num *= 1000000LL;
+    ring_ps = (num + calCount / 2) / calCount;  // rounded division
+  }
+
+  // Final tof calculation
+  int64_t tof64 = (int64_t)tof_base + ring_ps;
+
+  // Clamp to documented bounds
+  if (tof64 < 300000LL) tof64 = 300000LL;
+  if (tof64 > 100300000LL) tof64 = 100300000LL;
+
+  // Store result
+  tof = (int32_t)tof64;
+  optimized_tof = (int32_t)tof64;  // Keep for compatibility if needed
+  
   // Ack all interrupts
   tdc_ack_int();
-
+  
   return (int64_t)tof;
 }
+
 
 
 

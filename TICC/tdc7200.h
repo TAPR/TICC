@@ -70,6 +70,7 @@ public:
   int64_t tof;
   int64_t last_tof;
   int64_t totalize;
+  int32_t optimized_tof;  // For testing: optimized TOF calculation result
   // Optimized timestamp using Timestamp64 (int32_t sec + int64_t frac)
   volatile uint8_t new_ts_ready; // set when a fresh timestamp is available for pairing
   Timestamp64 timestamp;       // optimized timestamp (sec, picos)

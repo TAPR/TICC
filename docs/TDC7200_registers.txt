@@ -1,0 +1,26 @@
+Addr   Name                   Description                         Width  Default
+-----  ---------------------  ---------------------------------  -----  -------
+00h    CONFIG1                Configuration Register 1            8      00h
+01h    CONFIG2                Configuration Register 2            8      40h
+02h    INT_STATUS             Interrupt Status Register           8      00h
+03h    INT_MASK               Interrupt Mask Register             8      07h
+04h    COARSE_CNTR_OVF_H      Coarse Counter Overflow Value High  8      FFh
+05h    COARSE_CNTR_OVF_L      Coarse Counter Overflow Value Low   8      FFh
+06h    CLOCK_CNTR_OVF_H       CLOCK Counter Overflow Value High   8      FFh
+07h    CLOCK_CNTR_OVF_L       CLOCK Counter Overflow Value Low    8      FFh
+08h    CLOCK_CNTR_STOP_MASK_H CLOCK Counter STOP Mask High        8      00h
+09h    CLOCK_CNTR_STOP_MASK_L CLOCK Counter STOP Mask Low         8      00h
+10h    TIME1                  Measured Time 1                     24     00_0000h
+11h    CLOCK_COUNT1           CLOCK Counter Value                 24     00_0000h
+12h    TIME2                  Measured Time 2                     24     00_0000h
+13h    CLOCK_COUNT2           CLOCK Counter Value                 24     00_0000h
+14h    TIME3                  Measured Time 3                     24     00_0000h
+15h    CLOCK_COUNT3           CLOCK Counter Value                 24     00_0000h
+16h    TIME4                  Measured Time 4                     24     00_0000h
+17h    CLOCK_COUNT4           CLOCK Counter Value                 24     00_0000h
+18h    TIME5                  Measured Time 5                     24     00_0000h
+19h    CLOCK_COUNT5           CLOCK Counter Value                 24     00_0000h
+1Ah    TIME6                  Measured Time 6                     24     00_0000h
+1Bh    CALIBRATION1           Calibration 1, 1 CLOCK Period       24     00_0000h
+1Ch    CALIBRATION2           Calibration 2, 2/10/20/40 CLOCK     24     00_0000h
+

@@ -167,10 +167,6 @@ void tdc7200Channel::reset_channel_state() {
   cached_sec = 0;
   cached_rem_ticks = 0;
   
-  // Reset calibration cache
-  cached_cal1 = 0;
-  cached_cal2 = 0;
-  cal_cache_counter = 0;
   
   // Note: We deliberately do NOT reset totalize counter or PICstop
   // as these should maintain continuity across config changes
@@ -243,62 +239,6 @@ int64_t tdc7200Channel::read() {
   return (int64_t)tof;
 }
 
-// Optimized read function with cached calibration values
-int64_t tdc7200Channel::read_optimized() {
-  int64_t normLSB;
-  int64_t calCount;
-  int64_t ring_ticks;
-  int64_t ring_ps;
-  int64_t tof; 
-
-  // Read only the essential measurement data (3 SPI reads instead of 5)
-  time1Result = readReg24(TIME1);         // START to next 100ns tick
-  time2Result  = readReg24(TIME2);        // 100ns tick to STOP
-  clock1Result = readReg24(CLOCK_COUNT1); // number of 100ns ticks
-  
-  // Only read calibration values periodically (every CAL_CACHE_INTERVAL measurements)
-  cal_cache_counter++;
-  if (cal_cache_counter >= CAL_CACHE_INTERVAL) {
-    cal1Result = readReg24(CALIBRATION1);   // value of 1 cal cycle
-    cal2Result = readReg24(CALIBRATION2);   // value of CAL_PERIODS cycle
-    cached_cal1 = cal1Result;
-    cached_cal2 = cal2Result;
-    cal_cache_counter = 0;
-  } else {
-    // Use cached calibration values
-    cal1Result = cached_cal1;
-    cal2Result = cached_cal2;
-  }
-  
-  tof = (int64_t)(clock1Result * CLOCK_PERIOD);
-  tof -= (int64_t)fudge; // subtract delay due to silicon and prop delay
-  
-  // calCount *= 10e6; divide back later
-  // time_dilation adjusts for non-linearity at 100ns overflow
-  calCount = ((int64_t)(cal2Result - cal1Result) * (int64_t)(1000000 - time_dilation) ) / (int64_t)(CAL_PERIODS - 1); 
-
-  // if FIXED_TIME2 is set, substitute measured time2Result (which should be a fixed value,
-  // with any variation being noise, with the provided value.  This reduces jitter.
-  if (fixed_time2) {
-    time2Result = (int64_t)fixed_time2;
-  }
-  
-  // normLSB *= 10e6, but we've already multiplied the divisor
-  // above so we need to do 10e12 here
-  normLSB = ( (int64_t)CLOCK_PERIOD * (int64_t)1000000000000 ) / (int64_t)calCount;
-
-  ring_ticks = (int64_t)time1Result - (int64_t)time2Result;
- 
-  // ring_ps *= 10e-6 to get rid of earlier scaling
-  ring_ps = ((int64_t)normLSB * (int64_t)ring_ticks) / (int64_t)1000000;
-  
-  tof += (int64_t)ring_ps;
-
-  // Ack all interrupts
-  tdc_ack_int();
-
-  return (int64_t)tof;
-}
 
 
 /*************************************************************************

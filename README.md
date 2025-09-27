@@ -8,21 +8,16 @@ Each release is in its own branch named with version number.
 See the CHANGES.md file for more details about versions.  This
 is just a short summary:
 
-September 2025: New firmware version (beta) that adds/fixes:
+September 2025: Major new release that adds/fixes:
+* Much greater measurement speed, including binary
+  timestamp mode that can do over 1000 measurements/second
+  on one channel
 * Timestamps don't overflow for 68 years
 * Fix to bug in printing long timestamps (misplaced "-" sign)
 * Fully rework menu system with submenus and multiple command
   execution for scripting
-* Optimizations and bug fixes:
-  * Fix to longstanding kludge in TDC7200 interrupt handling
-  * Changed most 64 bit arithmetic to 32 bit for speed
-  * Reworked print routines for speed
-  (Together, these should improve the maximum number of measurements
-  per second.  Initial tests show at least 200 measurements/second
-  across both channels (i.e., 100 PPS on both ch0 and ch1.)
 
 12 April 2020: New firmware version that adds:
-
 * Change to 11 decimal place (10 ps) rather than 12 place (1 ps)
   resolution to better reflect real performance
 * Selectable timestamp rollover

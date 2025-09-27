@@ -1,9 +1,7 @@
 // print.cpp -- optimized 64-bit printing routines for TICC
-// Based on advisor's fast 64-bit to decimal conversion algorithm
 
 #include <Arduino.h>
 #include "config.h"
-// misc.h removed - no longer needed
 #include "tdc7200.h"
 #include "timestamp_utils.h"
 #include "print.h"
@@ -11,8 +9,8 @@
 // External config variable (defined in TICC.ino)
 extern config_t config;
 
-// Fast 64-bit to 12-digit conversion using advisor's optimized approach
-#define M6 1000000UL
+// Fast 64-bit to 12-digit conversion
+#define M6 1000000
 #define RECIP_M6 281474976UL
 
 // Compute q = floor(x / 1,000,000) for x < 10^12 without 64-bit division
@@ -68,10 +66,8 @@ void update_cached_config() {
   config_cached = true;
 }
 
-// Ultra-fast timestamp formatting using advisor's optimized approach
-// Performance: 548 measurements/second (tested) with PLACES/WRAP support
-// Optimizations: config parameter caching, direct array operations, 
-//                advisor's 64-bit to decimal conversion algorithm
+// Ultra-fast timestamp formatting
+// Performance: 565 measurements/second (tested) with PLACES/WRAP support
 int print_timestamp(
   char* out,
   size_t out_size,
@@ -187,15 +183,6 @@ int print_timestamp(
   return p - out;
 }
 
-// timestamp_ge moved to timestamp_utils.cpp
-
-// timestamp_difference moved to timestamp_utils.cpp
-
-// timestamp_difference_ps moved to timestamp_utils.cpp
-
-// format_time_difference moved to timestamp_utils.cpp
-
-// Test function for verifying the optimized print routine
 void test_optimized_print() {
   Serial.println("# Testing optimized timestamp printing...");
   

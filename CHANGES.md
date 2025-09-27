@@ -28,10 +28,17 @@ improvements
   from the configuration menus
 - **Enhanced Configuration Menus**: Heavily reworked menus now support
   multiple commands per line for simplified scripting
+- **New Binary Timestamp Mode**: Outputs binary data to achieve >1000
+  measurements/second on one channel
 - **Updated Documentation**: TICC User Guide completely rewritten and much
   expanded
 
 ### Improvements
+- **Timestamp Calculation Optimized**: Removed much 64 bit math to increase
+  throughput; raw calculation speed is >1250 measurements/second in one channel
+- **Optimized Print Routines**: Reworked printing to optimize 64 bit variable
+  output (an 8 bit Arduino weak point).  Now can output normal-format timestamps
+  at 565 Hz.
 - **Extended Timestamp Range**: Timestamp calculation modified so that
   overflow will not happen for about 68 years
 - **Paired Channel Ordering**: When timestamp data is received from both
@@ -42,8 +49,6 @@ improvements
 - **Interrupt Processing**: Fixed fundamental problems processing TDC7200
   chip interrupts, removing ugly hacks that affected maximum measurement
   rate
-- **Performance**: These fixes should improve measurement speeds
-  (synthesized tests show ~230 timestamp pairs per second)
 
 ---
 

@@ -400,7 +400,9 @@ void loop() {
         if (config.MODE == Binary) {
           // High-throughput mode: minimal output for maximum speed
           // Output: PICstop (bottom 4 bytes) + tof (4 bytes) + channel + CRLF
-          // Note: PICstop truncated to 32-bit for speed, user must detect rollover for full 64-bit timestamp
+          // Note: PICstop truncated to 32-bit for speed, so holds about 5 days
+          // (100 us per tick) before overflow.  User must detect rollover 
+          // for full 64-bit timestamp.
           // Tested to deliver 1068 measurements/second on one channel
           
           uint8_t buffer[11];

@@ -32,6 +32,7 @@ void doSetupMenu(struct config_t *pConfigInfo) {
       configPrint("A - Mode (currently: ");
       switch (pConfigInfo->MODE) {
         case Timestamp: serialPrintImmediate("Timestamp"); break;
+        case Binary:    serialPrintImmediate("Binary Timestamp"); break;
         case Period:    serialPrintImmediate("Period"); break;
         case Interval:  serialPrintImmediate("Interval A->B"); break;
         case timeLab:   serialPrintImmediate("TimeLab 3-ch"); break;

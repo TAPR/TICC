@@ -712,20 +712,14 @@ void loop() {
       while (Serial.available()) (void)Serial.read();
       
       // Handle exit from config menu
-      if (config_changed) {
-        // Apply changes and handle restart vs resume
-        handle_config_change_exit();
-        
-        // If restart required, exit loop to reinitialize
-        if (config_change_requires_restart()) {
-          skip_config_prompt_once = 1;
-          just_restarted = 1;  // Set flag for next loop iteration
-          return; // reinitialize via ticc_setup() on next loop entry
-        }
-        // Otherwise continue in the same loop with new settings
-      } else {
-        // No changes made, just resume
-        Serial.println("# No changes made, resuming operation");
+      // Always handle config changes (whether written to EEPROM or not)
+      handle_config_change_exit();
+      
+      // If restart required, exit loop to reinitialize
+      if (config_change_requires_restart()) {
+        skip_config_prompt_once = 1;
+        just_restarted = 1;  // Set flag for next loop iteration
+        return; // reinitialize via ticc_setup() on next loop entry
       }
       
       // Restart measurements after config changes

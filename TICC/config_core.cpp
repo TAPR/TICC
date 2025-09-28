@@ -438,13 +438,44 @@ void apply_config_changes() {
   }
 }
 
+// Print header for current mode
+void print_mode_header() {
+  Serial.println("# ");
+  switch (config.MODE) {
+    case Timestamp:
+      Serial.print("# timestamp (seconds with ");
+      Serial.print(config.PLACES);
+      Serial.println(" decimal places)");
+      break;
+    case Interval:
+      Serial.print("# time interval A->B (seconds with ");
+      Serial.print(config.PLACES);
+      Serial.println(" decimal places)");
+      break;
+    case Period:
+      Serial.print("# period (seconds with ");
+      Serial.print(config.PLACES);
+      Serial.println(" decimal places)");
+      break;
+    case timeLab:
+      Serial.print("# timestamp ch0, ch1; interval chA->B (seconds with ");
+      Serial.print(config.PLACES);
+      Serial.println(" decimal places)");
+      break;
+    case Debug:
+      Serial.println("# time1 time2 clock1 cal1 cal2 PICstop tof timestamp");
+      break;
+    case Binary:
+      Serial.println("# Binary Timestamp mode - PICstop (bottom 4 bytes) tof (4 bytes) channel (1 byte)");
+      break;
+    case Null:
+      Serial.println("# null output mode - no data");
+      break;
+  }
+}
+
 // Handle restart vs. resume decision after config changes
 void handle_config_change_exit() {
-  if (!config_changed) {
-    // No changes made, just resume
-    return;
-  }
-  
   if (config_change_requires_restart()) {
     // Full restart required
     Serial.println("# Configuration changes require restart. Restarting...");
@@ -452,10 +483,16 @@ void handle_config_change_exit() {
     return; // This will cause ticc_setup() to be called again
   } else {
     // Can resume with flush
-    Serial.println("# Applying configuration changes...");
-    apply_config_changes();
-    // Note: flush_all_channels() will be called from TICC.ino
-    Serial.println("# Resuming operation with new settings.");
-    Serial.println("# (Changes are temporary - will revert on restart)");
+    if (config_changed) {
+      Serial.println("# Applying configuration changes...");
+      apply_config_changes();
+      Serial.println("# Resuming operation with new settings.");
+      Serial.println("# (Changes are temporary - will revert on restart)");
+    } else {
+      // Changes were written to EEPROM, just resume
+      Serial.println("# Resuming operation with new settings.");
+    }
+    // Print new header for the current mode
+    print_mode_header();
   }
 }

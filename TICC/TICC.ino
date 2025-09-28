@@ -396,15 +396,14 @@ void loop() {
           CLR_EXT_LED_1;
         };
 
-        // Binary mode: high-throughput output
-        if (config.MODE == Binary) {
-          // High-throughput mode: minimal output for maximum speed
-          // Output: PICstop (bottom 4 bytes) + tof (4 bytes) + channel + CRLF
-          // Note: PICstop truncated to 32-bit for speed, so holds about 5 days
-          // (100 us per tick) before overflow.  User must detect rollover 
-          // for full 64-bit timestamp.
-          // Tested to deliver 1068 measurements/second on one channel
+        // High-throughput mode: minimal output for maximum speed
+        // Output: PICstop (bottom 4 bytes) + tof (4 bytes) + channel + CRLF
+        // Note: PICstop truncated to 32-bit for speed, so holds about 5 days
+        // (100 us per tick) before overflow.  User must detect rollover 
+        // for full 64-bit timestamp.
+        // Tested to deliver 1068 measurements/second on one channel
           
+        if (config.MODE == Binary) {
           uint8_t buffer[11];
           uint32_t picstop_raw = (uint32_t)channels[i].PICstop;
           uint32_t tof_raw = (uint32_t)channels[i].tof;
@@ -430,7 +429,7 @@ void loop() {
           channels[i].totalize++;
           channels[i].ready_next();
           continue;
-        }
+        } // end of binary mode
         
         // delta ticks since previous event on this channel
         int64_t dcount = (int64_t)(channels[i].PICstop - channels[i].last_picstop);
@@ -754,109 +753,3 @@ void catch_stop1() {
   channels[1].PICstop = PICcount;
 }
 
-
-// Test function for optimized timestamp calculation
-void test_optimized_calculation() {
-  Serial.println("# ");
-  Serial.println("# Testing optimized timestamp calculation...");
-  Serial.println("# ");
-  
-  // Create a test channel structure
-  tdc7200Channel test_ch('T', 0, 0, 0, 0, 0);  // Test channel
-  
-  // Initialize test channel
-  test_ch.timestamp.seconds = 0;
-  test_ch.timestamp.picos = 0;
-  test_ch.last_timestamp.seconds = 0;
-  test_ch.last_timestamp.picos = 0;
-  test_ch.last_picstop = 0;
-  test_ch.fudge = 0;  // No fudge for testing
-  
-  struct TestCase {
-    uint64_t picstop;
-    int64_t tof;
-    const char* description;
-    uint32_t expected_sec;
-    uint64_t expected_picos;
-  };
-  
-  TestCase test_cases[] = {
-    // Basic tests
-    {10000, 1000000000, "1 second (10000 ticks @ 100µs) + 1ns TOF", 0, 1000000000},
-    {10000, 500000000000, "1 second + 500µs TOF", 0, 500000000000},
-    {10000, 999999999999, "1 second + 999.999µs TOF", 0, 999999999999},
-    
-    // Carry tests
-    {10000, 0, "1 second exactly (should carry to seconds)", 1, 0},
-    {10000, 1000000, "1 second + 1µs (should carry)", 1, 1000000},
-    
-    // Multiple second tests
-    {50000, 0, "5 seconds exactly", 5, 0},
-    {50000, 123456789012, "5 seconds + fractional", 5, 123456789012},
-    
-    // Edge cases
-    {1, 999999999999, "1 tick (100µs) + max fractional", 0, 999999999999},
-    {0, 0, "Zero case", 0, 0},
-  };
-  
-  for (int i = 0; i < sizeof(test_cases) / sizeof(test_cases[0]); i++) {
-    TestCase* tc = &test_cases[i];
-    
-    // Reset test channel
-    test_ch.timestamp.seconds = 0;
-    test_ch.timestamp.picos = 0;
-    test_ch.last_picstop = 0;
-    
-    // Run the optimized calculation (inline version)
-    int64_t dcount = (int64_t)(tc->picstop - test_ch.last_picstop);
-    test_ch.last_picstop = tc->picstop;
-    
-    int64_t delta_ps = dcount * (int64_t)PICTICK_PS - (int64_t)tc->tof - test_ch.fudge;
-    
-    if (delta_ps >= 0) {
-      test_ch.timestamp.picos += (uint64_t)delta_ps;
-      if (test_ch.timestamp.picos >= PS_PER_SEC) {
-        test_ch.timestamp.picos -= PS_PER_SEC;
-        test_ch.timestamp.seconds += 1u;
-      }
-    } else {
-      uint64_t m = (uint64_t)(-delta_ps);
-      if (m <= test_ch.timestamp.picos) {
-        test_ch.timestamp.picos -= m;
-      } else {
-        m -= test_ch.timestamp.picos;
-        uint64_t borrow_sec = 1 + (m / PS_PER_SEC);
-        uint64_t rem = m % PS_PER_SEC;
-        test_ch.timestamp.seconds -= (uint32_t)borrow_sec;
-        test_ch.timestamp.picos = PS_PER_SEC - rem;
-      }
-    }
-    
-    // Check results
-    bool sec_ok = (test_ch.timestamp.seconds == tc->expected_sec);
-    bool sub_ok = (test_ch.timestamp.picos == tc->expected_picos);
-    
-    Serial.print("# Test ");
-    Serial.print(i + 1);
-    Serial.print(" (");
-    Serial.print(tc->description);
-    Serial.print("): ");
-    
-    if (sec_ok && sub_ok) {
-      char result_buf[64];
-      sprintf(result_buf, "PASS - %u.%llu seconds", test_ch.timestamp.seconds, test_ch.timestamp.picos);
-      Serial.println(result_buf);
-    } else {
-      char result_buf[128];
-      sprintf(result_buf, "FAIL - Expected %u.%llu, got %u.%llu", 
-              tc->expected_sec, tc->expected_picos, 
-              test_ch.timestamp.seconds, test_ch.timestamp.picos);
-      Serial.println(result_buf);
-    }
-  }
-  
-  Serial.println("# ");
-  Serial.println("# Optimized calculation test complete.");
-  Serial.println("# ");
-}
-/****************************************************************/

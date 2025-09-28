@@ -393,6 +393,7 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
   // W) Write changes to EEPROM (without restart)
   if (cmd == 'W') {
     eeprom_write_config();
+    config_changed = 0; // Clear the changed flag since changes are now persistent
     configPrint("Changes written to EEPROM (will persist across restarts)\r\n");
     return true;
   }
@@ -549,6 +550,8 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
   if (cmd == '3') { 
     // Apply changes and resume operation
     configPrint("Applying changes and resuming operation...\r\n"); 
+    // Clear the changed flag since we're applying changes
+    config_changed = 0;
     return false; 
   }
   if (cmd == '4') { 

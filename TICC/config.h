@@ -135,6 +135,7 @@ template <class T> int EEPROM_readAnything(int ee, T& value)
 // read and write config struct in eeprom
 void eeprom_write_config_default (uint16_t offset);
 void print_config (config_t x);
+void print_mode_header();
 
 
 #endif	/* CONFIG_H */

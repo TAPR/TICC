@@ -86,14 +86,14 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
     else if (choice == '2') {
       // G2) Coarse tick us
       char buf[96];
-      char *input = getInputOrPrompt(args, "Coarse tick (us): ", buf, sizeof(buf));
+      char *input = getInputOrPrompt(args, "Coarse Tick (us): ", buf, sizeof(buf));
       int64_t ps; 
       if (parseDecimalScaled(input, 1000000LL, &ps) && ps > 0) { 
         int64_t old = pConfigInfo->PICTICK_PS; 
         pConfigInfo->PICTICK_PS = ps; 
         MARK_CONFIG_CHANGED();
         char m[64]; 
-        sprintf(m, "OK -- Coarse %ld.%06ld -> %ld.%06ld\r\n", 
+        sprintf(m, "OK -- Coarse Tick %ld.%06ld -> %ld.%06ld\r\n", 
                 (int32_t)(old/1000000LL), (int32_t)(old%1000000LL),
                 (int32_t)(ps/1000000LL), (int32_t)(ps%1000000LL)); 
         configPrint(m); 
@@ -105,7 +105,7 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
     else if (choice == '3') {
       // G3) Prop delays
       char buf[96];
-      char *input = getInputOrPrompt(args, "Enter pair A/B: ", buf, sizeof(buf));
+      char *input = getInputOrPrompt(args, "Enter Pair A/B: ", buf, sizeof(buf));
       bool s0=false, s1=false; int64_t v0=0, v1=0; 
       if (!parseInt64Pair(input, &s0, &v0, &s1, &v1)) { 
         configPrint("Invalid\r\n"); 
@@ -124,7 +124,7 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
     else if (choice == '4') {
       // G4) Time dilation
       char buf[96];
-      char *input = getInputOrPrompt(args, "Enter pair A/B: ", buf, sizeof(buf));
+      char *input = getInputOrPrompt(args, "Enter Pair A/B: ", buf, sizeof(buf));
       bool s0=false, s1=false; int64_t v0=0, v1=0; 
       if (!parseInt64Pair(input, &s0, &v0, &s1, &v1)) { 
         configPrint("Invalid\r\n"); 
@@ -134,7 +134,7 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
         if (s1) pConfigInfo->TIME_DILATION[1]=v1; 
         MARK_CONFIG_CHANGED();
         char m[80]; 
-        sprintf(m, "OK -- TimeDilation %ld/%ld -> %ld/%ld\r\n", 
+        sprintf(m, "OK -- Time Dilation %ld/%ld -> %ld/%ld\r\n", 
                 (long)o0, (long)o1, (long)pConfigInfo->TIME_DILATION[0], (long)pConfigInfo->TIME_DILATION[1]); 
         configPrint(m); 
       }
@@ -143,7 +143,7 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
     else if (choice == '5') {
       // G5) fixedTime2
       char buf[96];
-      char *input = getInputOrPrompt(args, "Enter pair A/B: ", buf, sizeof(buf));
+      char *input = getInputOrPrompt(args, "Enter Pair A/B: ", buf, sizeof(buf));
       bool s0=false, s1=false; int64_t v0=0, v1=0; 
       if (!parseInt64Pair(input, &s0, &v0, &s1, &v1)) { 
         configPrint("Invalid\r\n"); 
@@ -162,7 +162,7 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
     else if (choice == '6') {
       // G6) FUDGE0
       char buf[96];
-      char *input = getInputOrPrompt(args, "Enter pair A/B: ", buf, sizeof(buf));
+      char *input = getInputOrPrompt(args, "Enter Pair A/B: ", buf, sizeof(buf));
       bool s0=false, s1=false; int64_t v0=0, v1=0; 
       if (!parseInt64Pair(input, &s0, &v0, &s1, &v1)) { 
         configPrint("Invalid\r\n"); 
@@ -179,7 +179,7 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
       Serial.flush();
     }
     else {
-      configPrint("Invalid advanced choice\r\n");
+      configPrint("Invalid Advanced Choice\r\n");
     }
     return true;
   }
@@ -190,8 +190,8 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
     for (;;) {
       configPrint("\r\n");
       configPrint("-- Mode --\r\n");
-      configPrint("A1 - Timestamps\r\n");
-      configPrint("A2 - Binary (High-throughput)\r\n");
+      configPrint("A1 - Timestamp\r\n");
+      configPrint("A2 - Binary Timestamp\r\n");
       configPrint("A3 - Time Interval A -> B\r\n");
       configPrint("A4 - Period\r\n");
       configPrint("A5 - TimeLab 3-Cornered Hat\r\n");
@@ -202,7 +202,7 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
       
       switch (pConfigInfo->MODE) {
         case Timestamp: serialPrintImmediate("Timestamp"); break;
-        case Binary:    serialPrintImmediate("Binary (High-throughput)"); break;
+        case Binary:    serialPrintImmediate("Binary Timestamp"); break;
         case Period:    serialPrintImmediate("Period"); break;
         case Interval:  serialPrintImmediate("Time Interval A->B"); break;
         case timeLab:   serialPrintImmediate("TimeLab 3-Cornered Hat"); break;
@@ -230,22 +230,25 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
           // Mode setting options
           char m = toupper(mline[0]); MeasureMode old = pConfigInfo->MODE;
           if (m == 'A' && mline[1] == '1') pConfigInfo->MODE = Timestamp;
-          else if (m == 'A' && mline[1] == '2') pConfigInfo->MODE = Interval;
-          else if (m == 'A' && mline[1] == '3') pConfigInfo->MODE = Period;
-          else if (m == 'A' && mline[1] == '4') pConfigInfo->MODE = timeLab;
-          else if (m == 'A' && mline[1] == '5') pConfigInfo->MODE = Debug;
-          else if (m == 'A' && mline[1] == '6') pConfigInfo->MODE = Null;
+          else if (m == 'A' && mline[1] == '2') pConfigInfo->MODE = Binary;
+          else if (m == 'A' && mline[1] == '3') pConfigInfo->MODE = Interval;
+          else if (m == 'A' && mline[1] == '4') pConfigInfo->MODE = Period;
+          else if (m == 'A' && mline[1] == '5') pConfigInfo->MODE = timeLab;
+          else if (m == 'A' && mline[1] == '6') pConfigInfo->MODE = Debug;
+          else if (m == 'A' && mline[1] == '7') pConfigInfo->MODE = Null;
           
           // Show mode change confirmation and mark config as changed
           if (old != pConfigInfo->MODE) {
             char msg[128];
             sprintf(msg, "Mode was %s; now %s\r\n", 
                     (old == Timestamp) ? "Timestamp" :
+                    (old == Binary) ? "Binary Timestamp" :
                     (old == Interval) ? "Time Interval A->B" :
                     (old == Period) ? "Period" :
                     (old == timeLab) ? "TimeLab 3-Cornered Hat" :
                     (old == Debug) ? "Debug" : "Null Output",
                     (pConfigInfo->MODE == Timestamp) ? "Timestamp" :
+                    (pConfigInfo->MODE == Binary) ? "Binary Timestamp" :
                     (pConfigInfo->MODE == Interval) ? "Time Interval A->B" :
                     (pConfigInfo->MODE == Period) ? "Period" :
                     (pConfigInfo->MODE == timeLab) ? "TimeLab 3-Cornered Hat" :
@@ -264,14 +267,14 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
   // B) Wrap digits
   if (cmd == 'B') {
     char buf[96];
-    char *input = getInputOrPrompt(args, "Wrap digits (0..10): ", buf, sizeof(buf));
+    char *input = getInputOrPrompt(args, "Wrap Digits (0..10): ", buf, sizeof(buf));
     int64_t wrap; 
     if (parseInt64Simple(input, &wrap) && wrap >= 0 && wrap <= 10) { 
       int16_t old = pConfigInfo->WRAP; 
       pConfigInfo->WRAP = (int16_t)wrap; 
       MARK_CONFIG_CHANGED();
       char m[64]; 
-      sprintf(m, "OK -- Wrap %d -> %d\r\n", (int)old, (int)pConfigInfo->WRAP); 
+      sprintf(m, "OK -- Wrap Digits %d -> %d\r\n", (int)old, (int)pConfigInfo->WRAP); 
       configPrint(m); 
     } else {
       configPrint("Invalid\r\n");
@@ -283,14 +286,14 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
   // C) Output decimal places
   if (cmd == 'C') {
     char buf[96];
-    char *input = getInputOrPrompt(args, "Output decimal places (0..12): ", buf, sizeof(buf));
+    char *input = getInputOrPrompt(args, "Output Decimal Places (0..12): ", buf, sizeof(buf));
     int64_t places; 
     if (parseInt64Simple(input, &places) && places >= 0 && places <= 12) { 
       int16_t old = pConfigInfo->PLACES; 
       pConfigInfo->PLACES = (int16_t)places; 
       MARK_CONFIG_CHANGED();
       char m[64]; 
-      sprintf(m, "OK -- Places %d -> %d\r\n", (int)old, (int)pConfigInfo->PLACES); 
+      sprintf(m, "OK -- Decimal Places %d -> %d\r\n", (int)old, (int)pConfigInfo->PLACES); 
       configPrint(m); 
     } else {
       configPrint("Invalid\r\n");
@@ -302,7 +305,7 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
   // D) Trigger edges
   if (cmd == 'D') {
     char buf[96];
-    char *input = getInputOrPrompt(args, "Enter edges A/B (R/F): ", buf, sizeof(buf));
+    char *input = getInputOrPrompt(args, "Enter Edges A/B (R/F): ", buf, sizeof(buf));
     if (input[0] && input[1] == '/' && input[2]) {
       char e0 = toupper(input[0]), e1 = toupper(input[2]);
       if ((e0 == 'R' || e0 == 'F') && (e1 == 'R' || e1 == 'F')) {
@@ -333,7 +336,7 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
       pConfigInfo->SYNC_MODE = c; 
       MARK_CONFIG_CHANGED();
       char m[64]; 
-      sprintf(m, "OK -- Sync %c -> %c\r\n", old, c); 
+      sprintf(m, "OK -- Sync Mode %c -> %c\r\n", old, c); 
       configPrint(m); 
     } else {
       configPrint("Invalid\r\n");
@@ -345,7 +348,7 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
   // F) Channel names (preserve case - no uppercasing)
   if (cmd == 'F') {
     char buf[96];
-    char *input = getInputOrPrompt(args, "Enter names A/B: ", buf, sizeof(buf));
+    char *input = getInputOrPrompt(args, "Enter Names A/B: ", buf, sizeof(buf));
     if (input[0] && input[1] == '/' && input[2]) {
       char o0 = pConfigInfo->NAME[0], o1 = pConfigInfo->NAME[1]; 
       pConfigInfo->NAME[0] = input[0];  // No toupper() - preserve case
@@ -364,15 +367,15 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
   // G) Poll char
   if (cmd == 'G') {
     char buf[96];
-    char *input = getInputOrPrompt(args, "Enter poll character (space to clear): ", buf, sizeof(buf));
+    char *input = getInputOrPrompt(args, "Enter Poll Character (space to clear): ", buf, sizeof(buf));
     char old = pConfigInfo->POLL_CHAR;
     pConfigInfo->POLL_CHAR = (input[0] == '\0' || input[0] == ' ') ? 0x00 : input[0];
     MARK_CONFIG_CHANGED();
     char msg[64]; 
     if (old) {
-      sprintf(msg, "OK -- Poll Char %c -> %c\r\n", old, pConfigInfo->POLL_CHAR ? pConfigInfo->POLL_CHAR : ' '); 
+      sprintf(msg, "OK -- Poll Character %c -> %c\r\n", old, pConfigInfo->POLL_CHAR ? pConfigInfo->POLL_CHAR : ' '); 
     } else {
-      sprintf(msg, "OK -- Poll Char none -> %c\r\n", pConfigInfo->POLL_CHAR ? pConfigInfo->POLL_CHAR : ' '); 
+      sprintf(msg, "OK -- Poll Character none -> %c\r\n", pConfigInfo->POLL_CHAR ? pConfigInfo->POLL_CHAR : ' '); 
     }
     configPrint(msg);
     Serial.flush();
@@ -477,28 +480,28 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
           }
           // H2) Coarse tick us
           else if (a == 'H' && aline[1] == '2') {
-            configPrint("Coarse tick (us): "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
+            configPrint("Coarse Tick (us): "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
             int64_t ps; if (parseDecimalScaled(cline, 1000000LL, &ps) && ps > 0) { int64_t old=pConfigInfo->PICTICK_PS; pConfigInfo->PICTICK_PS = ps; char m[64]; sprintf(m, "OK -- Coarse %ld.%06ld -> %ld.%06ld\r\n", (int32_t)(old/1000000LL),(int32_t)(old%1000000LL),(int32_t)(ps/1000000LL),(int32_t)(ps%1000000LL)); configPrint(m); } else configPrint("Invalid\r\n");
             Serial.flush();
           }
           // H3) Prop delays
           else if (a == 'H' && aline[1] == '3') {
-            configPrint("Enter pair A/B: "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
+            configPrint("Enter Pair A/B: "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
             bool s0=false, s1=false; int64_t v0=0, v1=0; if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { configPrint("Invalid\r\n"); Serial.flush(); } else { int32_t o0=pConfigInfo->PROP_DELAY[0], o1=pConfigInfo->PROP_DELAY[1]; if (s0) pConfigInfo->PROP_DELAY[0]=v0; if (s1) pConfigInfo->PROP_DELAY[1]=v1; char m[80]; sprintf(m, "OK -- PropDelay %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->PROP_DELAY[0],(long)pConfigInfo->PROP_DELAY[1]); configPrint(m); Serial.flush(); }
           }
           // H4) Time dilation
           else if (a == 'H' && aline[1] == '4') {
-            configPrint("Enter pair A/B: "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
+            configPrint("Enter Pair A/B: "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
             bool s0=false, s1=false; int64_t v0=0, v1=0; if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { configPrint("Invalid\r\n"); Serial.flush(); } else { int32_t o0=pConfigInfo->TIME_DILATION[0], o1=pConfigInfo->TIME_DILATION[1]; if (s0) pConfigInfo->TIME_DILATION[0]=v0; if (s1) pConfigInfo->TIME_DILATION[1]=v1; char m[80]; sprintf(m, "OK -- TimeDilation %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->TIME_DILATION[0],(long)pConfigInfo->TIME_DILATION[1]); configPrint(m); Serial.flush(); }
           }
           // H5) fixedTime2
           else if (a == 'H' && aline[1] == '5') {
-            configPrint("Enter pair A/B: "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
+            configPrint("Enter Pair A/B: "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
             bool s0=false, s1=false; int64_t v0=0, v1=0; if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { configPrint("Invalid\r\n"); Serial.flush(); } else { int32_t o0=pConfigInfo->FIXED_TIME2[0], o1=pConfigInfo->FIXED_TIME2[1]; if (s0) pConfigInfo->FIXED_TIME2[0]=v0; if (s1) pConfigInfo->FIXED_TIME2[1]=v1; char m[80]; sprintf(m, "OK -- fixedTime2 %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->FIXED_TIME2[0],(long)pConfigInfo->FIXED_TIME2[1]); configPrint(m); Serial.flush(); }
           }
           // H6) FUDGE0
           else if (a == 'H' && aline[1] == '6') {
-            configPrint("Enter pair A/B: "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
+            configPrint("Enter Pair A/B: "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
             bool s0=false, s1=false; int64_t v0=0, v1=0; if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { configPrint("Invalid\r\n"); Serial.flush(); } else { int32_t o0=pConfigInfo->FUDGE0[0], o1=pConfigInfo->FUDGE0[1]; if (s0) pConfigInfo->FUDGE0[0]=v0; if (s1) pConfigInfo->FUDGE0[1]=v1; char m[80]; sprintf(m, "OK -- FUDGE0 %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->FUDGE0[0],(long)pConfigInfo->FUDGE0[1]); configPrint(m); Serial.flush(); }
           }
           else { configPrint("Invalid\r\n"); Serial.flush(); }
@@ -529,7 +532,7 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
     return true;
   }
 
-  // Numbered exits - now handled by main loop restart/resume logic
+  // Numbered exits
   if (cmd == '1') { 
     configPrint("Discarded changes.\r\n"); 
     config_changed = 0; // Clear the changed flag since we're discarding

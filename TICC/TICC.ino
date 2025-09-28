@@ -7,8 +7,8 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-// 27 September 2025 - version 1
-extern const char SW_VERSION[17] = "20250927.1";
+// 28 September 2025 - version 1
+extern const char SW_VERSION[17] = "20250928.1";
 extern const char SW_TAG[6] = "BETA";
 
 
@@ -270,7 +270,7 @@ void ticc_setup() {
       Serial.println("# time1 time2 clock1 cal1 cal2 PICstop tof timestamp");
       break;
     case Binary:
-      Serial.println("# Binary mode - PICstop (bottom 4 bytes) tof (4 bytes) channel (1 byte)");
+      Serial.println("# Binary Timestamp mode - PICstop (bottom 4 bytes) tof (4 bytes) channel (1 byte)");
       break;
     case Null:
       Serial.println("# null output mode - no data");
@@ -317,7 +317,10 @@ void loop() {
       uint32_t now = micros();
       if ((now - last_micros) > 250) {       // 2.5 ticks at 100 uS/tick
         last_micros = now;                   // Update the watchdog timestamp
-        int64_t pc_snapshot = PICcount;      // Snapshot volatile counter
+        int64_t pc_snapshot;
+        noInterrupts(); // protect read
+        pc_snapshot = PICcount;
+        interrupts();
         if (pc_snapshot != last_PICcount) {  // Has the counter changed since last sampled?
           if (!ext_clk_led_on) {             // turn on only if was off
             SET_EXT_LED_CLK;
@@ -405,8 +408,14 @@ void loop() {
           
         if (config.MODE == Binary) {
           uint8_t buffer[11];
-          uint32_t picstop_raw = (uint32_t)channels[i].PICstop;
-          uint32_t tof_raw = (uint32_t)channels[i].tof;
+          uint32_t picstop_raw, tof_raw;
+          uint8_t ch;
+
+          noInterrupts();   // protect these reades
+          picstop_raw = (uint32_t)channels[i].PICstop;
+          tof_raw = (uint32_t)channels[i].tof;
+          ch = (uint8_t)channels[i].name;
+          interrupts();
           
           // Build buffer: 4 bytes PICstop + 4 bytes tof + 1 byte channel + CR + LF
           buffer[0] = (uint8_t)(picstop_raw & 0xFF);
@@ -417,11 +426,12 @@ void loop() {
           buffer[5] = (uint8_t)((tof_raw >> 8) & 0xFF);
           buffer[6] = (uint8_t)((tof_raw >> 16) & 0xFF);
           buffer[7] = (uint8_t)((tof_raw >> 24) & 0xFF);
-          buffer[8] = (uint8_t)channels[i].name;
+          buffer[8] = ch;
           buffer[9] = '\r';
           buffer[10] = '\n';
           
           // Single Serial.write call
+          while (Serial.availableForWrite() < 11) {}
           Serial.write(buffer, 11);
           
           // Skip timestamp calculation and normal processing
@@ -432,7 +442,13 @@ void loop() {
         } // end of binary mode
         
         // delta ticks since previous event on this channel
-        int64_t dcount = (int64_t)(channels[i].PICstop - channels[i].last_picstop);
+        
+        int64_t picstop_now64, last_picstop64;
+        noInterrupts(); // protect these reads
+        picstop_now64 = channels[i].PICstop;
+        last_picstop64 = channels[i].lastpicstop;
+        interrupts();
+        int64_t dcount = picstop_now64 - lastpicstop64;
 
         // delta_ps = dcount*PICTICK_PS - (int64_t)channels[i].tof + (int64_t)channels[i].last_tof;
         int64_t delta_ps = dcount * (int64_t)PICTICK_PS

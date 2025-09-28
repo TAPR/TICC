@@ -54,7 +54,7 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
       case Period: modeName = "Period"; break;
       case timeLab: modeName = "TimeLab"; break;
       case Debug: modeName = "Debug"; break;
-      case Binary: modeName = "Binary"; break;
+      case Binary: modeName = "Binary Timestamp"; break;
       case Null: modeName = "Null"; break;
     }
     sprintf(msg, "OK -- Mode set to %s\r\n", modeName); configPrint(msg);

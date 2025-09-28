@@ -363,6 +363,9 @@ void print_MeasureMode(MeasureMode x) {
     case Timestamp:
       Serial.println("Timestamp");
       break;
+    case Binary:
+      Serial.println("Binary Timestamp");
+      break;
     case Period:
       Serial.println("Period");
       break;
@@ -374,6 +377,9 @@ void print_MeasureMode(MeasureMode x) {
       break;
     case Debug:
       Serial.println("Debug");
+      break;
+    case Null:
+      Serial.println("Null Output");
       break;
   }  
 }

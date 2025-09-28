@@ -318,7 +318,7 @@ void loop() {
       if ((now - last_micros) > 250) {       // 2.5 ticks at 100 uS/tick
         last_micros = now;                   // Update the watchdog timestamp
         int64_t pc_snapshot;
-        noInterrupts(); // protect read
+        noInterrupts(); // protect read from ISR trips
         pc_snapshot = PICcount;
         interrupts();
         if (pc_snapshot != last_PICcount) {  // Has the counter changed since last sampled?
@@ -408,10 +408,11 @@ void loop() {
           
         if (config.MODE == Binary) {
           uint8_t buffer[11];
+
+          // protect these reads from ISR trips
           uint32_t picstop_raw, tof_raw;
           uint8_t ch;
-
-          noInterrupts();   // protect these reades
+          noInterrupts();
           picstop_raw = (uint32_t)channels[i].PICstop;
           tof_raw = (uint32_t)channels[i].tof;
           ch = (uint8_t)channels[i].name;
@@ -443,12 +444,13 @@ void loop() {
         
         // delta ticks since previous event on this channel
         
+        // protect PICstop reads from ISR trips
         int64_t picstop_now64, last_picstop64;
-        noInterrupts(); // protect these reads
+        noInterrupts();
         picstop_now64 = channels[i].PICstop;
-        last_picstop64 = channels[i].lastpicstop;
+        last_picstop64 = channels[i].last_picstop;
         interrupts();
-        int64_t dcount = picstop_now64 - lastpicstop64;
+        int64_t dcount = picstop_now64 - last_picstop64;
 
         // delta_ps = dcount*PICTICK_PS - (int64_t)channels[i].tof + (int64_t)channels[i].last_tof;
         int64_t delta_ps = dcount * (int64_t)PICTICK_PS

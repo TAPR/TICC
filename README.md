@@ -24,17 +24,14 @@ September 2025: Major new release that adds/fixes:
 * Changes to support multi-TICC
 * Other cleanup
 
-NOTE: To build the TICC firmware, you will need to install the
-EnableInterrupt library, which is included in this directory.  The
-simplest way to install is to open the Arduino IDE and go to
-sketch/Include Library/Add Zip Library and select EnableInterrupts.zip.
-
 The TICC is a circuit board mated to an Arduino Mega 2560 controller that 
 allows very high resolution time interval measurements -- down to less than 
 60 picoseconds (trillionths of a second).  
 
-The software here runs on the Mega 2560 and controls the shield.  Measurement 
-data is output in ASCII form on the Arduino's USB port.
+The software in this repo runs on the Mega 2560 and controls the shield.  
+Measurement data is output in ASCII form on the Arduino's USB port.
+In the latest version, there is also a high-speed mode that outputs
+binary data at nearly double the rate of the ASCII output.
 
 Source files are contained in the "TICC" folder which is an Arduino
 sketch folder.

@@ -84,9 +84,14 @@ void doSetupMenu(struct config_t *pConfigInfo) {
       serialPrintImmediate(")\r\n");
       // H) Advanced settings
       configPrint("H - Advanced settings\r\n");
+      // I) Serial baud rate
+      {
+        char tmp[64]; sprintf(tmp, "I - Serial Baud Rate (currently: %lu)\r\n", (unsigned long)pConfigInfo->BAUD_RATE);
+        configPrint(tmp);
+      }
       configPrint("\r\n");
       configPrint("M - Show this menu again\r\n");
-      configPrint("I - Show startup info\r\n");
+      configPrint("J - Show startup info\r\n");
       configPrint("W - Write changes to EEPROM (persist across restarts)\r\n");
       configPrint("\r\n");
       configPrint("1 - Discard changes and exit\r\n");

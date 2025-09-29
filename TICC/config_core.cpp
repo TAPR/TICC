@@ -247,6 +247,7 @@ struct config_t defaultConfig() {
   x.WRAP = DEFAULT_WRAP;
   x.PLACES = DEFAULT_PLACES;
   x.SYNC_MODE = DEFAULT_SYNC_MODE;
+  x.BAUD_RATE = DEFAULT_BAUD_RATE;
   x.NAME[0] = DEFAULT_NAME_0;
   x.NAME[1] = DEFAULT_NAME_1;
   x.PROP_DELAY[0] = DEFAULT_PROP_DELAY_0;
@@ -312,6 +313,9 @@ void print_config (config_t x) {
   
   // SyncMode
   Serial.print("# SyncMode: ");Serial.println(x.SYNC_MODE);
+  
+  // Serial Baud Rate
+  Serial.print("# Serial Baud Rate: ");Serial.println((unsigned long)x.BAUD_RATE);
   
   // Channel Names
   Serial.print("# Channel Names: ");Serial.print(x.NAME[0]);Serial.print("/");Serial.println(x.NAME[1]);

@@ -382,8 +382,68 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
     return true;
   }
 
-  // I) Show startup info
+  // I) Serial baud rate
   if (cmd == 'I') {
+    // Interactive baud rate submenu
+    for (;;) {
+      configPrint("\r\n");
+      configPrint("-- Serial Baud Rate Settings --\r\n");
+      configPrint("I1 - 9600 bps\r\n");
+      configPrint("I2 - 19200 bps\r\n");
+      configPrint("I3 - 38400 bps\r\n");
+      configPrint("I4 - 57600 bps\r\n");
+      configPrint("I5 - 115200 bps (default)\r\n");
+      configPrint("I6 - 230400 bps\r\n");
+      configPrint("\r\n");
+      configPrint("1 - Discard changes and return to main menu\r\n");
+      configPrint("2 - Keep changes and return to main menu\r\n");
+      configPrint("> ");
+      char buf[96];
+      size_t mn = readLine(buf, sizeof(buf)); char *mline = trimInPlace(buf);
+      if (mn) {
+        if (mline[0] == '1' || mline[0] == '2') {
+          // Return options
+          if (mline[0] == '1') {
+            configPrint("Baud rate changes discarded.\r\n");
+          } else {
+            configPrint("Baud rate changes kept.\r\n");
+          }
+          *showMenu = true;
+          break; // Exit the submenu loop
+        } else {
+          // Baud rate setting options
+          if (strlen(mline) >= 2 && mline[0] == 'I' && mline[1] >= '1' && mline[1] <= '6') {
+            uint32_t old_rate = pConfigInfo->BAUD_RATE;
+            uint32_t new_rate;
+            switch (mline[1]) {
+              case '1': new_rate = 9600; break;
+              case '2': new_rate = 19200; break;
+              case '3': new_rate = 38400; break;
+              case '4': new_rate = 57600; break;
+              case '5': new_rate = 115200; break;
+              case '6': new_rate = 230400; break;
+              default: new_rate = old_rate; break;
+            }
+            
+            // Show baud rate change confirmation and mark config as changed
+            if (old_rate != new_rate) {
+              pConfigInfo->BAUD_RATE = new_rate;
+              char msg[128];
+              sprintf(msg, "Baud rate was %lu; now %lu\r\n", (unsigned long)old_rate, (unsigned long)new_rate);
+              serialPrintImmediate(msg);
+              MARK_CONFIG_CHANGED();
+            }
+          } else {
+            configPrint("Invalid selection\r\n");
+          }
+        }
+      }
+    }
+    return true;
+  }
+
+  // J) Show startup info
+  if (cmd == 'J') {
     configPrint("\r\n");
     print_config(*pConfigInfo);
     configPrint("\r\n");

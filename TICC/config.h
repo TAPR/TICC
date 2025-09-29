@@ -17,7 +17,7 @@ enum MeasureMode : unsigned char {Timestamp, Interval, Period, timeLab, Debug, B
 /*****************************************************************/
 // system defines
 #define BOARD_REVISION            'D'                   // production version is 'D'
-#define EEPROM_VERSION            (byte)     11         // eeprom struct version
+#define EEPROM_VERSION            (byte)     12         // eeprom struct version
 #define CONFIG_START              (byte)     0x00       // first byte of config in eeprom
 #define SER_NUM_START             (int16_t)  0x0FF0     // first byte of serial number in eeprom
 /*****************************************************************/
@@ -43,6 +43,7 @@ enum MeasureMode : unsigned char {Timestamp, Interval, Period, timeLab, Debug, B
 #define DEFAULT_FIXED_TIME2_1     (int64_t) 0           // 0 to calculate, or fixed (~1135)
 #define DEFAULT_FUDGE0_0          (int64_t) 0           // Fudge channel A value (ps)
 #define DEFAULT_FUDGE0_1          (int64_t) 0           // Fudge channel B value (ps)
+#define DEFAULT_BAUD_RATE         (uint32_t) 115200     // Serial baud rate (default 115200)
 
 /*****************************************************************/
 // configuration structure type
@@ -63,6 +64,7 @@ struct config_t {
   int16_t    WRAP;                      // wraparound value for PICcount
   int16_t    PLACES;                    // decimal places for output (0-12, default 11)
   char       SYNC_MODE;                 // one byte:  'P' for primary, 'S' for secondary
+  uint32_t   BAUD_RATE;                 // serial baud rate (default 115200)
   
   // per-channel settings, arrays of 2 for channels 0 and 1:
   char       START_EDGE[2];            // (R)ising (default) or (F)alling edge 

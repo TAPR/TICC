@@ -414,8 +414,11 @@ void loop() {
         // Output: PICstop (bottom 4 bytes) + tof (4 bytes) + channel + CRLF
         // Note: PICstop truncated to 32-bit for speed, so holds about 5 days
         // (100 us per tick) before overflow.  User must detect rollover 
-        // for full 64-bit timestamp.
-        // Binary frames use Ox55,0xAA for framing plus 8 bit CRC
+        // for full 64-bit timestamp. Binary frames use Ox55,0xAA for framing plus 8 bit CRC
+        // This routine can sustain timestamp output at 1080 measurements/second
+        // on one channel at 230400 baud.  At 115200 baud, serial output is a
+        // bottlenck and maximum throughput is about 1040 measurements/second on
+        // one channel.
           
         if (config.MODE == Binary) {
           uint8_t buffer[11];

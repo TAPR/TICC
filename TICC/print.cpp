@@ -67,7 +67,7 @@ void update_cached_config() {
 }
 
 // Ultra-fast timestamp formatting
-// Performance: 565 measurements/second (tested) with PLACES/WRAP support
+// Performance: 560 measurements/second (tested) with PLACES/WRAP support
 int print_timestamp(
   char* out,
   size_t out_size,

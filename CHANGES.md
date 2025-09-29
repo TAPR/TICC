@@ -16,18 +16,19 @@ improvements
   parameter values have changed -- e.g., SYNC_MODE is now
   [P]rimary/[S]econdary instead of [M]aster/[C]lient.
 - **New EEPROM Layout**: The layout of configuration values stored in
-  EEPROM has been updated from version 10 to version 11.  On first
+  EEPROM has been updated from version 10 to version 12.  On first
   execution the EEPROM will be updated to the new version.  All config 
   values will be reset to defaults, but the board serial number will 
   be retained.
 
 ### New Features
-- **Timestamp Wraparound Configuration**: Timestamp wraparound can now be
-  enabled in the startup configuration menu (e.g., wrap at 100 seconds)
-- **Configurable Precision**: The number of decimal places can now be set
-  from the configuration menus
-- **Enhanced Configuration Menus**: Heavily reworked menus now support
-  multiple commands per line for simplified scripting
+- **Enhanced Configuration Menus and New Options**: 
+  - **Multiple commands per line**: Allows simplified scripting
+  - **Timestamp Wraparound Configuration**: Timestamp wraparound can now be
+    enabled in the startup configuration menu (e.g., wrap at 100 seconds)
+  - **Configurable Precision**: The number of decimal places can now be set
+    from the configuration menus
+  - **Configurable Baud Rate**: Allows 230400 baud for maximum throughput
 - **New Binary Timestamp Mode**: Outputs binary data to achieve >1000
   measurements/second on one channel
 - **Updated Documentation**: TICC User Guide completely rewritten and much

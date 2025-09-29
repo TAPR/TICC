@@ -130,3 +130,21 @@ int format_time_difference(
   
   return (int)(p - out);
 }
+
+
+// CRC-8 Dallas/Maxim (poly 0x31, reflected => 0x8C, init 0x00)
+uint8_t crc8_maxim(const uint8_t *data, size_t len) {
+  uint8_t crc = 0x00;
+  while (len--) {
+    uint8_t in = *data++;
+    crc ^= in;
+    for (uint8_t i = 0; i < 8; i++) {
+      if (crc & 0x01) {
+        crc = (crc >> 1) ^ 0x8C;
+      } else {
+        crc >>= 1;
+      }
+    }
+  }
+  return crc;
+}

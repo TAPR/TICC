@@ -7,8 +7,8 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-// 29 September 2025 - version 1
-extern const char SW_VERSION[17] = "20250929.1";
+// 28 September 2025 - version 1
+extern const char SW_VERSION[17] = "20250928.1";
 extern const char SW_TAG[6] = "BETA";
 
 
@@ -121,19 +121,25 @@ void ticc_setup() {
   SET_LED_1;
   SET_EXT_LED_1;
 
+  // start the serial library
+  Serial.end();  // first close in case we've come here from a break
+  Serial.begin(115200);
+  // Allow host CDC/TTY stack to settle to avoid buffered prompts on reconnect
+  delay(1500);
+  Serial.flush();
+  // start the SPI library:
+  SPI.end();  // first close in case we've come here from a break
+  SPI.begin();
+
+
   /*******************************************
    * Configuration read/change/store
-   *******************************************/
+  *******************************************/
   // check or assign serial number
   get_serial_number();
 
   // if no config stored, or wrong version, restore from default
   if (EEPROM.read(CONFIG_START) != EEPROM_VERSION) {
-    // Need to initialize serial at default rate to show message
-    Serial.end();  // first close in case we've come here from a break
-    Serial.begin(115200);  // Use default baud rate for initial message
-    delay(1500);
-    Serial.flush();
     Serial.println("No config found.  Writing default...");
     eeprom_write_config_default(CONFIG_START);
   }
@@ -141,17 +147,6 @@ void ticc_setup() {
   // read config and set global vars
   eeprom_read_config();
   lastMODE = config.MODE;
-
-  // start the serial library with configured baud rate
-  Serial.end();  // first close in case we've come here from a break
-  Serial.begin(config.BAUD_RATE);
-  // Allow host CDC/TTY stack to settle to avoid buffered prompts on reconnect
-  delay(1500);
-  Serial.flush();
-  
-  // start the SPI library:
-  SPI.end();  // first close in case we've come here from a break
-  SPI.begin();
 
   // print banner -- all non-data output lines begin with "#" so they're seen as comments
   Serial.println("# ");
@@ -275,9 +270,7 @@ void ticc_setup() {
       Serial.println("# time1 time2 clock1 cal1 cal2 PICstop tof timestamp");
       break;
     case Binary:
-      Serial.println("# Binary Timestamp mode - 12 byte frames:");
-      Serial.println("# header (0x55,0xAA), channel (1 byte), PICstop (4 bytes), tof (4 bytes), CRC (1 byte)");
-      Serial.println();
+      Serial.println("# Binary Timestamp mode - PICstop (bottom 4 bytes) tof (4 bytes) channel (1 byte)");
       break;
     case Null:
       Serial.println("# null output mode - no data");
@@ -395,10 +388,6 @@ void loop() {
         channels[i].last_tof = channels[i].tof;                 // preserve last tof
         channels[i].last_timestamp = channels[i].timestamp;     // preserve last timestamp if needed
         channels[i].tof = channels[i].read();                   // get new tof (absolute per event)
-        uint32_t tof_raw = (uint32_t)channels[i].tof;         // local copy for fast reuse
-
-        // Clear TDC INTB immediately to prevent duplicate processing
-        channels[i].ready_next();
 
         // turn LED off (visual feedback that event was processed)
         if (i == 0) {
@@ -410,44 +399,46 @@ void loop() {
           CLR_EXT_LED_1;
         };
 
-        // High-throughput binary output mode: minimal output for maximum speed
+        // High-throughput mode: minimal output for maximum speed
         // Output: PICstop (bottom 4 bytes) + tof (4 bytes) + channel + CRLF
         // Note: PICstop truncated to 32-bit for speed, so holds about 5 days
         // (100 us per tick) before overflow.  User must detect rollover 
         // for full 64-bit timestamp.
-        // Binary frames use Ox55,0xAA for framing plus 8 bit CRC
+        // Tested to deliver 1068 measurements/second on one channel
           
         if (config.MODE == Binary) {
           uint8_t buffer[11];
 
-          // protect this read from ISR trips
-          uint32_t picstop_low32;
+          // protect these reads from ISR trips
+          uint32_t picstop_raw, tof_raw;
+          uint8_t ch;
           noInterrupts();
-          picstop_low32 = (uint32_t)channels[i].PICstop;
+          picstop_raw = (uint32_t)channels[i].PICstop;
+          tof_raw = (uint32_t)channels[i].tof;
+          ch = (uint8_t)channels[i].name;
           interrupts();
           
-          // Build buffer: 2 byte header + 4 bytes PICstop + 4 bytes tof + 1 // byte channel + CRC
-          uint8_t buf[12];
-          buf[0] = 0x55;
-          buf[1] = 0xAA;
-          buf[2] = channels[i].name;
-          buf[3] = (uint8_t)(picstop_low32 & 0xFF);
-          buf[4] = (uint8_t)((picstop_low32 >> 8) & 0xFF);
-          buf[5] = (uint8_t)((picstop_low32 >> 16) & 0xFF);
-          buf[6] = (uint8_t)((picstop_low32 >> 24) & 0xFF);
-          buf[7] = (uint8_t)(tof_raw & 0xFF);
-          buf[8] = (uint8_t)((tof_raw >> 8) & 0xFF);
-          buf[9] = (uint8_t)((tof_raw >> 16) & 0xFF);
-          buf[10] = (uint8_t)((tof_raw >> 24) & 0xFF);
-          buf[11] = crc8_maxim(&buf[2], 9); // CRC over payload only
+          // Build buffer: 4 bytes PICstop + 4 bytes tof + 1 byte channel + CR + LF
+          buffer[0] = (uint8_t)(picstop_raw & 0xFF);
+          buffer[1] = (uint8_t)((picstop_raw >> 8) & 0xFF);
+          buffer[2] = (uint8_t)((picstop_raw >> 16) & 0xFF);
+          buffer[3] = (uint8_t)((picstop_raw >> 24) & 0xFF);
+          buffer[4] = (uint8_t)(tof_raw & 0xFF);
+          buffer[5] = (uint8_t)((tof_raw >> 8) & 0xFF);
+          buffer[6] = (uint8_t)((tof_raw >> 16) & 0xFF);
+          buffer[7] = (uint8_t)((tof_raw >> 24) & 0xFF);
+          buffer[8] = ch;
+          buffer[9] = '\r';
+          buffer[10] = '\n';
           
           // Single Serial.write call
-          while (Serial.availableForWrite() < 12) {}
-          Serial.write(buf, 12);
+          while (Serial.availableForWrite() < 11) {}
+          Serial.write(buffer, 11);
           
           // Skip timestamp calculation and normal processing
           channels[i].last_picstop = channels[i].PICstop;
           channels[i].totalize++;
+          channels[i].ready_next();
           continue;
         } // end of binary mode
         

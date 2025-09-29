@@ -31,4 +31,7 @@ int format_time_difference(
   char ch_name
 );
 
+// Generate CRC-8 Dallas/Maxim (poly 0x31, reflected => 0x8C, init 0x00)
+uint8_t crc8_maxim(const uint8_t *data, size_t len);
+
 #endif // TIMESTAMP_UTILS_H

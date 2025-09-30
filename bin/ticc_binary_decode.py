@@ -4,9 +4,6 @@
 # It is not part of the core TICC distribution.  Public domain --
 # no copyright claimed.
 
-#!/usr/bin/env python3
-# ID: decode_timestamps_55AA_final.py v2025-09-29.5
-
 # Strict decoder for 0x55AA + ch + PICstop_low32 + tof + CRC8 (Dallas/Maxim)
 #
 # Frame (12 bytes):

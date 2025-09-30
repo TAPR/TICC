@@ -5,8 +5,6 @@
 # It is not part of the core TICC distribution.  Public domain --
 # no copyright claimed.
 
-#!/usr/bin/env python3
-# ticc_binary_capture.py
 # Raw serial capture:
 # - Waits for the two-line binary header you specified
 # - Discards all prior text (banner/config/dots)

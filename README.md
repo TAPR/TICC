@@ -22,10 +22,9 @@ Source files are contained in the "TICC" folder which is an
 Arduino sketch folder.
 
 Binary ".hex" files are in the binaries/ folder.  Several upload
-tools for Windows, Linux, and Mac are in the bin/ folder.  
-Instructions for using one of them, AVRDUDESS, will be in an
-appendix to the updated User Guide which will be in the docs/ folder
-as soon as it's ready.
+tools for Windows, Linux, and Mac are in the bin/ folder.  Instructions 
+for using one of them, AVRDUDESS, will be in an appendix to the updated 
+User Guide which will be in the docs/ folder as soon as it's ready.
 
 See the CHANGES.md file for more details about versions.  This
 is just a short summary:

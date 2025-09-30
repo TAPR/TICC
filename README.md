@@ -21,10 +21,11 @@ rate of the ASCII output.
 Source files are contained in the "TICC" folder which is an 
 Arduino sketch folder.
 
-Binary files as well as a Windows-based upload tool are 
-contained in the "binaries" folder.
-
-A user's manual is contained in the "docs" folder.
+Binary ".hex" files are in the binaries/ folder.  Several upload
+tools for Windows, Linux, and Mac are in the bin/ folder.  
+Instructions for using one of them, AVRDUDESS, will be in an
+appendix to the updated User Guide which will be in the docs/ folder
+as soon as it's ready.
 
 See the CHANGES.md file for more details about versions.  This
 is just a short summary:
@@ -35,7 +36,7 @@ September 2025: Major new release that adds/fixes:
   on one channel
 * Timestamps don't overflow for 68 years
 * Fix to bug in printing long timestamps (misplaced "-" sign)
-* Fully rework menu system with submenus and multiple command
+* Fully reworked menu system with submenus and multiple command
   execution for scripting
 
 12 April 2020: New firmware version that adds:

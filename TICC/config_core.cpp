@@ -298,10 +298,9 @@ void print_config (config_t x) {
     Serial.print((unsigned long)wrap_seconds);
     Serial.println(" seconds)");
   } else {
+    // This case should not occur with validation limiting to 0-9
     Serial.print(x.WRAP);
-    Serial.print(" (wraps at 1e");
-    Serial.print(x.WRAP);
-    Serial.println(" seconds)");
+    Serial.println(" (invalid - should be 0-9)");
   }
   
   // Output Decimal Places
@@ -408,9 +407,10 @@ uint8_t config_change_requires_restart() {
   if (config.START_EDGE[0] != config_backup.START_EDGE[0]) return 1;
   if (config.START_EDGE[1] != config_backup.START_EDGE[1]) return 1;
   if (config.SYNC_MODE != config_backup.SYNC_MODE) return 1;
+  if (config.WRAP != config_backup.WRAP) return 1;  // WRAP affects cached print parameters
   
   // These parameters can be changed with just a flush
-  // MODE, POLL_CHAR, WRAP, PLACES, NAME, PROP_DELAY, TIME_DILATION, FIXED_TIME2, FUDGE0, TIMEOUT
+  // MODE, POLL_CHAR, PLACES, NAME, PROP_DELAY, TIME_DILATION, FIXED_TIME2, FUDGE0, TIMEOUT
   return 0;
 }
 

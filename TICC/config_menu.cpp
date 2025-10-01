@@ -267,15 +267,16 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
   // B) Wrap digits
   if (cmd == 'B') {
     char buf[96];
-    char *input = getInputOrPrompt(args, "Wrap Digits (0..10): ", buf, sizeof(buf));
+    char *input = getInputOrPrompt(args, "Wrap Digits (0..9): ", buf, sizeof(buf));
     int64_t wrap; 
-    if (parseInt64Simple(input, &wrap) && wrap >= 0 && wrap <= 10) { 
+    if (parseInt64Simple(input, &wrap) && wrap >= 0 && wrap <= 9) { 
       int16_t old = pConfigInfo->WRAP; 
       pConfigInfo->WRAP = (int16_t)wrap; 
       MARK_CONFIG_CHANGED();
       char m[64]; 
       sprintf(m, "OK -- Wrap Digits %d -> %d\r\n", (int)old, (int)pConfigInfo->WRAP); 
-      configPrint(m); 
+      configPrint(m);
+      configPrint("Note: Wrap changes require restart to take effect. Use 'W' to write changes and '2' to restart.\r\n");
     } else {
       configPrint("Invalid\r\n");
     }

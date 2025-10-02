@@ -209,6 +209,9 @@ void doSetupMenu(struct config_t *pConfigInfo) {
     }
     serialDrain();
 
+    // Check if original input had semicolons (determines interactive mode)
+    bool has_semicolons = (strchr(line, ';') != NULL);
+    
     // Process semicolon-separated commands
     char *cmd_start = line;
     char *cmd_end;
@@ -227,7 +230,8 @@ void doSetupMenu(struct config_t *pConfigInfo) {
       // Process this command
       char *cmd_line = trimInPlace(cmd_start);
       if (strlen(cmd_line) > 0) {
-        if (!processCommand(pConfigInfo, cmd_line, &showMenu)) {
+        // Use interactive mode only if original input had no semicolons
+        if (!processCommand(pConfigInfo, cmd_line, &showMenu, !has_semicolons)) {
           should_exit = true;
           break;
         }

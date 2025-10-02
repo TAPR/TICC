@@ -20,6 +20,8 @@ extern uint8_t config_changed;
 
 // Single shared buffer to reduce memory usage - replaces all local buffers
 static char sharedBuffer[128];
+// Separate buffer for confirmation input to avoid conflicts
+static char confirmBuffer[32];
 
 // PROGMEM strings for submenus and messages
 const char str_mode_menu[] PROGMEM = "-- Mode --";
@@ -84,8 +86,9 @@ static void copyProgStrToBuffer(const char* str, char* buffer, size_t bufferSize
 
 // Helper function to handle confirmation flow with keep/discard options
 // Returns true if changes should be kept, false if discarded
+// interactive = false for semicolon-separated commands (auto-keep changes)
 static bool handleConfirmation(const char* confirmationMsg, const char* itemSpecificMsg, 
-                              bool preserveCase = false) {
+                              bool preserveCase = false, bool interactive = true) {
   // Show confirmation message
   strcpy(sharedBuffer, confirmationMsg);
   strcat(sharedBuffer, "\r\n");
@@ -96,6 +99,13 @@ static bool handleConfirmation(const char* confirmationMsg, const char* itemSpec
     copyProgStrToBuffer(itemSpecificMsg, sharedBuffer, sizeof(sharedBuffer));
     strcat(sharedBuffer, "\r\n");
     configPrint(sharedBuffer);
+  }
+  
+  // For non-interactive mode (semicolon commands), just keep changes
+  if (!interactive) {
+    strcpy(sharedBuffer, "Changes kept.\r\n");
+    configPrint(sharedBuffer);
+    return true;
   }
   
   configPrint("\r\n");
@@ -109,9 +119,14 @@ static bool handleConfirmation(const char* confirmationMsg, const char* itemSpec
   configPrint(sharedBuffer);
   configPrint("> ");
   
-  // Get user choice
-  size_t n = readLine(sharedBuffer, sizeof(sharedBuffer));
-  char *choice = trimInPlace(sharedBuffer);
+  // Clear Serial input buffer completely
+  while (Serial.available() > 0) {
+    Serial.read(); // Discard any buffered input
+  }
+  
+  // Get user choice using separate buffer to avoid conflicts
+  size_t n = readLine(confirmBuffer, sizeof(confirmBuffer));
+  char *choice = trimInPlace(confirmBuffer);
   
   // Sanitize input: uppercase all alphas unless preserveCase is true
   if (!preserveCase) {
@@ -168,7 +183,7 @@ static void printConfirmation(const char* prefix, char oldVal, char newVal) {
 }
 
 // Process a single command and return true if the command was processed successfully
-bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu) {
+bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu, bool interactive) {
   char *line = trimInPlace(cmdLine);
   if (strlen(line) == 0) return true; // Empty command, continue
   
@@ -460,7 +475,7 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
       strcat(sharedBuffer, " -> ");
       sprintf(sharedBuffer + strlen(sharedBuffer), "%d", pConfigInfo->WRAP);
       
-      if (!handleConfirmation(sharedBuffer, str_save_eeprom)) {
+      if (!handleConfirmation(sharedBuffer, str_save_eeprom, false, interactive)) {
         // Discard changes
         pConfigInfo->WRAP = old;
         config_changed = 0; // Clear the changed flag
@@ -487,7 +502,7 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
       strcat(sharedBuffer, " -> ");
       sprintf(sharedBuffer + strlen(sharedBuffer), "%d", pConfigInfo->PLACES);
       
-      if (!handleConfirmation(sharedBuffer, str_save_eeprom)) {
+      if (!handleConfirmation(sharedBuffer, str_save_eeprom, false, interactive)) {
         // Discard changes
         pConfigInfo->PLACES = old;
         config_changed = 0; // Clear the changed flag
@@ -522,7 +537,7 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
         sharedBuffer[strlen(sharedBuffer)+2] = e1;
         sharedBuffer[strlen(sharedBuffer)+3] = '\0';
         
-        if (!handleConfirmation(sharedBuffer, str_save_eeprom)) {
+        if (!handleConfirmation(sharedBuffer, str_save_eeprom, false, interactive)) {
           // Discard changes
           pConfigInfo->START_EDGE[0] = o0;
           pConfigInfo->START_EDGE[1] = o1;
@@ -555,7 +570,7 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
       sharedBuffer[strlen(sharedBuffer)] = c;
       sharedBuffer[strlen(sharedBuffer)+1] = '\0';
       
-      if (!handleConfirmation(sharedBuffer, str_save_eeprom)) {
+      if (!handleConfirmation(sharedBuffer, str_save_eeprom, false, interactive)) {
         // Discard changes
         pConfigInfo->SYNC_MODE = old;
         config_changed = 0; // Clear the changed flag
@@ -588,7 +603,7 @@ bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu)
       sharedBuffer[strlen(sharedBuffer)+2] = input[2];
       sharedBuffer[strlen(sharedBuffer)+3] = '\0';
       
-      if (!handleConfirmation(sharedBuffer, str_save_eeprom, true)) { // preserveCase = true
+      if (!handleConfirmation(sharedBuffer, str_save_eeprom, true, interactive)) { // preserveCase = true
         // Discard changes
         pConfigInfo->NAME[0] = o0;
         pConfigInfo->NAME[1] = o1;

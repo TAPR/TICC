@@ -90,7 +90,7 @@ size_t readLine(char *buf, size_t cap);
 char* trimInPlace(char *s);
 
 // Forward declaration for processCommand (defined in config_menu.cpp)
-bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu);
+bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu, bool interactive = true);
 void print_MeasureMode(MeasureMode x);
 void printHzAsMHz(int64_t x);
 void get_serial_number();

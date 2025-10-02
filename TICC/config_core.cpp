@@ -199,13 +199,18 @@ bool parseDecimalScaledPair(const char *s, int64_t scale, bool *set0, int64_t *v
 }
 
 // Get input either from direct parameter or interactive prompt
+// Returns NULL if user enters empty input (escape/cancel)
 char* getInputOrPrompt(const char* args, const char* prompt, char* buffer, size_t bufferSize) {
   if (strlen(args) >= 1) {
     return (char*)args;  // Direct parameter provided
   } else {
     configPrint(prompt);
     readLine(buffer, bufferSize);
-    return trimInPlace(buffer);
+    char* trimmed = trimInPlace(buffer);
+    if (!trimmed[0]) {
+      return NULL;  // Empty input = escape/cancel
+    }
+    return trimmed;
   }
 }
 

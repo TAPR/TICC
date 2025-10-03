@@ -17,6 +17,7 @@ const CommandEntry command_table[] PROGMEM = {
   {'I', CMD_SUBMENU, true,  process_baud_command,    show_baud_menu},
   {'M', CMD_MAIN_MENU, false, process_menu_command,  nullptr},
   {'S', CMD_DIRECT,  false, process_info_command,    nullptr},
+  {'V', CMD_DIRECT,  false, process_version_command, nullptr},
   {'W', CMD_DIRECT,  false, process_write_command,   nullptr},
   {'X', CMD_DIRECT,  false, process_eeprom_clear_command, nullptr},
   

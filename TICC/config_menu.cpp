@@ -26,6 +26,11 @@ extern void eeprom_write_config();
 extern void eeprom_clear();
 extern struct config_t defaultConfig();
 
+// Forward declarations for version info
+extern const char SW_VERSION[17];
+extern const char SW_TAG[6];
+extern char SER_NUM[17];
+
 // Single shared buffer to reduce memory usage
 static char sharedBuffer[128];
 static char confirmBuffer[32];
@@ -264,6 +269,9 @@ void show_main_menu() {
   configPrintln(line);
   
   copyProgStrToBuffer(it_printcfg, line, sizeof(line));
+  configPrintln(line);
+  
+  copyProgStrToBuffer(it_version, line, sizeof(line));
   configPrintln(line);
   
   copyProgStrToBuffer(it_save, line, sizeof(line));
@@ -842,6 +850,25 @@ bool process_info_command() {
   configPrintln("");
   // print_config(config); // Call existing function
   configPrintln("");
+  return true;
+}
+
+// Process version command
+bool process_version_command() {
+  // Build complete version string
+  char versionStr[128];
+  strcpy(versionStr, "Firmware version: ");
+  strcat(versionStr, SW_VERSION);
+  if (strlen(SW_TAG) > 0) {
+    strcat(versionStr, " (");
+    strcat(versionStr, SW_TAG);
+    strcat(versionStr, ")");
+  }
+  strcat(versionStr, ", Board serial: ");
+  strcat(versionStr, SER_NUM);
+  
+  // Single print call - configPrintln adds # prefix
+  configPrintln(versionStr);
   return true;
 }
 

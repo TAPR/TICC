@@ -20,6 +20,7 @@ const char it_pollchar[]       PROGMEM = "G - Poll Character (currently: ";
 const char it_advanced[]       PROGMEM = "H - Advanced settings";
 const char it_baud[]           PROGMEM = "I - Serial Baud Rate (currently: ";
 const char it_printcfg[]       PROGMEM = "S - Show startup info";
+const char it_version[]        PROGMEM = "V - Show firmware version";
 const char it_save[]           PROGMEM = "W - Write changes to EEPROM (persist across restarts)";
 
 // Menu navigation

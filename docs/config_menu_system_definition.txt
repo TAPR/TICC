@@ -1,3 +1,7 @@
+2 October 2025 -- config menu system description used
+for development of the new config code to replace the
+old spaghetti mess.
+
 1.  This is a functional description of the configuration menu
 system in the TICC.  The goal is to generate Arduino code that
 will implement this.  The target is an Arduino Mega 2560 board.

@@ -77,20 +77,32 @@ struct config_t {
 };
 
 /*****************************************************************/
-// exposed function prototypes
-void UserConfig(struct config_t *config);
-void doSetupMenu(struct config_t *config);
+// External variables (defined in config_core.cpp)
+extern char SER_NUM[17];
+extern uint8_t config_changed;
+extern config_t config;
+extern config_t config_backup;
+
+// New configuration system function prototypes
+void show_config_menu();
+bool process_config_command(const char* cmd, bool interactive = true);
+void init_config_system();
+
+// Legacy function prototypes (for backward compatibility)
+// (none currently needed)
 
 // Serial I/O helper functions (declared in config_core.cpp)
 void serialPrintImmediate(const char *s);
 void configPrint(const char* msg);
+void configPrintln(const char* msg);
+void configPrintProg(const char* msg);
+void configPrintlnProg(const char* msg);
 void serialWriteImmediate(char c);
 void serialDrain();
 size_t readLine(char *buf, size_t cap);
 char* trimInPlace(char *s);
 
-// Forward declaration for processCommand (defined in config_menu.cpp)
-bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu, bool interactive = true);
+// Utility functions
 void print_MeasureMode(MeasureMode x);
 void printHzAsMHz(int64_t x);
 void get_serial_number();

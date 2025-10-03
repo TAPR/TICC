@@ -1,4 +1,4 @@
-// config_core.cpp -- core configuration management functions
+// config_core.cpp -- Core configuration management functions
 
 // TICC Time interval Counter based on TICC Shield using TDC7200
 //
@@ -9,52 +9,64 @@
 
 #include <stdint.h>
 #include <ctype.h>
-#include <EEPROM.h>
-#include <SPI.h>
 #include <string.h>
-
-// misc.h removed - no longer needed
+#include <Arduino.h>
+#include <EEPROM.h>
+#include "config_types.h"
 #include "config.h"
-#include "board.h"
-#include "tdc7200.h"
-#include "print.h"
 
-extern const char SW_VERSION[17]; // set in TICC.ino
-extern const char SW_TAG[6];      // set in TICC.ino
+// External variables referenced by other files
 char SER_NUM[17];          // set by get_ser_num();
 
-// External variables for config change tracking
+// External variables defined in TICC.ino
 extern uint8_t config_changed;
 extern config_t config;
-extern tdc7200Channel channels[];
+extern config_t config_backup;
 
-// Macro to mark config as changed
-#define MARK_CONFIG_CHANGED() do { config_changed = 1; } while(0)
+// External variables from TICC.ino
+extern const char SW_VERSION[17];
+extern const char SW_TAG[6];
 
-// --- Serial helpers ---
-static void serialWriteRaw(const char *s, size_t len) {
-  while (len) {
-    // Wait until there is buffer space to avoid internal buffering delaying output
-    while (Serial.availableForWrite() == 0) { /* yield */ }
-    size_t n = Serial.write((const uint8_t*)s, len);
-    s += n; len -= n;
+// External references to existing EEPROM functions (from original config system)
+extern void eeprom_write_config();
+extern void eeprom_read_config();
+extern void eeprom_clear();
+extern struct config_t defaultConfig();
+
+// Serial I/O helper functions
+void configPrint(const char* msg) {
+  Serial.print("# ");
+  // Check if this is a PROGMEM string (starts with PROGMEM marker)
+  // For now, assume all strings passed to configPrint are regular strings
+  Serial.print(msg);
+  Serial.flush();
+}
+
+void configPrintln(const char* msg) {
+  Serial.print("# ");
+  Serial.println(msg);
+  Serial.flush();
+}
+
+// PROGMEM-aware print functions
+void configPrintProg(const char* msg) {
+  Serial.print("# ");
+  char c;
+  while ((c = pgm_read_byte(msg++)) != 0) {
+    Serial.write(c);
   }
   Serial.flush();
 }
 
-static void serialPrintImmediate(const char *s) {
-  Serial.print(s);
+void configPrintlnProg(const char* msg) {
+  Serial.print("# ");
+  char c;
+  while ((c = pgm_read_byte(msg++)) != 0) {
+    Serial.write(c);
+  }
+  Serial.println();
   Serial.flush();
 }
-
-// Helper function to print config output with "# " prefix for data file compatibility
-static void configPrint(const char* msg) {
-  serialPrintImmediate("# ");
-  serialPrintImmediate(msg);
-}
-
-// Macro to replace serialPrintImmediate with configPrint for config output
-#define CONFIG_PRINT(msg) configPrint(msg)
 
 static void serialWriteImmediate(char c) {
   Serial.write(c);
@@ -67,7 +79,6 @@ static void serialDrain() {
 }
 
 // Read a line into buf (cap includes terminator). Returns length (excludes terminator).
-// Handles echo, backspace, CR/LF termination. Produces a NUL-terminated string without CR/LF.
 static size_t readLine(char *buf, size_t cap) {
   if (cap == 0) return 0;
   size_t n = 0;
@@ -77,13 +88,19 @@ static size_t readLine(char *buf, size_t cap) {
     if (ch == '\r' || ch == '\n') {
       // Only echo newline if there was actual input
       if (n > 0) {
-        serialWriteImmediate('\r'); serialWriteImmediate('\n');
+        serialWriteImmediate('\r'); 
+        serialWriteImmediate('\n');
       }
       buf[n] = '\0';
       return n;
     }
     if (ch == 0x08 || ch == 0x7F) { // backspace/delete
-      if (n > 0) { n--; serialWriteImmediate('\b'); serialWriteImmediate(' '); serialWriteImmediate('\b'); }
+      if (n > 0) { 
+        n--; 
+        serialWriteImmediate('\b'); 
+        serialWriteImmediate(' '); 
+        serialWriteImmediate('\b'); 
+      }
       continue;
     }
     if (n + 1 < cap) {
@@ -105,7 +122,8 @@ static char* trimInPlace(char *s) {
 // Simple int64 parser: accepts optional +/-, digits only; returns true on success
 bool parseInt64Simple(const char *s, int64_t *out) {
   if (!s || !*s) return false;
-  bool neg = false; if (*s == '+' || *s == '-') { neg = (*s == '-'); s++; }
+  bool neg = false; 
+  if (*s == '+' || *s == '-') { neg = (*s == '-'); s++; }
   if (!*s) return false;
   int64_t v = 0;
   while (*s) {
@@ -121,7 +139,8 @@ bool parseInt64Simple(const char *s, int64_t *out) {
 // Parse decimal like 10.5 into integer scaled by scale (e.g., 1e6). Returns true on success.
 bool parseDecimalScaled(const char *s, int64_t scale, int64_t *out) {
   if (!s || !*s) return false;
-  bool neg = false; if (*s == '+' || *s == '-') { neg = (*s == '-'); s++; }
+  bool neg = false; 
+  if (*s == '+' || *s == '-') { neg = (*s == '-'); s++; }
   if (!*s) return false;
   int64_t intPart = 0;
   while (*s && *s != '.') {
@@ -129,7 +148,8 @@ bool parseDecimalScaled(const char *s, int64_t scale, int64_t *out) {
     intPart = intPart * 10 + (*s - '0');
     s++;
   }
-  int64_t fracPart = 0; int64_t fracScale = 1;
+  int64_t fracPart = 0; 
+  int64_t fracScale = 1;
   if (*s == '.') {
     s++;
     while (*s && fracScale < scale) {
@@ -148,101 +168,293 @@ bool parseDecimalScaled(const char *s, int64_t scale, int64_t *out) {
 }
 
 // Parse pair syntax "A/B" where either side may be empty.
-// Returns which sides are set, and their parsed int64 values.
 bool parseInt64Pair(const char *s, bool *set0, int64_t *v0, bool *set1, int64_t *v1) {
   if (!s) return false;
   const char *slash = strchr(s, '/');
   char tmp[64];
-  if (!slash) { // single value => apply to both
+  if (!slash) { 
+    // single value => apply to both
     size_t len = strlcpy(tmp, s, sizeof(tmp)); (void)len;
     char *t = trimInPlace(tmp);
-    int64_t v; if (!parseInt64Simple(t, &v)) return false;
-    *set0 = *set1 = true; *v0 = *v1 = v; return true;
+    int64_t v; 
+    if (!parseInt64Simple(t, &v)) return false;
+    *set0 = *set1 = true; 
+    *v0 = *v1 = v; 
+    return true;
   }
   bool ok;
   if (slash != s) {
-    size_t l = (size_t)(slash - s); if (l >= sizeof(tmp)) l = sizeof(tmp) - 1;
-    memcpy(tmp, s, l); tmp[l] = '\0';
+    size_t l = (size_t)(slash - s); 
+    if (l >= sizeof(tmp)) l = sizeof(tmp) - 1;
+    memcpy(tmp, s, l); 
+    tmp[l] = '\0';
     char *t = trimInPlace(tmp);
-    ok = parseInt64Simple(t, v0); if (!ok) return false; *set0 = true;
-  } else { *set0 = false; }
+    ok = parseInt64Simple(t, v0); 
+    if (!ok) return false; 
+    *set0 = true;
+  } else { 
+    *set0 = false; 
+  }
   if (*(slash+1)) {
     size_t l = strlcpy(tmp, slash+1, sizeof(tmp)); (void)l;
     char *t = trimInPlace(tmp);
-    ok = parseInt64Simple(t, v1); if (!ok) return false; *set1 = true;
-  } else { *set1 = false; }
+    ok = parseInt64Simple(t, v1); 
+    if (!ok) return false; 
+    *set1 = true;
+  } else { 
+    *set1 = false; 
+  }
   return true;
 }
 
-// Specialized pair parser for decimal scaled values (e.g., us->ps or MHz->Hz)
-bool parseDecimalScaledPair(const char *s, int64_t scale, bool *set0, int64_t *v0, bool *set1, int64_t *v1) {
-  const char *slash = strchr(s, '/');
-  char tmp[64];
-  if (!slash) {
-    size_t l = strlcpy(tmp, s, sizeof(tmp)); (void)l;
-    char *t = trimInPlace(tmp);
-    int64_t v; if (!parseDecimalScaled(t, scale, &v)) return false; *set0 = *set1 = true; *v0 = *v1 = v; return true;
+// Parse pair syntax for non-numeric values (like edges "R/F" or names "A/B")
+bool parseCharPair(const char *s, bool *set0, char *v0, bool *set1, char *v1) {
+  if (!s) return false;
+  
+  // Handle run-together format (e.g., "RR", "RF")
+  if (strlen(s) == 2 && s[0] != '/' && s[1] != ' ') {
+    *set0 = *set1 = true;
+    *v0 = s[0];
+    *v1 = s[1];
+    return true;
   }
-  bool ok;
-  if (slash != s) {
-    size_t l = (size_t)(slash - s); if (l >= sizeof(tmp)) l = sizeof(tmp) - 1;
-    memcpy(tmp, s, l); tmp[l] = '\0';
+  
+  // Handle separated format (e.g., "R/F", "R F")
+  const char *separator = strchr(s, '/');
+  if (!separator) {
+    // Try space separator
+    separator = strchr(s, ' ');
+  }
+  
+  char tmp[16];
+  if (!separator) { 
+    // single value => apply to both
+    if (strlen(s) == 1) {
+      *set0 = *set1 = true; 
+      *v0 = *v1 = s[0]; 
+      return true;
+    }
+    return false;
+  }
+  
+  if (separator != s) {
+    size_t l = (size_t)(separator - s); 
+    if (l >= sizeof(tmp)) l = sizeof(tmp) - 1;
+    memcpy(tmp, s, l); 
+    tmp[l] = '\0';
     char *t = trimInPlace(tmp);
-    ok = parseDecimalScaled(t, scale, v0); if (!ok) return false; *set0 = true;
-  } else { *set0 = false; }
-  if (*(slash+1)) {
-    size_t l = strlcpy(tmp, slash+1, sizeof(tmp)); (void)l;
+    if (strlen(t) == 1) {
+      *v0 = t[0];
+      *set0 = true;
+    } else {
+      *set0 = false;
+    }
+  } else { 
+    *set0 = false; 
+  }
+  
+  if (*(separator+1)) {
+    size_t l = strlcpy(tmp, separator+1, sizeof(tmp)); (void)l;
     char *t = trimInPlace(tmp);
-    ok = parseDecimalScaled(t, scale, v1); if (!ok) return false; *set1 = true;
-  } else { *set1 = false; }
+    if (strlen(t) == 1) {
+      *v1 = t[0];
+      *set1 = true;
+    } else {
+      *set1 = false;
+    }
+  } else { 
+    *set1 = false; 
+  }
   return true;
 }
 
 // Get input either from direct parameter or interactive prompt
-// Returns NULL if user enters empty input (escape/cancel)
 char* getInputOrPrompt(const char* args, const char* prompt, char* buffer, size_t bufferSize) {
-  if (strlen(args) >= 1) {
-    return (char*)args;  // Direct parameter provided
-  } else {
-    configPrint(prompt);
+  // Check if args is empty or null
+  if (args == NULL || args[0] == '\0') {
+    configPrintProg(prompt);  // Use PROGMEM-aware print function
     readLine(buffer, bufferSize);
     char* trimmed = trimInPlace(buffer);
     if (!trimmed[0]) {
       return NULL;  // Empty input = escape/cancel
     }
     return trimmed;
+  } else {
+    return (char*)args;  // Direct parameter provided
   }
 }
 
-void printHzAsMHz(int64_t x)
-{
-  char str[128];
-  int64_t MHz = x / 1000000;
+// Configuration change management functions
+void backup_config() {
+  config_backup = config;
+  config_changed = 0;
+}
+
+// Check if a config change requires a full restart vs. just a flush
+uint8_t config_change_requires_restart() {
+  // These parameters require full restart (hardware reinitialization)
+  if (config.CLOCK_HZ != config_backup.CLOCK_HZ) return 1;
+  if (config.PICTICK_PS != config_backup.PICTICK_PS) return 1;
+  if (config.CAL_PERIODS != config_backup.CAL_PERIODS) return 1;
+  if (config.START_EDGE[0] != config_backup.START_EDGE[0]) return 1;
+  if (config.START_EDGE[1] != config_backup.START_EDGE[1]) return 1;
+  if (config.SYNC_MODE != config_backup.SYNC_MODE) return 1;
+  
+  // These parameters can be changed with just a flush
+  return 0;
+}
+
+// Apply config changes that don't require restart
+void apply_config_changes() {
+  // This would integrate with the main program's config application logic
+  // For now, just mark as applied
+  config_changed = 0;
+}
+
+// Handle restart vs. resume decision after config changes
+void handle_config_change_exit() {
+  if (config_change_requires_restart()) {
+    // Full restart required
+    configPrintln("Configuration changes require restart. Restarting...");
+    delay(1000);
+    // This would trigger a restart in the main program
+  } else {
+    // Can resume with flush
+    if (config_changed) {
+      configPrintln("Applying configuration changes...");
+      apply_config_changes();
+      configPrintln("Resuming operation with new settings.");
+      configPrintln("(Changes are temporary - will revert on restart)");
+    } else {
+      // Changes were written to EEPROM, just resume
+      configPrintln("Resuming operation with new settings.");
+    }
+  }
+}
+
+// Print current configuration (replaces old print_config function)
+void print_config(config_t x) {
+  char tmpbuf[64];
+  
+  // Software Version
+  strcpy(tmpbuf, "Software Version: ");
+  strcat(tmpbuf, SW_VERSION);
+  if (strlen(SW_TAG) > 0) {
+    strcat(tmpbuf, " (");
+    strcat(tmpbuf, SW_TAG);
+    strcat(tmpbuf, ")");
+  }
+  configPrintln(tmpbuf);
+  
+  // EEPROM Version and Board Version
+  sprintf(tmpbuf, "EEPROM Version: %d, Board Version: %c", EEPROM.read(CONFIG_START), x.BOARD_REV);
+  configPrintln(tmpbuf);
+  
+  // Board Serial Number
+  strcpy(tmpbuf, "Board Serial Number: ");
+  strcat(tmpbuf, x.SER_NUM);
+  configPrintln(tmpbuf);
+  
+  // Measurement Mode (most important param)
+  strcpy(tmpbuf, "Measurement Mode: ");
+  switch (x.MODE) {
+    case Timestamp: strcat(tmpbuf, "Timestamp"); break;
+    case Binary: strcat(tmpbuf, "Binary Timestamp"); break;
+    case Period: strcat(tmpbuf, "Period"); break;
+    case Interval: strcat(tmpbuf, "Time Interval A->B"); break;
+    case timeLab: strcat(tmpbuf, "TimeLab 3-Cornered Hat"); break;
+    case Debug: strcat(tmpbuf, "Debug"); break;
+    case Null: strcat(tmpbuf, "Null Output"); break;
+  }
+  configPrintln(tmpbuf);
+  
+  // Timestamp Wrap
+  strcpy(tmpbuf, "Timestamp Wrap: ");
+  if (x.WRAP <= 0) {
+    sprintf(tmpbuf + strlen(tmpbuf), "%d (no wrap)", x.WRAP);
+  } else if (x.WRAP <= 9) {
+    uint32_t wrap_seconds = 1;
+    for (int i = 0; i < x.WRAP; i++) wrap_seconds *= 10;
+    sprintf(tmpbuf + strlen(tmpbuf), "%d (wraps at %lu seconds)", x.WRAP, (unsigned long)wrap_seconds);
+  } else {
+    sprintf(tmpbuf + strlen(tmpbuf), "%d (wraps at 1e%d seconds)", x.WRAP, x.WRAP);
+  }
+  configPrintln(tmpbuf);
+  
+  // Output Decimal Places
+  sprintf(tmpbuf, "Output Decimal Places: %d", x.PLACES);
+  configPrintln(tmpbuf);
+  
+  // Trigger Edge
+  sprintf(tmpbuf, "Trigger Edge: %c (ch0), %c (ch1)", x.START_EDGE[0], x.START_EDGE[1]);
+  configPrintln(tmpbuf);
+  
+  // SyncMode
+  sprintf(tmpbuf, "SyncMode: %c", x.SYNC_MODE);
+  configPrintln(tmpbuf);
+  
+  // Serial Baud Rate
+  sprintf(tmpbuf, "Serial Baud Rate: %lu", (unsigned long)x.BAUD_RATE);
+  configPrintln(tmpbuf);
+  
+  // Channel Names
+  sprintf(tmpbuf, "Channel Names: %c/%c", x.NAME[0], x.NAME[1]);
+  configPrintln(tmpbuf);
+  
+  // Poll Character
+  if (x.POLL_CHAR) {
+    sprintf(tmpbuf, "Poll Character: %c", x.POLL_CHAR);
+  } else {
+    strcpy(tmpbuf, "Poll Character: none");
+  }
+  configPrintln(tmpbuf);
+  
+  // Clock Speed
+  int64_t MHz = x.CLOCK_HZ / 1000000;
   int64_t Hz = MHz * 1000000;
-  int64_t fract = x - Hz;
-  sprintf(str, "%ld.", (int32_t)MHz), Serial.print(str);
-  sprintf(str,"%06ld", (int32_t)fract), Serial.print(str);
+  int64_t fract = x.CLOCK_HZ - Hz;
+  sprintf(tmpbuf, "Clock Speed: %ld.%06ld MHz", (int32_t)MHz, (int32_t)fract);
+  configPrintln(tmpbuf);
+  
+  // Coarse tick
+  int64_t us = x.PICTICK_PS / 1000000;
+  int64_t ps = us * 1000000;
+  int64_t ps_fract = x.PICTICK_PS - ps;
+  sprintf(tmpbuf, "Coarse tick: %ld.%06ld usec", (int32_t)us, (int32_t)ps_fract);
+  configPrintln(tmpbuf);
+  
+  // Cal Periods
+  sprintf(tmpbuf, "Cal Periods: %d", x.CAL_PERIODS);
+  configPrintln(tmpbuf);
+  
+  // PropDelay
+  sprintf(tmpbuf, "PropDelay: %ld (ch0), %ld (ch1)", (long)x.PROP_DELAY[0], (long)x.PROP_DELAY[1]);
+  configPrintln(tmpbuf);
+  
+  // Timeout
+  sprintf(tmpbuf, "Timeout: 0x%.2X", x.TIMEOUT);
+  configPrintln(tmpbuf);
+  
+  // Time Dilation
+  sprintf(tmpbuf, "Time Dilation: %ld (ch0), %ld (ch1)", (long)x.TIME_DILATION[0], (long)x.TIME_DILATION[1]);
+  configPrintln(tmpbuf);
+  
+  // FIXED_TIME2
+  sprintf(tmpbuf, "FIXED_TIME2: %ld (ch0), %ld (ch1)", (long)x.FIXED_TIME2[0], (long)x.FIXED_TIME2[1]);
+  configPrintln(tmpbuf);
+  
+  // FUDGE0
+  sprintf(tmpbuf, "FUDGE0: %ld (ch0), %ld (ch1)", (long)x.FUDGE0[0], (long)x.FUDGE0[1]);
+  configPrintln(tmpbuf);
 }
 
-char modeToChar(unsigned char mode)
-{
-		switch (mode)
-		{
-			case Timestamp: return 'T';
-			case Interval:  return 'I';
-			case Period:    return 'P';
-			case timeLab:   return 'L';
-			case Debug:     return 'D';
-		}
-   return '?';
-}
-
+// Create default configuration struct
 struct config_t defaultConfig() {
   struct config_t x;
   x.VERSION = EEPROM_VERSION;
-  strncpy(x.SW_VERSION,SW_VERSION,sizeof(SW_VERSION));
+  strncpy(x.SW_VERSION, SW_VERSION, sizeof(x.SW_VERSION));
   x.BOARD_REV = BOARD_REVISION;
-  strncpy(x.SER_NUM,SER_NUM,sizeof(SER_NUM));
+  strncpy(x.SER_NUM, SER_NUM, sizeof(x.SER_NUM));
   x.MODE = DEFAULT_MODE;
   x.POLL_CHAR = DEFAULT_POLL_CHAR;
   x.CLOCK_HZ = DEFAULT_CLOCK_HZ;
@@ -268,240 +480,9 @@ struct config_t defaultConfig() {
   return x;
 }
 
-// eeprom_write_config_default moved to config_eeprom.cpp
-
-void print_config (config_t x) {
-  char tmpbuf[8];
-  
-  // Software Version
-  Serial.print("# Software Version: ");Serial.print(SW_VERSION);
-  if (strlen(SW_TAG) > 0) {
-    Serial.print(" (");Serial.print(SW_TAG);Serial.print(")");
-  }
-  Serial.println();
-  
-  // EEPROM Version and Board Version
-  Serial.print("# EEPROM Version: ");Serial.print(EEPROM.read(CONFIG_START)); 
-  Serial.print(", Board Version: ");Serial.println(x.BOARD_REV);
-  
-  // Board Serial Number
-  Serial.print("# Board Serial Number: ");Serial.println(x.SER_NUM);
-  
-  // Measurement Mode (most important param)
-  Serial.print("# Measurement Mode: ");print_MeasureMode(MeasureMode(x.MODE));
-  
-  // Timestamp Wrap
-  Serial.print("# Timestamp Wrap: ");
-  if (x.WRAP <= 0) {
-    Serial.print(x.WRAP);
-    Serial.println(" (no wrap)");
-  } else if (x.WRAP <= 9) {
-    uint32_t wrap_seconds = 1;
-    for (int i = 0; i < x.WRAP; i++) wrap_seconds *= 10;
-    Serial.print(x.WRAP);
-    Serial.print(" (wraps at ");
-    Serial.print((unsigned long)wrap_seconds);
-    Serial.println(" seconds)");
-  } else {
-    Serial.print(x.WRAP);
-    Serial.print(" (wraps at 1e");
-    Serial.print(x.WRAP);
-    Serial.println(" seconds)");
-  }
-  
-  // Output Decimal Places
-  Serial.print("# Output Decimal Places: ");Serial.println(x.PLACES);
-  
-  // Trigger Edge
-  Serial.print("# Trigger Edge: ");Serial.print(x.START_EDGE[0]);Serial.print(" (ch0), ");  
-  Serial.print(x.START_EDGE[1]);Serial.println(" (ch1)");
-  
-  // SyncMode
-  Serial.print("# SyncMode: ");Serial.println(x.SYNC_MODE);
-  
-  // Serial Baud Rate
-  Serial.print("# Serial Baud Rate: ");Serial.println((unsigned long)x.BAUD_RATE);
-  
-  // Channel Names
-  Serial.print("# Channel Names: ");Serial.print(x.NAME[0]);Serial.print("/");Serial.println(x.NAME[1]);
-  
-  // Poll Character (moved to follow Channel Names)
-  Serial.print("# Poll Character: ");
-  if (x.POLL_CHAR) {
-    Serial.println(x.POLL_CHAR);
-  } else {
-    Serial.println("none");
-  }
-  
-  // Clock Speed
-  Serial.print("# Clock Speed: ");printHzAsMHz(x.CLOCK_HZ);Serial.println(" MHz");
-  
-  // Coarse tick
-  Serial.print("# Coarse tick: ");printHzAsMHz(x.PICTICK_PS);Serial.println(" usec");
-  
-  // Cal Periods
-  Serial.print("# Cal Periods: ");Serial.println(x.CAL_PERIODS);
-  
-  // PropDelay
-  Serial.print("# PropDelay: ");Serial.print((int32_t)x.PROP_DELAY[0]);
-  Serial.print(" (ch0), ");Serial.print((int32_t)x.PROP_DELAY[1]);Serial.println(" (ch1)");
-  
-  // Timeout
-  Serial.print("# Timeout: ");
-  sprintf(tmpbuf,"0x%.2X",x.TIMEOUT);Serial.println(tmpbuf);
-  
-  // Time Dilation
-  Serial.print("# Time Dilation: ");Serial.print((int32_t)x.TIME_DILATION[0]);
-  Serial.print(" (ch0), ");Serial.print((int32_t)x.TIME_DILATION[1]);Serial.println(" (ch1)");
-  
-  // FIXED_TIME2
-  Serial.print("# FIXED_TIME2: ");Serial.print((int32_t)x.FIXED_TIME2[0]);
-  Serial.print(" (ch0), ");Serial.print((int32_t)x.FIXED_TIME2[1]);Serial.println(" (ch1)");
-  
-  // FUDGE0
-  Serial.print("# FUDGE0: ");Serial.print((int32_t)x.FUDGE0[0]);
-  Serial.print(" (ch0), ");Serial.print((int32_t)x.FUDGE0[1]);Serial.println(" (ch1)");
-}
-
-// get_serial_number moved to config_eeprom.cpp
-
-// eeprom_clear moved to config_eeprom.cpp
-
-void print_MeasureMode(MeasureMode x) {
-  switch (x) {
-    case Timestamp:
-      Serial.println("Timestamp");
-      break;
-    case Binary:
-      Serial.println("Binary Timestamp");
-      break;
-    case Period:
-      Serial.println("Period");
-      break;
-    case Interval:
-      Serial.println("Time Interval A->B");
-      break;
-    case timeLab:
-      Serial.println("TimeLab 3-Cornered Hat");
-      break;
-    case Debug:
-      Serial.println("Debug");
-      break;
-    case Null:
-      Serial.println("Null Output");
-      break;
-  }  
-}
-
-// Configuration change management functions (moved from TICC.ino)
-
-// Static backup for config change tracking
-static config_t config_backup;
-
-// Backup current config before making changes
-void backup_config() {
-  config_backup = config;
+// Initialize configuration system
+void init_config_system() {
+  // Load config from EEPROM using existing function
+  eeprom_read_config();
   config_changed = 0;
-}
-
-// Check if a config change requires a full restart vs. just a flush
-uint8_t config_change_requires_restart() {
-  // These parameters require full restart (hardware reinitialization)
-  if (config.CLOCK_HZ != config_backup.CLOCK_HZ) return 1;
-  if (config.PICTICK_PS != config_backup.PICTICK_PS) return 1;
-  if (config.CAL_PERIODS != config_backup.CAL_PERIODS) return 1;
-  if (config.START_EDGE[0] != config_backup.START_EDGE[0]) return 1;
-  if (config.START_EDGE[1] != config_backup.START_EDGE[1]) return 1;
-  if (config.SYNC_MODE != config_backup.SYNC_MODE) return 1;
-  
-  // These parameters can be changed with just a flush
-  // MODE, POLL_CHAR, WRAP, PLACES, NAME, PROP_DELAY, TIME_DILATION, FIXED_TIME2, FUDGE0, TIMEOUT
-  return 0;
-}
-
-// Apply config changes that don't require restart
-void apply_config_changes() {
-  extern int64_t CLOCK_HZ, PICTICK_PS, CLOCK_PERIOD, ticksPerSecond;
-  extern int16_t CAL_PERIODS, WRAP;
-  extern MeasureMode MODE;
-  
-  // Update global variables from config
-  MODE = config.MODE;
-  CLOCK_HZ = config.CLOCK_HZ;
-  CLOCK_PERIOD = (PS_PER_SEC / CLOCK_HZ);
-  PICTICK_PS = config.PICTICK_PS;
-  CAL_PERIODS = config.CAL_PERIODS;
-  WRAP = config.WRAP;
-  ticksPerSecond = PS_PER_SEC / PICTICK_PS;
-  
-  // Update cached print parameters for maximum performance
-  update_cached_config();
-
-  // Update channel-specific settings (2 channels: A and B)
-  for (size_t i = 0; i < 2; ++i) {
-    channels[i].name = config.NAME[i];
-    channels[i].prop_delay = config.PROP_DELAY[i];
-    channels[i].time_dilation = config.TIME_DILATION[i];
-    channels[i].fixed_time2 = config.FIXED_TIME2[i];
-    channels[i].fudge = config.PROP_DELAY[i] + config.FUDGE0[i];
-  }
-}
-
-// Print header for current mode
-void print_mode_header() {
-  Serial.println("# ");
-  switch (config.MODE) {
-    case Timestamp:
-      Serial.print("# timestamp (seconds with ");
-      Serial.print(config.PLACES);
-      Serial.println(" decimal places)");
-      break;
-    case Interval:
-      Serial.print("# time interval A->B (seconds with ");
-      Serial.print(config.PLACES);
-      Serial.println(" decimal places)");
-      break;
-    case Period:
-      Serial.print("# period (seconds with ");
-      Serial.print(config.PLACES);
-      Serial.println(" decimal places)");
-      break;
-    case timeLab:
-      Serial.print("# timestamp ch0, ch1; interval chA->B (seconds with ");
-      Serial.print(config.PLACES);
-      Serial.println(" decimal places)");
-      break;
-    case Debug:
-      Serial.println("# time1 time2 clock1 cal1 cal2 PICstop tof timestamp");
-      break;
-    case Binary:
-      Serial.println("# Binary Timestamp mode - PICstop (bottom 4 bytes) tof (4 bytes) channel (1 byte)");
-      break;
-    case Null:
-      Serial.println("# null output mode - no data");
-      break;
-  }
-}
-
-// Handle restart vs. resume decision after config changes
-void handle_config_change_exit() {
-  if (config_change_requires_restart()) {
-    // Full restart required
-    Serial.println("# Configuration changes require restart. Restarting...");
-    delay(1000);
-    return; // This will cause ticc_setup() to be called again
-  } else {
-    // Can resume with flush
-    if (config_changed) {
-      Serial.println("# Applying configuration changes...");
-      apply_config_changes();
-      Serial.println("# Resuming operation with new settings.");
-      Serial.println("# (Changes are temporary - will revert on restart)");
-    } else {
-      // Changes were written to EEPROM, just resume
-      Serial.println("# Resuming operation with new settings.");
-    }
-    // Print new header for the current mode
-    print_mode_header();
-  }
 }

@@ -7,8 +7,8 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-// 2 October 2025 - version 20251002.1
-extern const char SW_VERSION[17] = "20251002.1";
+// 3 January 2025 - version 20250103.1
+extern const char SW_VERSION[17] = "20250103.1";
 extern const char SW_TAG[6] = "BETA";
 
 
@@ -168,7 +168,23 @@ void ticc_setup() {
 
   // get and save config change (skip once after exiting config menu via '#')
   if (!skip_config_prompt_once) {
-    UserConfig(&config);
+    // New config system startup check
+    Serial.println("# Type any character for config menu");
+    Serial.print("# ");
+    bool configRequested = false;
+    for (int i = 6; i >= 0; --i) {  // wait ~6 sec so user can type something
+      delay(250);   Serial.print('.'); if (Serial.available()) { configRequested = true; break; }
+      delay(250);   Serial.print('.'); if (Serial.available()) { configRequested = true; break; }
+      delay(250);   Serial.print('.'); if (Serial.available()) { configRequested = true; break; }
+      delay(250);   Serial.print('.'); if (Serial.available()) { configRequested = true; break; }
+    }
+    Serial.println();
+    while (Serial.available()) { char c = Serial.read(); }   // eat any characters entered before starting config menu
+    if (configRequested) {
+      backup_config();
+      show_config_menu();
+      handle_config_change_exit();
+    }
   } else {
     skip_config_prompt_once = 0;
   }
@@ -714,11 +730,10 @@ void loop() {
       // Double-check buffer is clear
       while (Serial.available()) (void)Serial.read();
       
-      // Backup config before making changes
-      backup_config();
-      
       // Enter config menu directly (no T/P choice needed)
-      doSetupMenu(&config);
+      backup_config();
+      show_config_menu();
+      handle_config_change_exit();
       
       // Clear any remaining characters after config menu exits
       while (Serial.available()) (void)Serial.read();

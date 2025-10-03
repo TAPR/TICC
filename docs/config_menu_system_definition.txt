@@ -1,0 +1,316 @@
+1.  This is a functional description of the configuration menu
+system in the TICC.  The goal is to generate Arduino code that
+will implement this.  The target is an Arduino Mega 2560 board.
+
+The user interface is a serial console.  The user can enter config mode by
+pressing a key at system startup, or by pressing a special escape key at any
+time during operation.
+
+There are a main menu and currently three submenus.  This is their current
+layout.  Note that where applicable each menu item displays its current value.
+
+# == TICC Configuration ==
+# A - Mode (currently: Timestamp)
+# B - Timestamp Wrap digits (currently: 2 - wraps at 100 seconds)
+# C - Output Decimal Places (currently: 11)
+# D - Trigger Edge A/B (currently: R/R)
+# E - Primary/Secondary (currently: P)
+# F - Channel Names (currently: A/B)
+# G - Poll Character (currently: none)
+# H - Advanced settings
+# I - Serial Baud Rate (currently: 115200)
+# 
+# M - Show this menu again
+# S - Show startup info
+# W - Write changes to EEPROM (persist across restarts)
+# 
+# 1 - Discard changes and exit
+# 2 - Apply changes and restart
+# 3 - Apply changes and resume operation
+# 4 - Reset all to defaults and restart
+# > 
+
+========
+The "A - Mode" menu looks like this:
+# -- Mode --
+# A1 - Timestamp
+# A2 - Binary Timestamp
+# A3 - Time Interval A -> B
+# A4 - Period
+# A5 - TimeLab 3-Cornered Hat
+# A6 - Debug
+# A7 - Null Output
+# 
+# Current mode: Timestamp
+# 
+# 1 - Discard changes and return to main menu
+# 2 - Keep changes and return to main menu
+# > 
+
+========
+The "H - Advanced" menu looks like this:
+# -- Advanced Settings --
+# H1 - Clock Speed MHz (currently: 10.000000)
+# H2 - Coarse Tick us (currently: 100.000000)
+# H3 - Propagation Delay ps A/B (currently: 0/0)
+# H4 - Time Dilation A/B (currently: 2500/2500)
+# H5 - fixedTime2 ps A/B (currently: 0/0)
+# H6 - FUDGE0 ps A/B (currently: 0/0)
+# 
+# 1 - Discard changes and return to main menu
+# 2 - Keep changes and return to main menu
+# > 
+
+========
+The "I - Baud Rate" menu looks like this:
+# -- Serial Baud Rate Settings --
+# I1 - 9600 bps
+# I2 - 19200 bps
+# I3 - 38400 bps
+# I4 - 57600 bps
+# I5 - 115200 bps (default)
+# I6 - 230400 bps
+# 
+# 1 - Discard changes and return to main menu
+# 2 - Keep changes and return to main menu
+# > 
+
+===========================
+
+Each item has constraints on its allowed user input as follows.  You will see
+that there are a limited number of input types allowed, and it should be
+possible to write a small number of input prompt and validation functions to
+handle them all.  The below list shows the input types and also the name of
+the variable in the config struct (shown lower in this document) that each
+item affects.
+
+Main menu:
+# A - Mode (currently: Timestamp)
+    Brings up submenu of allowed mode types.  User enters submenu
+    item number.  No other user input.
+    Affects: config.MODE
+
+# B - Timestamp Wrap digits
+    User is prompted for integer from 0 to 9; default is 2.  
+    Affects: config.WRAP
+
+# C - Output Decimal Places
+    User is prompted for integer from 0 to 12; default is 11
+    Affects: config.PLACES
+
+# D - Trigger Edge A/B
+    User is prompted for trigger edge for each channel.  Valid choices
+    are "R" (default) or "F". Input is forced to upper case.
+    Affects: config.START_EDGE
+
+# E - Primary/Secondary
+    User is prompted for single character; valid choices are "P" and "S".
+    Input is forced to upper case.
+    Affects: config.SYNC_MODE
+
+# F - Channel Names
+    User is prompted for channel name for each channel.  Any alphanumeric
+    is valid.  Input is NOT forced to upper case.
+    Affects: config.NAME
+
+# G - Poll Character
+    User is prompted for a poll character (space to clear).  Any
+    printable 7 bit ASCII character, plus space character, is
+    valid.  Input is NOT forced to upper case.
+    Affects: config.POLL_CHAR
+
+# H - Advanced settings
+    Brings up advanced menu
+
+# I - Serial Baud Rate
+    Brings up baud rate menu; user enters baud rate selection
+    from that menu; no other user input.
+    Affects: config.BAUD_RATE
+
+Mode and baud rate menus:
+In these menus, the user enters mode (e.g., "A3") or baud rate 
+(e.g., "I5") with no other parameters.
+
+# A1 - Timestamp (default)
+# A2 - Binary Timestamp
+# A3 - Time Interval A -> B
+# A4 - Period
+# A5 - TimeLab 3-Cornered Hat
+# A6 - Debug
+# A7 - Null Output
+
+# I1 - 9600 bps
+# I2 - 19200 bps
+# I3 - 38400 bps
+# I4 - 57600 bps
+# I5 - 115200 bps (default)
+# I6 - 230400 bps
+
+
+Advanced settings menu:
+# H1 - Clock Speed MHz (currently: 10.000000)
+    User is prompted to enter frequency in MHz.
+    Valid input is a single float in the range 1.000
+    to 16.000 (default 10.000)
+    Affects: config.CLOCK_HZ (note: normalize to Hz)
+
+# H2 - Coarse Tick us
+    User is prompted to enter period in microseconds.
+    Valid input is a single integer in the range 100
+    to 100000 (default 100000
+    Affects: config.PICKTICK_PS (note: normalize to picoseconds)
+
+# H3 - Propagation Delay ps A/B
+    User is is prompted to enter two integers in the
+    range 0 to 1e12. (default 0)
+    Affects: config.PROP_DELAY
+
+# H4 - Time Dilation A/B
+    User is is prompted to enter two integers in the
+    range 0 to 1e12. (default 2500)
+    Affects: config.TIME_DILATION
+    
+# H5 - fixedTime2 ps A/B
+    User is is prompted to enter two integers in the
+    range 0 to 1e12. (default 0)
+    Affects: config.FIXED_TIME2
+
+# H6 - FUDGE0 ps A/B
+    User is is prompted to enter two integers in the
+    range 0 to 1e12. (default 0)
+    Affects: config.FUDGE0
+
+========
+
+REQUIREMENTS:
+
+1.  The ">" is the user prompt.
+
+2.  ALL lines output by the configuration system MUST have a "#" prepended
+so that downstream software will treat the lines as comments.  This includes
+user input lines -- i.e., when the user types it must be on a continuation
+of the current line, not a new blank line below the prompt.
+
+3.  For items that take two arguments, they may separated by "/" or space.  
+If and only if the values are non-numeric, they may be run together, 
+e.g., edges may be entered as "R/R", "R R", or "RR".  Numeric values 
+must always be separated by "/" or space.
+
+4.  Users can cancel any input operation by pressing enter with no
+input.  This returns them to the previous menu level.
+
+5.  If the user enters an invalid value, they are given
+an "Invalid entry" message and the opportunity to enter a correct value
+or to exit to the next higher level by pressing return.
+
+6.  After a valid entry, the user gets confirmation of the change showing
+the old and new value(s) with an option to either accept the change or discard
+it, then returning to the prior menu as shown here:
+
+    # > B
+    # Wrap Digits (0..10): 9
+    # OK -- Wrap Digits 2 -> 9
+    # Save to EEPROM with 'W' and restart for change to take effect.
+    # 
+    # 1 - Keep changes
+    # 2 - Discard changes
+    # > 1
+    # Changes kept.
+    (reprint main menu)
+
+
+7.  At the main menu, there are options to:
+ 
+    # M - Show this menu again
+    # S - Show startup info
+    # W - Write changes to EEPROM (persist across restarts)
+    # 
+    # 1 - Discard changes and exit
+    # 2 - Apply changes and restart
+    # 3 - Apply changes and resume operation
+    # 4 - Reset all to defaults and restart
+
+8.  Configuration values are written to a struct that is stored in EEPROM.  The
+"W" command writes the current configuration to EEPROM.  
+
+9.  An "X" command, not shown in the menus, clears the EEPROM area after a 
+"Type YES to confirm" message to allow a fresh configuration to be written.
+
+9.  In addition to the interactive configuration flow described above, there
+is also batch mode where multiple commands can be given with semicolons
+separating them.  For xample, based on the above menus the single string
+"A3;B9;FCD;W;2" would select time interval mode (A3), set wrap to 9, set channel
+names to C and D, write the changes to EEPROM, and restart.
+
+
+CODE LEVEL REQUIREMENTS:
+
+1.  The configuration values are stored in a struct that currently looks
+like this:
+
+    struct config_t {
+      byte       VERSION = EEPROM_VERSION;  // one byte   
+      char       SW_VERSION[17];            // up to 16 bytes plus term
+      char       BOARD_REV;                 // one byte   
+      char       SER_NUM[17];              // up to 16 bytes plus term
+  
+      // global settings:
+      MeasureMode MODE;                     // (T)imestamp, time (I)nterval
+                                        // Time(L)ab, (P)eriod, (D)ebug, (B)inary (default 'T')
+      char       POLL_CHAR;                 // In poll mode, wiat for this before output
+      int64_t    CLOCK_HZ;                  // clock in Hz (default 10 000 000)
+      int64_t    PICTICK_PS;                // coarse tick (default 100 000 000)
+      int16_t    CAL_PERIODS;               // cal periods 2, 10, 20, 40 (default 20)
+      int16_t    TIMEOUT;                   // timeout for measurement in hex (default 0x05)
+      int16_t    WRAP;                      // wraparound value for PICcount
+      int16_t    PLACES;                    // decimal places for output (0-12, default 11)
+      char       SYNC_MODE;                 // one byte:  'P' for primary, 'S' for secondary
+      uint32_t   BAUD_RATE;                 // serial baud rate (default 115200)
+  
+      // per-channel settings, arrays of 2 for channels 0 and 1:
+      char       START_EDGE[2];            // (R)ising (default) or (F)alling edge 
+      char       NAME[2];                  // user-set channel name
+      int64_t    PROP_DELAY[2];            // user-set offset value (ps)
+      int64_t    TIME_DILATION[2];         // time dilation factor (default 2500)
+      int64_t    FIXED_TIME2[2];           // if >0 use to replace time2 (default 0)
+      int64_t    FUDGE0[2];                // fudge factor (ps) (default 0)
+  
+    };
+
+The configuration routine will need to read current values from, and write
+changed values to, this structure.
+
+2.  The goal is to implement an efficient structure that allows for changes and
+expansion.  Likely a solution using a table of information for each
+configuration item is best.
+
+3.  Given the input constraints described above, a small number of user input
+prompt and validation functions should work to reduce code duplication.  ONLY AS
+POSSIBLE EXAMPLES, consider functions like:
+
+    processCharInput(buf, prompt, current_vals, num_vals, to_upper, valid_chars)
+or
+    processNumericInput(buf, prompt, current_vals, num_vals, val_type, min_val, max_val)
+
+that would return the new validated values.  The item handlers would then need
+a minimal amount of code to further process the new values and put them in the
+config struct.
+
+4. Global (variable) memory consumption is important.  All non-trivial text
+strings must be in PROGMEM, and shared buffers should be used to reduce variable 
+space consumption 
+
+5.  Some configuration changes require a restart while others can be applied
+in the current session.  There is logic in the main program handling that, and
+the configuration system needs to integrate with that.
+
+6.  Configuration change tracking:
+The system tracks which parameters require restart vs. can be applied
+immediately.  This is the current split although it is subject to change:
+- Restart required: CLOCK_HZ, PICTICK_PS, CAL_PERIODS, START_EDGE, SYNC_MODE
+- Can apply immediately: MODE, POLL_CHAR, WRAP, PLACES, NAME, PROP_DELAY, TIME_DILATION, 
+  FIXED_TIME2, FUDGE0, TIMEOUT
+This affects exit options:
+- Option 2: "Apply changes and restart" (for restart-required changes)
+- Option 3: "Apply changes and resume operation" (for immediate changes)
+

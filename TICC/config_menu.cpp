@@ -1,79 +1,37 @@
-// config_menu.cpp -- Menu command processing functions
+// config_menu.cpp -- Menu display and command processing functions using command table
 
 // TICC Time interval Counter based on TICC Shield using TDC7200
 //
-// Copyright John Ackermann N8UR 2016-2020
+// Copyright John Ackermann N8UR 2016-2025
 // Portions Copyright George Byrkit K9TRV 2016
 // Portions Copyright Jeremy McDermond NH6Z 2016
-// Portions Copyright David McQuate WA8YWQ 2016
 // Licensed under BSD 2-clause license
 
 #include <stdint.h>
 #include <Arduino.h>
-#include "config.h"
+#include <string.h>
+#include "config_types.h"
+#include "config_menu_text.h"
+#include "config_command_table.h"
 
-// External variables
-extern uint8_t config_changed;
+// Forward declarations for functions in config_core.cpp
+extern void configPrint(const char* msg);
+extern void configPrintln(const char* msg);
+extern size_t readLine(char *buf, size_t cap);
+extern char* trimInPlace(char *s);
+extern bool parseInt64Simple(const char *s, int64_t *out);
+extern bool parseDecimalScaled(const char *s, int64_t scale, int64_t *out);
+extern bool parseInt64Pair(const char *s, bool *set0, int64_t *v0, bool *set1, int64_t *v1);
+extern bool parseCharPair(const char *s, bool *set0, char *v0, bool *set1, char *v1);
+extern char* getInputOrPrompt(const char* args, const char* prompt, char* buffer, size_t bufferSize);
+extern void eeprom_write_config();
+extern void eeprom_clear();
+extern struct config_t defaultConfig();
 
-// Macro to mark config as changed
-#define MARK_CONFIG_CHANGED() do { config_changed = 1; } while(0)
-
-// Single shared buffer to reduce memory usage - replaces all local buffers
+// Single shared buffer to reduce memory usage
 static char sharedBuffer[128];
-// Separate buffer for confirmation input to avoid conflicts
 static char confirmBuffer[32];
 
-
-// PROGMEM strings for submenus and messages
-const char str_mode_menu[] PROGMEM = "-- Mode --";
-const char str_mode1[] PROGMEM = "A1 - Timestamp";
-const char str_mode2[] PROGMEM = "A2 - Binary Timestamp";
-const char str_mode3[] PROGMEM = "A3 - Time Interval A -> B";
-const char str_mode4[] PROGMEM = "A4 - Period";
-const char str_mode5[] PROGMEM = "A5 - TimeLab 3-Cornered Hat";
-const char str_mode6[] PROGMEM = "A6 - Debug";
-const char str_mode7[] PROGMEM = "A7 - Null Output";
-const char str_current_mode[] PROGMEM = "Current mode: ";
-const char str_discard[] PROGMEM = "1 - Discard changes and return to main menu";
-const char str_keep[] PROGMEM = "2 - Keep changes and return to main menu";
-const char str_mode_changes_discarded[] PROGMEM = "Mode changes discarded.";
-const char str_mode_changes_kept[] PROGMEM = "Mode changes kept.";
-const char str_mode_was[] PROGMEM = "Mode was ";
-const char str_mode_now[] PROGMEM = "; now ";
-
-const char str_baud_menu[] PROGMEM = "-- Serial Baud Rate Settings --";
-const char str_baud1[] PROGMEM = "I1 - 9600 bps";
-const char str_baud2[] PROGMEM = "I2 - 19200 bps";
-const char str_baud3[] PROGMEM = "I3 - 38400 bps";
-const char str_baud4[] PROGMEM = "I4 - 57600 bps";
-const char str_baud5[] PROGMEM = "I5 - 115200 bps (default)";
-const char str_baud6[] PROGMEM = "I6 - 230400 bps";
-const char str_baud_changes_discarded[] PROGMEM = "Baud rate changes discarded.";
-const char str_baud_changes_kept[] PROGMEM = "Baud rate changes kept.";
-const char str_baud_was[] PROGMEM = "Baud rate was ";
-const char str_baud_now[] PROGMEM = "; now ";
-
-// Advanced Settings submenu PROGMEM strings
-const char str_advanced_menu[] PROGMEM = "-- Advanced Settings --";
-const char str_h1_clock[] PROGMEM = "H1 - Clock Speed MHz (currently: ";
-const char str_h2_coarse[] PROGMEM = "H2 - Coarse Tick us (currently: ";
-const char str_h3_prop[] PROGMEM = "H3 - Propagation Delay ps A/B (currently: ";
-const char str_h4_dilation[] PROGMEM = "H4 - Time Dilation A/B (currently: ";
-const char str_h5_fixed[] PROGMEM = "H5 - fixedTime2 ps A/B (currently: ";
-const char str_h6_fudge[] PROGMEM = "H6 - FUDGE0 ps A/B (currently: ";
-
-// Confirmation message strings
-const char str_save_eeprom[] PROGMEM = "Save to EEPROM with 'W' and restart for change to take effect.";
-const char str_keep_changes[] PROGMEM = "1 - Keep changes";
-const char str_discard_changes[] PROGMEM = "2 - Discard changes";
-
-// Helper function to print PROGMEM strings
-static void printProgStr(const char* str) {
-  char c;
-  while ((c = pgm_read_byte(str++)) != 0) {
-    Serial.write(c);
-  }
-}
 
 // Helper function to copy PROGMEM strings to buffer
 static void copyProgStrToBuffer(const char* str, char* buffer, size_t bufferSize) {
@@ -85,39 +43,169 @@ static void copyProgStrToBuffer(const char* str, char* buffer, size_t bufferSize
   buffer[i] = '\0';
 }
 
-// Helper function to handle confirmation flow with keep/discard options
-// Returns true if changes should be kept, false if discarded
-// interactive = false for semicolon-separated commands (auto-keep changes)
-static bool handleConfirmation(const char* confirmationMsg, const char* itemSpecificMsg, 
-                              bool preserveCase = false, bool interactive = true) {
-  // Show confirmation message
-  strcpy(sharedBuffer, confirmationMsg);
-  strcat(sharedBuffer, "\r\n");
-  configPrint(sharedBuffer);
-  
-  // Show item-specific message if provided
-  if (itemSpecificMsg) {
-    copyProgStrToBuffer(itemSpecificMsg, sharedBuffer, sizeof(sharedBuffer));
-    strcat(sharedBuffer, "\r\n");
-    configPrint(sharedBuffer);
+// Helper function to get mode name as string
+static const char* getModeName(MeasureMode mode) {
+  switch (mode) {
+    case Timestamp: return mode_timestamp;
+    case Binary: return mode_binary;
+    case Interval: return mode_interval;
+    case Period: return mode_period;
+    case timeLab: return mode_timelab;
+    case Debug: return mode_debug;
+    case Null: return mode_null;
+    default: return mode_unknown;
   }
+}
+
+// Helper function to get wrap description as string
+static const char* getWrapDescription(int16_t wrap) {
+  static char desc[32];
+  if (wrap <= 0) {
+    strcpy_P(desc, wrap_no_wrap);
+  } else if (wrap <= 9) {
+    uint32_t wrap_seconds = 1;
+    for (int i = 0; i < wrap; i++) wrap_seconds *= 10;
+    sprintf_P(desc, wrap_format, (unsigned long)wrap_seconds);
+  } else {
+    sprintf_P(desc, wrap_scientific, wrap);
+  }
+  return desc;
+}
+
+
+// Print frequency as MHz
+static void printHzAsMHz(int64_t hz) {
+  int64_t MHz = hz / 1000000LL;
+  int64_t Hz = MHz * 1000000LL;
+  int64_t fract = hz - Hz;
+  Serial.print((int32_t)MHz);
+  Serial.print(".");
+  if (fract < 100000) Serial.print("0");
+  if (fract < 10000) Serial.print("0");
+  if (fract < 1000) Serial.print("0");
+  if (fract < 100) Serial.print("0");
+  if (fract < 10) Serial.print("0");
+  Serial.print((int32_t)fract);
+}
+
+// Format frequency as MHz string
+static void formatHzAsMHz(int64_t hz, char* buffer, size_t bufferSize) {
+  int64_t MHz = hz / 1000000LL;
+  int64_t Hz = MHz * 1000000LL;
+  int64_t fract = hz - Hz;
+  snprintf(buffer, bufferSize, "%ld.%06ld MHz", (int32_t)MHz, (int32_t)fract);
+}
+
+// Format picoseconds as microseconds string
+static void formatPsAsUs(int64_t ps, char* buffer, size_t bufferSize) {
+  int64_t us = ps / 1000000LL;
+  int64_t ps_remainder = ps - (us * 1000000LL);
+  snprintf(buffer, bufferSize, "%ld.%06ld usec", (int32_t)us, (int32_t)ps_remainder);
+}
+
+// Parse scientific notation input (e.g., "1e7", "10e6", "1.5e7", "10000000")
+// Returns true if successful, false if invalid
+static bool parseScientificNotation(const char* input, int64_t* result) {
+  if (!input || strlen(input) == 0) return false;
   
-  // For non-interactive mode (semicolon commands), just keep changes
+  char* endptr;
+  double value = strtod(input, &endptr);
+  
+  // Check if entire string was consumed
+  if (*endptr != '\0') return false;
+  
+  // Check for reasonable range (avoid overflow)
+  if (value < 0 || value > 1e15) return false;
+  
+  *result = (int64_t)value;
+  return true;
+}
+
+// Parse pair of values (scientific notation or integers) (e.g., "1e6/2e6", "1000000 2000000", "40/40")
+// Returns true if successful, false if invalid
+static bool parseScientificNotationPair(const char* input, int64_t* resultA, int64_t* resultB) {
+  if (!input || strlen(input) == 0) return false;
+  
+  // Find the separator (either "/" or space)
+  char* separator = strchr(input, '/');
+  if (!separator) {
+    separator = strchr(input, ' ');
+  }
+  if (!separator) return false;
+  
+  // Split the input at the separator
+  char inputA[64], inputB[64];
+  size_t lenA = separator - input;
+  if (lenA >= sizeof(inputA)) return false;
+  
+  strncpy(inputA, input, lenA);
+  inputA[lenA] = '\0';
+  
+  strcpy(inputB, separator + 1);
+  
+  // Parse both values using the same function that handles both scientific notation and integers
+  return parseScientificNotation(inputA, resultA) && parseScientificNotation(inputB, resultB);
+}
+
+// Helper function to handle confirmation flow for pair values
+static bool handlePairConfirmation(int64_t oldA, int64_t oldB, int64_t newA, int64_t newB, 
+                                  int64_t* configA, int64_t* configB, const char* name) {
+  sprintf_P(sharedBuffer, msg_ok_pair, name, (long)oldA, (long)oldB, (long)newA, (long)newB);
+  configPrintln(sharedBuffer);
+  
+  // Show keep/discard options
+  configPrintln("");
+  configPrintlnProg(ln_1_keep);
+  configPrintlnProg(ln_2_discard);
+  configPrint("> ");
+  
+  readLine(sharedBuffer, sizeof(sharedBuffer));
+  char *choice = trimInPlace(sharedBuffer);
+  
+  if (choice[0] == '2' && strlen(choice) == 1) {
+    // Discard changes
+    *configA = oldA;
+    *configB = oldB;
+    config_changed = 0;
+    configPrintlnProg(ln_discard_changes);
+    return false;
+  } else {
+    // Keep changes (default)
+    *configA = newA;
+    *configB = newB;
+    configPrintlnProg(ln_keep_changes);
+    return true;
+  }
+}
+
+// Print picoseconds as microseconds
+static void printPsAsUs(int64_t ps) {
+  int64_t us = ps / 1000000LL;
+  int64_t ps_remainder = ps - (us * 1000000LL);
+  Serial.print((int32_t)us);
+  Serial.print(".");
+  if (ps_remainder < 100000) Serial.print("0");
+  if (ps_remainder < 10000) Serial.print("0");
+  if (ps_remainder < 1000) Serial.print("0");
+  if (ps_remainder < 100) Serial.print("0");
+  if (ps_remainder < 10) Serial.print("0");
+  Serial.print((int32_t)ps_remainder);
+}
+
+// Handle confirmation flow with keep/discard options
+static bool handleConfirmation(const char* confirmationMsg, bool interactive = true) {
+  configPrintln(confirmationMsg);
+  configPrintlnProg(ln_save_eeprom);
+  configPrintln("");
+  
+  // For non-interactive mode (batch commands), just keep changes
   if (!interactive) {
-    strcpy(sharedBuffer, "Changes kept.\r\n");
-    configPrint(sharedBuffer);
+    configPrintlnProg(ln_keep_changes);
     return true;
   }
   
-  configPrint("\r\n");
-  
-  // Show keep/discard options
-  copyProgStrToBuffer(str_keep_changes, sharedBuffer, sizeof(sharedBuffer));
-  strcat(sharedBuffer, "\r\n");
-  configPrint(sharedBuffer);
-  copyProgStrToBuffer(str_discard_changes, sharedBuffer, sizeof(sharedBuffer));
-  strcat(sharedBuffer, "\r\n");
-  configPrint(sharedBuffer);
+  configPrintlnProg(ln_1_keep);
+  configPrintlnProg(ln_2_discard);
   configPrint("> ");
   
   // Clear Serial input buffer completely
@@ -126,839 +214,885 @@ static bool handleConfirmation(const char* confirmationMsg, const char* itemSpec
   }
   
   // Get user choice using separate buffer to avoid conflicts
-  size_t n = readLine(confirmBuffer, sizeof(confirmBuffer));
+  readLine(confirmBuffer, sizeof(confirmBuffer));
   char *choice = trimInPlace(confirmBuffer);
   
-  // Sanitize input: uppercase all alphas unless preserveCase is true
-  if (!preserveCase) {
-    for (size_t i = 0; i < n; i++) {
-      if (isalpha(choice[i])) {
-        choice[i] = toupper(choice[i]);
-      }
-    }
-  }
-  
-  if (n && choice[0] == '2') {
+  if (strlen(choice) > 0 && choice[0] == '2') {
     // Discard changes
-    strcpy(sharedBuffer, "Changes discarded.\r\n");
-    configPrint(sharedBuffer);
+    configPrintlnProg(ln_discard_changes);
     return false;
   } else {
     // Keep changes (default)
-    strcpy(sharedBuffer, "Changes kept.\r\n");
-    configPrint(sharedBuffer);
+    configPrintlnProg(ln_keep_changes);
     return true;
   }
 }
 
-// Helper function to print confirmation messages without sprintf
-static void printConfirmation(const char* prefix, const char* oldVal, const char* newVal) {
-  Serial.print("# ");
-  Serial.print(prefix);
-  if (oldVal) {
-    Serial.print(oldVal);
-    Serial.print(" -> ");
+// Show main menu
+void show_main_menu() {
+  char line[128];
+  
+  configPrintln("");
+  
+  // Title
+  copyProgStrToBuffer(pg_main_title, line, sizeof(line));
+  configPrintln(line);
+  
+  // A - Mode
+  copyProgStrToBuffer(it_mode, line, sizeof(line));
+  strcat(line, getModeName(config.MODE));
+  strcat(line, ")");
+  configPrintln(line);
+  
+  // B - Wrap
+  copyProgStrToBuffer(it_wrap, line, sizeof(line));
+  sprintf(line + strlen(line), "%d%s)", config.WRAP, getWrapDescription(config.WRAP));
+  configPrintln(line);
+  
+  // C - Places
+  copyProgStrToBuffer(it_places, line, sizeof(line));
+  sprintf(line + strlen(line), "%d)", config.PLACES);
+  configPrintln(line);
+  
+  // D - Trigger Edge
+  copyProgStrToBuffer(it_edge, line, sizeof(line));
+  sprintf(line + strlen(line), "%c/%c)", config.START_EDGE[0], config.START_EDGE[1]);
+  configPrintln(line);
+  
+  // E - Sync Mode
+  copyProgStrToBuffer(it_sync, line, sizeof(line));
+  sprintf(line + strlen(line), "%c)", config.SYNC_MODE);
+  configPrintln(line);
+  
+  // F - Channel Names
+  copyProgStrToBuffer(it_names, line, sizeof(line));
+  sprintf(line + strlen(line), "%c/%c)", config.NAME[0], config.NAME[1]);
+  configPrintln(line);
+  
+  // G - Poll Character
+  copyProgStrToBuffer(it_pollchar, line, sizeof(line));
+  if (config.POLL_CHAR) {
+    sprintf(line + strlen(line), "%c)", config.POLL_CHAR);
+  } else {
+    strcat_P(line, msg_poll_none);
   }
-  Serial.print(newVal);
-  Serial.println();
+  configPrintln(line);
+  
+  // H - Advanced
+  copyProgStrToBuffer(it_advanced, line, sizeof(line));
+  configPrintln(line);
+  
+  // I - Baud Rate
+  copyProgStrToBuffer(it_baud, line, sizeof(line));
+  sprintf(line + strlen(line), "%lu)", (unsigned long)config.BAUD_RATE);
+  configPrintln(line);
+  
+  configPrintln("");
+  
+  copyProgStrToBuffer(it_show_menu, line, sizeof(line));
+  configPrintln(line);
+  
+  copyProgStrToBuffer(it_printcfg, line, sizeof(line));
+  configPrintln(line);
+  
+  copyProgStrToBuffer(it_save, line, sizeof(line));
+  configPrintln(line);
+  
+  configPrintln("");
+  
+  copyProgStrToBuffer(it_exit1, line, sizeof(line));
+  configPrintln(line);
+  
+  copyProgStrToBuffer(it_exit2, line, sizeof(line));
+  configPrintln(line);
+  
+  copyProgStrToBuffer(it_exit3, line, sizeof(line));
+  configPrintln(line);
+  
+  copyProgStrToBuffer(it_exit4, line, sizeof(line));
+  configPrintln(line);
 }
 
-// Helper function to print confirmation messages with numbers
-static void printConfirmation(const char* prefix, int32_t oldVal, int32_t newVal) {
-  Serial.print("# ");
-  Serial.print(prefix);
-  Serial.print(oldVal);
-  Serial.print(" -> ");
-  Serial.print(newVal);
-  Serial.println();
+// Show mode submenu
+void show_mode_menu() {
+  char line[128];
+  
+  configPrintln("");
+  
+  copyProgStrToBuffer(pg_mode_title, line, sizeof(line));
+  configPrintln(line);
+  
+  copyProgStrToBuffer(it_mode_ts, line, sizeof(line));
+  configPrintln(line);
+  
+  copyProgStrToBuffer(it_mode_bin, line, sizeof(line));
+  configPrintln(line);
+  
+  copyProgStrToBuffer(it_mode_int, line, sizeof(line));
+  configPrintln(line);
+  
+  copyProgStrToBuffer(it_mode_period, line, sizeof(line));
+  configPrintln(line);
+  
+  copyProgStrToBuffer(it_mode_3ch, line, sizeof(line));
+  configPrintln(line);
+  
+  copyProgStrToBuffer(it_mode_debug, line, sizeof(line));
+  configPrintln(line);
+  
+  copyProgStrToBuffer(it_mode_null, line, sizeof(line));
+  configPrintln(line);
+  
+  configPrintln("");
+  
+  copyProgStrToBuffer(ln_current_mode, line, sizeof(line));
+  strcat(line, getModeName(config.MODE));
+  configPrintln(line);
+  
+  configPrintln("");
 }
 
-// Helper function to print confirmation messages with characters
-static void printConfirmation(const char* prefix, char oldVal, char newVal) {
-  Serial.print("# ");
-  Serial.print(prefix);
-  Serial.write(oldVal);
-  Serial.print(" -> ");
-  Serial.write(newVal);
-  Serial.println();
+// Show baud rate submenu
+void show_baud_menu() {
+  char line[128];
+  
+  configPrintln("");
+  
+  copyProgStrToBuffer(pg_serial_title, line, sizeof(line));
+  configPrintln(line);
+  
+  copyProgStrToBuffer(it_baud_9600, line, sizeof(line));
+  configPrintln(line);
+  
+  copyProgStrToBuffer(it_baud_19200, line, sizeof(line));
+  configPrintln(line);
+  
+  copyProgStrToBuffer(it_baud_38400, line, sizeof(line));
+  configPrintln(line);
+  
+  copyProgStrToBuffer(it_baud_57600, line, sizeof(line));
+  configPrintln(line);
+  
+  copyProgStrToBuffer(it_baud_115200, line, sizeof(line));
+  configPrintln(line);
+  
+  copyProgStrToBuffer(it_baud_230400, line, sizeof(line));
+  configPrintln(line);
+  
+  configPrintln("");
 }
 
-// Process a single command and return true if the command was processed successfully
-bool processCommand(struct config_t *pConfigInfo, char *cmdLine, bool *showMenu, bool interactive) {
-  char *line = trimInPlace(cmdLine);
+// Show advanced submenu
+void show_advanced_menu() {
+  char line[128];
+  
+  configPrintln("");
+  
+  copyProgStrToBuffer(pg_advanced_title, line, sizeof(line));
+  configPrintln(line);
+  
+  // H1 - Clock Speed
+  copyProgStrToBuffer(it_adv_clock, line, sizeof(line));
+  int64_t MHz = config.CLOCK_HZ / 1000000;
+  int64_t Hz = MHz * 1000000;
+  int64_t fract = config.CLOCK_HZ - Hz;
+  sprintf(line + strlen(line), "%ld.%06ld MHz)", (int32_t)MHz, (int32_t)fract);
+  configPrintln(line);
+  
+  // H2 - Coarse Tick
+  copyProgStrToBuffer(it_adv_pictick, line, sizeof(line));
+  int64_t us = config.PICTICK_PS / 1000000;
+  int64_t ps = us * 1000000;
+  int64_t ps_fract = config.PICTICK_PS - ps;
+  sprintf(line + strlen(line), "%ld.%06ld usec)", (int32_t)us, (int32_t)ps_fract);
+  configPrintln(line);
+  
+  // H3 - Propagation Delay
+  copyProgStrToBuffer(it_adv_prop, line, sizeof(line));
+  sprintf(line + strlen(line), "%ld/%ld)", (long)config.PROP_DELAY[0], (long)config.PROP_DELAY[1]);
+  configPrintln(line);
+  
+  // H4 - Time Dilation
+  copyProgStrToBuffer(it_adv_dilation, line, sizeof(line));
+  sprintf(line + strlen(line), "%ld/%ld)", (long)config.TIME_DILATION[0], (long)config.TIME_DILATION[1]);
+  configPrintln(line);
+  
+  // H5 - Fixed Time2
+  copyProgStrToBuffer(it_adv_fixed, line, sizeof(line));
+  sprintf(line + strlen(line), "%ld/%ld)", (long)config.FIXED_TIME2[0], (long)config.FIXED_TIME2[1]);
+  configPrintln(line);
+  
+  // H6 - FUDGE0
+  copyProgStrToBuffer(it_adv_fudge, line, sizeof(line));
+  sprintf(line + strlen(line), "%ld/%ld)", (long)config.FUDGE0[0], (long)config.FUDGE0[1]);
+  configPrintln(line);
+  
+  configPrintln("");
+}
+
+// Process mode submenu commands
+bool process_mode_command(char cmd, const char* args, bool interactive) {
+  MeasureMode oldMode = config.MODE;
+  
+  switch (cmd) {
+    case '1': config.MODE = Timestamp; break;
+    case '2': config.MODE = Binary; break;
+    case '3': config.MODE = Interval; break;
+    case '4': config.MODE = Period; break;
+    case '5': config.MODE = timeLab; break;
+    case '6': config.MODE = Debug; break;
+    case '7': config.MODE = Null; break;
+    default:
+      configPrintlnProg(ln_invalid);
+      configPrintln(" mode choice");
+      return false;
+  }
+  
+  if (oldMode != config.MODE) {
+    config_changed = 1;
+    strcpy_P(sharedBuffer, msg_ok_mode);
+    strcat(sharedBuffer, getModeName(config.MODE));
+    configPrintln(sharedBuffer);
+    
+    // Show keep/discard options
+    configPrintln("");
+    configPrintlnProg(ln_1_keep);
+    configPrintlnProg(ln_2_discard);
+    configPrint("> ");
+    
+    readLine(sharedBuffer, sizeof(sharedBuffer));
+    char *choice = trimInPlace(sharedBuffer);
+    
+    if (choice[0] == '2' && strlen(choice) == 1) {
+      // Discard changes
+      config.MODE = oldMode;
+      config_changed = 0;
+      configPrintlnProg(ln_discard_changes);
+    } else if (choice[0] == '1' && strlen(choice) == 1) {
+      // Keep changes
+      configPrintlnProg(ln_keep_changes);
+    } else {
+      // Invalid choice, keep changes by default
+      configPrintlnProg(ln_keep_changes);
+    }
+  }
+  
+  return true;
+}
+
+// Process baud rate submenu commands
+bool process_baud_command(char cmd, const char* args, bool interactive) {
+  uint32_t oldRate = config.BAUD_RATE;
+  uint32_t newRate;
+  
+  switch (cmd) {
+    case '1': newRate = 9600; break;
+    case '2': newRate = 19200; break;
+    case '3': newRate = 38400; break;
+    case '4': newRate = 57600; break;
+    case '5': newRate = 115200; break;
+    case '6': newRate = 230400; break;
+    default:
+      configPrintlnProg(ln_invalid);
+      configPrintln(" baud rate choice");
+      return false;
+  }
+  
+  if (oldRate != newRate) {
+    config.BAUD_RATE = newRate;
+    config_changed = 1;
+    strcpy_P(sharedBuffer, msg_ok_baud_was);
+    sprintf(sharedBuffer + strlen(sharedBuffer), "%ld", (long)oldRate);
+    strcat_P(sharedBuffer, msg_ok_baud_now);
+    sprintf(sharedBuffer + strlen(sharedBuffer), "%ld", (long)newRate);
+    configPrintln(sharedBuffer);
+    
+    // Show keep/discard options
+    configPrintln("");
+    configPrintlnProg(ln_1_keep);
+    configPrintlnProg(ln_2_discard);
+    configPrint("> ");
+    
+    readLine(sharedBuffer, sizeof(sharedBuffer));
+    char *choice = trimInPlace(sharedBuffer);
+    
+    if (choice[0] == '2' && strlen(choice) == 1) {
+      // Discard changes
+      config.BAUD_RATE = oldRate;
+      config_changed = 0;
+      configPrintlnProg(ln_discard_changes);
+    } else if (choice[0] == '1' && strlen(choice) == 1) {
+      // Keep changes
+      configPrintlnProg(ln_keep_changes);
+    } else {
+      // Invalid choice, keep changes by default
+      configPrintlnProg(ln_keep_changes);
+    }
+  } else {
+    // Baud rate is already set to this value
+    strcpy_P(sharedBuffer, msg_ok_baud_already);
+    sprintf(sharedBuffer + strlen(sharedBuffer), "%ld", (long)newRate);
+    configPrintln(sharedBuffer);
+  }
+  
+  return true;
+}
+
+// Process advanced submenu commands
+bool process_advanced_command(char cmd, const char* args, bool interactive) {
+  switch (cmd) {
+    case '1': {
+      // H1 - Clock Speed (Hz, accepts scientific notation like 1e7 for 10 MHz)
+      char* input = getInputOrPrompt(args, prompt_clock, sharedBuffer, sizeof(sharedBuffer));
+      if (!input) return false;
+      
+      int64_t hz;
+      if (parseScientificNotation(input, &hz) && hz >= 1000000LL && hz <= 16000000LL) {
+        int64_t old = config.CLOCK_HZ;
+        config.CLOCK_HZ = hz;
+        config_changed = 1;
+        
+        // Build confirmation message using string formatting
+        char oldStr[32], newStr[32];
+        formatHzAsMHz(old, oldStr, sizeof(oldStr));
+        formatHzAsMHz(hz, newStr, sizeof(newStr));
+        sprintf_P(sharedBuffer, msg_ok_clock, oldStr, newStr);
+        configPrintln(sharedBuffer);
+        
+        // Show keep/discard options
+        configPrintln("");
+        configPrintlnProg(ln_1_keep);
+        configPrintlnProg(ln_2_discard);
+        configPrint("> ");
+        
+        readLine(sharedBuffer, sizeof(sharedBuffer));
+        char *choice = trimInPlace(sharedBuffer);
+        
+        if (choice[0] == '2' && strlen(choice) == 1) {
+          // Discard changes
+          config.CLOCK_HZ = old;
+          config_changed = 0;
+          configPrintlnProg(ln_discard_changes);
+        } else if (choice[0] == '1' && strlen(choice) == 1) {
+          // Keep changes
+          configPrintlnProg(ln_keep_changes);
+        } else {
+          // Invalid choice, keep changes by default
+          configPrintlnProg(ln_keep_changes);
+        }
+      } else {
+        configPrintlnProg(ln_invalid);
+        configPrintln(" (expected Hz, e.g., 1e7 for 10 MHz)");
+      }
+      break;
+    }
+    case '2': {
+      // H2 - Coarse Tick (picoseconds, accepts scientific notation like 1e8 for 100 us)
+      char* input = getInputOrPrompt(args, prompt_pictick, sharedBuffer, sizeof(sharedBuffer));
+      if (!input) return false;
+      
+      int64_t ps;
+      if (parseScientificNotation(input, &ps) && ps >= 100000000LL && ps <= 100000000000LL) {
+        int64_t old = config.PICTICK_PS;
+        config.PICTICK_PS = ps;
+        config_changed = 1;
+        
+        // Build confirmation message using string formatting
+        char oldStr[32], newStr[32];
+        formatPsAsUs(old, oldStr, sizeof(oldStr));
+        formatPsAsUs(ps, newStr, sizeof(newStr));
+        sprintf(sharedBuffer, "OK -- Coarse Tick %s -> %s", oldStr, newStr);
+        configPrintln(sharedBuffer);
+        
+        // Show keep/discard options
+        configPrintln("");
+        configPrintlnProg(ln_1_keep);
+        configPrintlnProg(ln_2_discard);
+        configPrint("> ");
+        
+        readLine(sharedBuffer, sizeof(sharedBuffer));
+        char *choice = trimInPlace(sharedBuffer);
+        
+        if (choice[0] == '2' && strlen(choice) == 1) {
+          // Discard changes
+          config.PICTICK_PS = old;
+          config_changed = 0;
+          configPrintlnProg(ln_discard_changes);
+        } else if (choice[0] == '1' && strlen(choice) == 1) {
+          // Keep changes
+          configPrintlnProg(ln_keep_changes);
+        } else {
+          // Invalid choice, keep changes by default
+          configPrintlnProg(ln_keep_changes);
+        }
+      } else {
+        configPrintlnProg(ln_invalid);
+        configPrintln(" (expected picoseconds, e.g., 1e8 for 100 us)");
+      }
+      break;
+    }
+    case '3': {
+      // H3 - Propagation Delay A/B (picoseconds, accepts scientific notation like 1e6,2e6)
+      char* input = getInputOrPrompt(args, prompt_prop, sharedBuffer, sizeof(sharedBuffer));
+      if (!input) return false;
+      
+      int64_t psA, psB;
+      if (parseScientificNotationPair(input, &psA, &psB) && psA >= 0 && psA <= 1000000000000LL && psB >= 0 && psB <= 1000000000000LL) {
+        int64_t oldA = config.PROP_DELAY[0], oldB = config.PROP_DELAY[1];
+        config_changed = 1;
+        handlePairConfirmation(oldA, oldB, psA, psB, &config.PROP_DELAY[0], &config.PROP_DELAY[1], "PropDelay");
+      } else {
+        configPrintlnProg(ln_invalid);
+        configPrintln(" (expected ps values like 40/40 or 1e6/2e6)");
+      }
+      break;
+    }
+    case '4': {
+      // H4 - Time Dilation A/B (picoseconds, accepts scientific notation like 1e6,2e6)
+      char* input = getInputOrPrompt(args, prompt_dilation, sharedBuffer, sizeof(sharedBuffer));
+      if (!input) return false;
+      
+      int64_t psA, psB;
+      if (parseScientificNotationPair(input, &psA, &psB) && psA >= 0 && psA <= 1000000000000LL && psB >= 0 && psB <= 1000000000000LL) {
+        int64_t oldA = config.TIME_DILATION[0], oldB = config.TIME_DILATION[1];
+        config_changed = 1;
+        handlePairConfirmation(oldA, oldB, psA, psB, &config.TIME_DILATION[0], &config.TIME_DILATION[1], "Time Dilation");
+      } else {
+        configPrintlnProg(ln_invalid);
+        configPrintln(" (expected ps values like 40/40 or 1e6/2e6)");
+      }
+      break;
+    }
+    case '5': {
+      // H5 - Fixed Time2 A/B (picoseconds, accepts scientific notation like 1e6,2e6)
+      char* input = getInputOrPrompt(args, prompt_fixed, sharedBuffer, sizeof(sharedBuffer));
+      if (!input) return false;
+      
+      int64_t psA, psB;
+      if (parseScientificNotationPair(input, &psA, &psB) && psA >= 0 && psA <= 1000000000000LL && psB >= 0 && psB <= 1000000000000LL) {
+        int64_t oldA = config.FIXED_TIME2[0], oldB = config.FIXED_TIME2[1];
+        config_changed = 1;
+        handlePairConfirmation(oldA, oldB, psA, psB, &config.FIXED_TIME2[0], &config.FIXED_TIME2[1], "fixedTime2");
+      } else {
+        configPrintlnProg(ln_invalid);
+        configPrintln(" (expected ps values like 40/40 or 1e6/2e6)");
+      }
+      break;
+    }
+    case '6': {
+      // H6 - FUDGE0 A/B (picoseconds, accepts scientific notation like 1e6,2e6)
+      char* input = getInputOrPrompt(args, prompt_fudge, sharedBuffer, sizeof(sharedBuffer));
+      if (!input) return false;
+      
+      int64_t psA, psB;
+      if (parseScientificNotationPair(input, &psA, &psB) && psA >= 0 && psA <= 1000000000000LL && psB >= 0 && psB <= 1000000000000LL) {
+        int64_t oldA = config.FUDGE0[0], oldB = config.FUDGE0[1];
+        config_changed = 1;
+        handlePairConfirmation(oldA, oldB, psA, psB, &config.FUDGE0[0], &config.FUDGE0[1], "FUDGE0");
+      } else {
+        configPrintlnProg(ln_invalid);
+        configPrintln(" (expected ps values like 40/40 or 1e6/2e6)");
+      }
+      break;
+    }
+    default:
+      configPrintlnProg(ln_invalid);
+      configPrintln(" Advanced Choice");
+      return false;
+  }
+  
+  return true;
+}
+
+// ============================================================================
+// COMMAND PROCESSING FUNCTIONS
+// ============================================================================
+
+// Process wrap command
+bool process_wrap_command(char cmd, const char* args, bool interactive) {
+  char* input = getInputOrPrompt(args, prompt_wrap, sharedBuffer, sizeof(sharedBuffer));
+  if (!input) return true;
+  
+  int64_t wrap;
+  if (parseInt64Simple(input, &wrap) && wrap >= 0 && wrap <= 10) {
+    int16_t old = config.WRAP;
+    config.WRAP = (int16_t)wrap;
+    config_changed = 1;
+    sprintf(sharedBuffer, "OK -- Wrap Digits %d -> %d", old, config.WRAP);
+    if (!handleConfirmation(sharedBuffer, interactive)) {
+      config.WRAP = old;
+      config_changed = 0;
+    }
+  } else {
+    configPrintlnProg(ln_invalid);
+    configPrintln("");
+  }
+  return true;
+}
+
+// Process places command
+bool process_places_command(char cmd, const char* args, bool interactive) {
+  char* input = getInputOrPrompt(args, prompt_places, sharedBuffer, sizeof(sharedBuffer));
+  if (!input) return true;
+  
+  int64_t places;
+  if (parseInt64Simple(input, &places) && places >= 0 && places <= 12) {
+    int16_t old = config.PLACES;
+    config.PLACES = (int16_t)places;
+    config_changed = 1;
+    sprintf(sharedBuffer, "OK -- Decimal Places %d -> %d", old, config.PLACES);
+    if (!handleConfirmation(sharedBuffer, interactive)) {
+      config.PLACES = old;
+      config_changed = 0;
+    }
+  } else {
+    configPrintlnProg(ln_invalid);
+    configPrintln("");
+  }
+  return true;
+}
+
+// Process edge command
+bool process_edge_command(char cmd, const char* args, bool interactive) {
+  char* input = getInputOrPrompt(args, prompt_edge, sharedBuffer, sizeof(sharedBuffer));
+  if (!input) return true;
+  
+  bool set0, set1;
+  char v0, v1;
+  if (parseCharPair(input, &set0, &v0, &set1, &v1)) {
+    v0 = toupper(v0);
+    v1 = toupper(v1);
+    if ((v0 == 'R' || v0 == 'F') && (v1 == 'R' || v1 == 'F')) {
+      char old0 = config.START_EDGE[0], old1 = config.START_EDGE[1];
+      if (set0) config.START_EDGE[0] = v0;
+      if (set1) config.START_EDGE[1] = v1;
+      config_changed = 1;
+      sprintf(sharedBuffer, "OK -- Edges %c/%c -> %c/%c", old0, old1, config.START_EDGE[0], config.START_EDGE[1]);
+      if (!handleConfirmation(sharedBuffer, interactive)) {
+        config.START_EDGE[0] = old0;
+        config.START_EDGE[1] = old1;
+        config_changed = 0;
+      }
+    } else {
+      configPrintlnProg(ln_invalid);
+      configPrintln("");
+    }
+  } else {
+    configPrintlnProg(ln_invalid);
+    configPrintln("");
+  }
+  return true;
+}
+
+// Process sync command
+bool process_sync_command(char cmd, const char* args, bool interactive) {
+  char* input = getInputOrPrompt(args, prompt_sync, sharedBuffer, sizeof(sharedBuffer));
+  if (!input) return true;
+  
+  char c = toupper(input[0]);
+  if (c == 'P' || c == 'S') {
+    char old = config.SYNC_MODE;
+    config.SYNC_MODE = c;
+    config_changed = 1;
+    sprintf(sharedBuffer, "OK -- Sync Mode %c -> %c", old, c);
+    if (!handleConfirmation(sharedBuffer, interactive)) {
+      config.SYNC_MODE = old;
+      config_changed = 0;
+    }
+  } else {
+    configPrintlnProg(ln_invalid);
+    configPrintln("");
+  }
+  return true;
+}
+
+// Process names command
+bool process_names_command(char cmd, const char* args, bool interactive) {
+  char* input = getInputOrPrompt(args, prompt_names, sharedBuffer, sizeof(sharedBuffer));
+  if (!input) return true;
+  
+  bool set0, set1;
+  char v0, v1;
+  if (parseCharPair(input, &set0, &v0, &set1, &v1)) {
+    char old0 = config.NAME[0], old1 = config.NAME[1];
+    if (set0) config.NAME[0] = v0;
+    if (set1) config.NAME[1] = v1;
+    config_changed = 1;
+    sprintf(sharedBuffer, "OK -- Names %c/%c -> %c/%c", old0, old1, config.NAME[0], config.NAME[1]);
+    if (!handleConfirmation(sharedBuffer, interactive)) {
+      config.NAME[0] = old0;
+      config.NAME[1] = old1;
+      config_changed = 0;
+    }
+  } else {
+    configPrintlnProg(ln_invalid);
+    configPrintln("");
+  }
+  return true;
+}
+
+// Process poll command
+bool process_poll_command(char cmd, const char* args, bool interactive) {
+  char* input = getInputOrPrompt(args, prompt_poll, sharedBuffer, sizeof(sharedBuffer));
+  if (!input) return true;
+  
+  char old = config.POLL_CHAR;
+  config.POLL_CHAR = (input[0] == '\0' || input[0] == ' ') ? 0x00 : input[0];
+  config_changed = 1;
+  strcpy(sharedBuffer, "OK -- Poll Character ");
+  if (old) {
+    sharedBuffer[strlen(sharedBuffer)] = old;
+    sharedBuffer[strlen(sharedBuffer)+1] = '\0';
+  } else {
+    strcat(sharedBuffer, "none");
+  }
+  strcat(sharedBuffer, " -> ");
+  if (config.POLL_CHAR) {
+    sharedBuffer[strlen(sharedBuffer)] = config.POLL_CHAR;
+    sharedBuffer[strlen(sharedBuffer)+1] = '\0';
+  } else {
+    strcat(sharedBuffer, "none");
+  }
+  if (!handleConfirmation(sharedBuffer, interactive)) {
+    config.POLL_CHAR = old;
+    config_changed = 0;
+  }
+  return true;
+}
+
+// Process menu command
+bool process_menu_command() {
+  show_main_menu();
+  return true;
+}
+
+// Process info command
+bool process_info_command() {
+  configPrintln("");
+  // print_config(config); // Call existing function
+  configPrintln("");
+  return true;
+}
+
+// Process write command
+bool process_write_command() {
+  eeprom_write_config();
+  config_changed = 0;
+  configPrintln("Changes written to EEPROM (will persist across restarts)");
+  return true;
+}
+
+// Process EEPROM clear command
+bool process_eeprom_clear_command() {
+  configPrintlnProg(ln_eeprom_warning);
+  configPrintln("");
+  configPrintlnProg(ln_eeprom_confirm);
+  readLine(sharedBuffer, sizeof(sharedBuffer));
+  char *input = trimInPlace(sharedBuffer);
+  if (strcmp(input, "YES") == 0) {
+    configPrintlnProg(ln_eeprom_clearing);
+    eeprom_clear();
+    configPrintlnProg(ln_eeprom_cleared);
+    return false; // Exit config system
+  } else {
+    configPrintlnProg(ln_eeprom_cancelled);
+  }
+  return true;
+}
+
+// Process exit command
+bool process_exit_command(char cmd) {
+  switch (cmd) {
+    case '1':
+      configPrintln("Discarded changes.");
+      config_changed = 0;
+      return false; // Exit config system
+    case '2':
+      configPrintln("Applying changes and restarting...");
+      return false; // Exit config system with restart
+    case '3':
+      configPrintln("Applying changes and resuming operation...");
+      config_changed = 0;
+      return false; // Exit config system with resume
+    case '4':
+      config = defaultConfig();
+      eeprom_write_config();
+      configPrintln("Defaults written. Restarting...");
+      return false; // Exit config system with restart
+    default:
+      return true;
+  }
+}
+
+// ============================================================================
+// MAIN COMMAND PROCESSOR USING COMMAND TABLE
+// ============================================================================
+
+// Main command processor using the command table
+bool process_config_command(const char* cmdLine, bool interactive) {
+  char *line = trimInPlace((char*)cmdLine);
   if (strlen(line) == 0) return true; // Empty command, continue
   
   char cmd = toupper(line[0]);
-  // Check for direct parameters (no spaces required between command and parameters)
-  char *args = line + 1;
-  // Skip leading spaces if present, but also handle no-space case
-  while (*args == ' ') args++;
+  static char args_buffer[64];  // Static buffer for arguments
+  char *args;
   
-  // Direct submenu commands (A1-A6, G1-G6)
+  
+  if (strlen(line) <= 1) {
+    // No arguments - create empty string
+    args_buffer[0] = '\0';
+    args = args_buffer;
+  } else {
+    char *src = line + 1;
+    while (*src == ' ') src++; // Skip leading spaces
+
+    // Copy arguments to buffer and null-terminate
+    int i = 0;
+    while (*src && *src != ' ' && i < 63) {
+      args_buffer[i++] = *src++;
+    }
+    args_buffer[i] = '\0';
+    args = args_buffer;
+  }
+  
+  // Handle direct submenu commands (A1-A7, I1-I6, H1-H6)
   if (cmd == 'A' && strlen(line) >= 2 && isdigit(line[1])) {
-    // Mode submenu commands
-    char choice = line[1];
-    MeasureMode old = pConfigInfo->MODE;
-    if (choice == '1') pConfigInfo->MODE = Timestamp;
-    else if (choice == '2') pConfigInfo->MODE = Binary;
-    else if (choice == '3') pConfigInfo->MODE = Interval;
-    else if (choice == '4') pConfigInfo->MODE = Period;
-    else if (choice == '5') pConfigInfo->MODE = timeLab;
-    else if (choice == '6') pConfigInfo->MODE = Debug;
-    else if (choice == '7') pConfigInfo->MODE = Null;
-    else {
-      configPrint("Invalid mode choice\r\n");
-      return true;
-    }
-    MARK_CONFIG_CHANGED();
-    char msg[64]; 
-    const char* modeName = "Unknown";
-    switch (pConfigInfo->MODE) {
-      case Timestamp: modeName = "Timestamp"; break;
-      case Interval: modeName = "Interval"; break;
-      case Period: modeName = "Period"; break;
-      case timeLab: modeName = "TimeLab"; break;
-      case Debug: modeName = "Debug"; break;
-      case Binary: modeName = "Binary Timestamp"; break;
-      case Null: modeName = "Null"; break;
-    }
-    sprintf(msg, "OK -- Mode set to %s\r\n", modeName); configPrint(msg);
+    return process_mode_command(line[1], args, interactive);
+  }
+  
+  if (cmd == 'I' && strlen(line) >= 2 && isdigit(line[1])) {
+    return process_baud_command(line[1], args, interactive);
+  }
+  
+  if (cmd == 'H' && strlen(line) >= 2 && isdigit(line[1])) {
+    return process_advanced_command(line[1], args, interactive);
+  }
+  
+  // Look up command in table
+  const CommandEntry* entry = find_command(cmd);
+  if (!entry) {
+    char line[64];
+    copyProgStrToBuffer(ln_unknown, line, sizeof(line));
+    configPrintln(line);
     return true;
   }
   
-  if (cmd == 'G' && strlen(line) >= 2 && isdigit(line[1])) {
-    // Advanced submenu commands
-    char choice = line[1];
-    if (choice == '1') {
-      // G1) Clock speed MHz
-      char buf[96];
-      char *input = getInputOrPrompt(args, "Clock MHz: ", buf, sizeof(buf));
-      int64_t hz; 
-      if (parseDecimalScaled(input, 1000000LL, &hz) && hz > 0) { 
-        int64_t old = pConfigInfo->CLOCK_HZ; 
-        pConfigInfo->CLOCK_HZ = hz; 
-        MARK_CONFIG_CHANGED();
-        char m[64]; 
-        sprintf(m, "OK -- Clock %ld.%06ld -> %ld.%06ld\r\n", 
-                (int32_t)(old/1000000LL), (int32_t)(old%1000000LL),
-                (int32_t)(hz/1000000LL), (int32_t)(hz%1000000LL)); 
-        configPrint(m); 
-      } else {
-        configPrint("Invalid\r\n");
-      }
-      Serial.flush();
-    }
-    else if (choice == '2') {
-      // G2) Coarse tick us
-      char buf[96];
-      char *input = getInputOrPrompt(args, "Coarse Tick (us): ", buf, sizeof(buf));
-      int64_t ps; 
-      if (parseDecimalScaled(input, 1000000LL, &ps) && ps > 0) { 
-        int64_t old = pConfigInfo->PICTICK_PS; 
-        pConfigInfo->PICTICK_PS = ps; 
-        MARK_CONFIG_CHANGED();
-        char m[64]; 
-        sprintf(m, "OK -- Coarse Tick %ld.%06ld -> %ld.%06ld\r\n", 
-                (int32_t)(old/1000000LL), (int32_t)(old%1000000LL),
-                (int32_t)(ps/1000000LL), (int32_t)(ps%1000000LL)); 
-        configPrint(m); 
-      } else {
-        configPrint("Invalid\r\n");
-      }
-      Serial.flush();
-    }
-    else if (choice == '3') {
-      // G3) Prop delays
-      char buf[96];
-      char *input = getInputOrPrompt(args, "Enter Pair A/B: ", buf, sizeof(buf));
-      bool s0=false, s1=false; int64_t v0=0, v1=0; 
-      if (!parseInt64Pair(input, &s0, &v0, &s1, &v1)) { 
-        configPrint("Invalid\r\n"); 
-      } else { 
-        int32_t o0=pConfigInfo->PROP_DELAY[0], o1=pConfigInfo->PROP_DELAY[1]; 
-        if (s0) pConfigInfo->PROP_DELAY[0]=v0; 
-        if (s1) pConfigInfo->PROP_DELAY[1]=v1; 
-        MARK_CONFIG_CHANGED();
-        char m[80]; 
-        sprintf(m, "OK -- PropDelay %ld/%ld -> %ld/%ld\r\n", 
-                (long)o0, (long)o1, (long)pConfigInfo->PROP_DELAY[0], (long)pConfigInfo->PROP_DELAY[1]); 
-        configPrint(m); 
-      }
-      Serial.flush();
-    }
-    else if (choice == '4') {
-      // G4) Time dilation
-      char buf[96];
-      char *input = getInputOrPrompt(args, "Enter Pair A/B: ", buf, sizeof(buf));
-      bool s0=false, s1=false; int64_t v0=0, v1=0; 
-      if (!parseInt64Pair(input, &s0, &v0, &s1, &v1)) { 
-        configPrint("Invalid\r\n"); 
-      } else { 
-        int32_t o0=pConfigInfo->TIME_DILATION[0], o1=pConfigInfo->TIME_DILATION[1]; 
-        if (s0) pConfigInfo->TIME_DILATION[0]=v0; 
-        if (s1) pConfigInfo->TIME_DILATION[1]=v1; 
-        MARK_CONFIG_CHANGED();
-        char m[80]; 
-        sprintf(m, "OK -- Time Dilation %ld/%ld -> %ld/%ld\r\n", 
-                (long)o0, (long)o1, (long)pConfigInfo->TIME_DILATION[0], (long)pConfigInfo->TIME_DILATION[1]); 
-        configPrint(m); 
-      }
-      Serial.flush();
-    }
-    else if (choice == '5') {
-      // G5) fixedTime2
-      char buf[96];
-      char *input = getInputOrPrompt(args, "Enter Pair A/B: ", buf, sizeof(buf));
-      bool s0=false, s1=false; int64_t v0=0, v1=0; 
-      if (!parseInt64Pair(input, &s0, &v0, &s1, &v1)) { 
-        configPrint("Invalid\r\n"); 
-      } else { 
-        int32_t o0=pConfigInfo->FIXED_TIME2[0], o1=pConfigInfo->FIXED_TIME2[1]; 
-        if (s0) pConfigInfo->FIXED_TIME2[0]=v0; 
-        if (s1) pConfigInfo->FIXED_TIME2[1]=v1; 
-        MARK_CONFIG_CHANGED();
-        char m[80]; 
-        sprintf(m, "OK -- fixedTime2 %ld/%ld -> %ld/%ld\r\n", 
-                (long)o0, (long)o1, (long)pConfigInfo->FIXED_TIME2[0], (long)pConfigInfo->FIXED_TIME2[1]); 
-        configPrint(m); 
-      }
-      Serial.flush();
-    }
-    else if (choice == '6') {
-      // G6) FUDGE0
-      char buf[96];
-      char *input = getInputOrPrompt(args, "Enter Pair A/B: ", buf, sizeof(buf));
-      bool s0=false, s1=false; int64_t v0=0, v1=0; 
-      if (!parseInt64Pair(input, &s0, &v0, &s1, &v1)) { 
-        configPrint("Invalid\r\n"); 
-      } else { 
-        int32_t o0=pConfigInfo->FUDGE0[0], o1=pConfigInfo->FUDGE0[1]; 
-        if (s0) pConfigInfo->FUDGE0[0]=v0; 
-        if (s1) pConfigInfo->FUDGE0[1]=v1; 
-        MARK_CONFIG_CHANGED();
-        char m[80]; 
-        sprintf(m, "OK -- FUDGE0 %ld/%ld -> %ld/%ld\r\n", 
-                (long)o0, (long)o1, (long)pConfigInfo->FUDGE0[0], (long)pConfigInfo->FUDGE0[1]); 
-        configPrint(m); 
-      }
-      Serial.flush();
-    }
-    else {
-      configPrint("Invalid Advanced Choice\r\n");
-    }
-    return true;
+  // Read fields directly from PROGMEM
+  CommandType type = (CommandType)pgm_read_byte(&entry->type);
+  bool requires_submenu = pgm_read_byte(&entry->requires_submenu);
+  
+  // Execute command based on type
+  if (type == CMD_MAIN_MENU) {
+    bool (*handler_func)(char, const char*, bool) = (bool (*)(char, const char*, bool))pgm_read_word(&entry->handler_func);
+    return handler_func(cmd, args, interactive);
   }
-
-  // Main menu commands
-  if (cmd == 'A') {
-    // Interactive Mode submenu
-    for (;;) {
-      configPrint("\r\n");
-      copyProgStrToBuffer(str_mode_menu, sharedBuffer, sizeof(sharedBuffer));
-      strcat(sharedBuffer, "\r\n");
-      configPrint(sharedBuffer);
-      
-      copyProgStrToBuffer(str_mode1, sharedBuffer, sizeof(sharedBuffer));
-      strcat(sharedBuffer, "\r\n");
-      configPrint(sharedBuffer);
-      copyProgStrToBuffer(str_mode2, sharedBuffer, sizeof(sharedBuffer));
-      strcat(sharedBuffer, "\r\n");
-      configPrint(sharedBuffer);
-      copyProgStrToBuffer(str_mode3, sharedBuffer, sizeof(sharedBuffer));
-      strcat(sharedBuffer, "\r\n");
-      configPrint(sharedBuffer);
-      copyProgStrToBuffer(str_mode4, sharedBuffer, sizeof(sharedBuffer));
-      strcat(sharedBuffer, "\r\n");
-      configPrint(sharedBuffer);
-      copyProgStrToBuffer(str_mode5, sharedBuffer, sizeof(sharedBuffer));
-      strcat(sharedBuffer, "\r\n");
-      configPrint(sharedBuffer);
-      copyProgStrToBuffer(str_mode6, sharedBuffer, sizeof(sharedBuffer));
-      strcat(sharedBuffer, "\r\n");
-      configPrint(sharedBuffer);
-      copyProgStrToBuffer(str_mode7, sharedBuffer, sizeof(sharedBuffer));
-      strcat(sharedBuffer, "\r\n");
-      configPrint(sharedBuffer);
-      
-      configPrint("\r\n");
-      copyProgStrToBuffer(str_current_mode, sharedBuffer, sizeof(sharedBuffer));
-      switch (pConfigInfo->MODE) {
-        case Timestamp: strcat(sharedBuffer, "Timestamp"); break;
-        case Binary:    strcat(sharedBuffer, "Binary Timestamp"); break;
-        case Period:    strcat(sharedBuffer, "Period"); break;
-        case Interval:  strcat(sharedBuffer, "Time Interval A->B"); break;
-        case timeLab:   strcat(sharedBuffer, "TimeLab 3-Cornered Hat"); break;
-        case Debug:     strcat(sharedBuffer, "Debug"); break;
-        case Null:      strcat(sharedBuffer, "Null Output"); break;
-      }
-      strcat(sharedBuffer, "\r\n");
-      configPrint(sharedBuffer);
-      
-      configPrint("\r\n");
-      copyProgStrToBuffer(str_discard, sharedBuffer, sizeof(sharedBuffer));
-      strcat(sharedBuffer, "\r\n");
-      configPrint(sharedBuffer);
-      copyProgStrToBuffer(str_keep, sharedBuffer, sizeof(sharedBuffer));
-      strcat(sharedBuffer, "\r\n");
-      configPrint(sharedBuffer);
+  else if (type == CMD_SUBMENU) {
+    // Read function pointer from PROGMEM
+    void (*submenu_func)() = (void (*)())pgm_read_word(&entry->submenu_func);
+    if (submenu_func) {
+      submenu_func();
       configPrint("> ");
-      size_t mn = readLine(sharedBuffer, sizeof(sharedBuffer)); 
-      char *mline = trimInPlace(sharedBuffer);
-      if (mn) {
-        if (mline[0] == '1' || mline[0] == '2') {
-          // Return options
-          if (mline[0] == '1') {
-            strcpy(sharedBuffer, "Mode changes discarded.\r\n");
-            configPrint(sharedBuffer);
-          } else {
-            strcpy(sharedBuffer, "Mode changes kept.\r\n");
-            configPrint(sharedBuffer);
-          }
-          *showMenu = true;
-          break; // Exit the submenu loop
-        } else {
-          // Mode setting options
-          char m = toupper(mline[0]); MeasureMode old = pConfigInfo->MODE;
-          if (m == 'A' && mline[1] == '1') pConfigInfo->MODE = Timestamp;
-          else if (m == 'A' && mline[1] == '2') pConfigInfo->MODE = Binary;
-          else if (m == 'A' && mline[1] == '3') pConfigInfo->MODE = Interval;
-          else if (m == 'A' && mline[1] == '4') pConfigInfo->MODE = Period;
-          else if (m == 'A' && mline[1] == '5') pConfigInfo->MODE = timeLab;
-          else if (m == 'A' && mline[1] == '6') pConfigInfo->MODE = Debug;
-          else if (m == 'A' && mline[1] == '7') pConfigInfo->MODE = Null;
-          
-          // Show mode change confirmation and mark config as changed
-          if (old != pConfigInfo->MODE) {
-            strcpy(sharedBuffer, "Mode was ");
-            switch (old) {
-              case Timestamp: strcat(sharedBuffer, "Timestamp"); break;
-              case Binary: strcat(sharedBuffer, "Binary Timestamp"); break;
-              case Interval: strcat(sharedBuffer, "Time Interval A->B"); break;
-              case Period: strcat(sharedBuffer, "Period"); break;
-              case timeLab: strcat(sharedBuffer, "TimeLab 3-Cornered Hat"); break;
-              case Debug: strcat(sharedBuffer, "Debug"); break;
-              case Null: strcat(sharedBuffer, "Null Output"); break;
-            }
-            strcat(sharedBuffer, "; now ");
-            switch (pConfigInfo->MODE) {
-              case Timestamp: strcat(sharedBuffer, "Timestamp"); break;
-              case Binary: strcat(sharedBuffer, "Binary Timestamp"); break;
-              case Interval: strcat(sharedBuffer, "Time Interval A->B"); break;
-              case Period: strcat(sharedBuffer, "Period"); break;
-              case timeLab: strcat(sharedBuffer, "TimeLab 3-Cornered Hat"); break;
-              case Debug: strcat(sharedBuffer, "Debug"); break;
-              case Null: strcat(sharedBuffer, "Null Output"); break;
-            }
-            strcat(sharedBuffer, "\r\n");
-            configPrint(sharedBuffer);
-            MARK_CONFIG_CHANGED();
-          }
+      readLine(sharedBuffer, sizeof(sharedBuffer));
+      char *input = trimInPlace(sharedBuffer);
+      if (strlen(input) > 0) {
+        // Handle submenu selection (1-7 for mode, 1-6 for baud/advanced)
+        if (isdigit(input[0])) {
+          bool (*handler_func)(char, const char*, bool) = (bool (*)(char, const char*, bool))pgm_read_word(&entry->handler_func);
+          return handler_func(input[0], input + 1, interactive);
+        }
+        // Handle direct submenu commands (A1-A7, H1-H6, I1-I6)
+        else if (strlen(input) >= 2 && toupper(input[0]) == cmd && isdigit(input[1])) {
+          bool (*handler_func)(char, const char*, bool) = (bool (*)(char, const char*, bool))pgm_read_word(&entry->handler_func);
+          return handler_func(input[1], input + 2, interactive);
         }
       }
     }
     return true;
   }
+  else if (type == CMD_DIRECT) {
+    bool (*handler_func)(char, const char*, bool) = (bool (*)(char, const char*, bool))pgm_read_word(&entry->handler_func);
+    return handler_func(cmd, args, interactive);
+  }
+  else if (type == CMD_EXIT) {
+    bool (*handler_func)(char, const char*, bool) = (bool (*)(char, const char*, bool))pgm_read_word(&entry->handler_func);
+    return handler_func(cmd, args, interactive);
+  }
+  else {
+    char line[64];
+    copyProgStrToBuffer(ln_unknown, line, sizeof(line));
+    configPrintln(line);
+    return true;
+  }
+}
 
-  if (cmd == 'M') { *showMenu = true; configPrint("\r\n"); return true; }
-
-  // B) Wrap digits
-  if (cmd == 'B') {
-    char *input = getInputOrPrompt(args, "Wrap Digits (0..10): ", sharedBuffer, sizeof(sharedBuffer));
-    if (!input) {
-      *showMenu = true; // Return to main menu
-      return true;
-    }
-    int64_t wrap; 
-    if (parseInt64Simple(input, &wrap) && wrap >= 0 && wrap <= 10) { 
-      int16_t old = pConfigInfo->WRAP; 
-      pConfigInfo->WRAP = (int16_t)wrap; 
-      MARK_CONFIG_CHANGED();
-      
-      // Show confirmation and get user choice
-      strcpy(sharedBuffer, "OK -- Wrap Digits ");
-      sprintf(sharedBuffer + strlen(sharedBuffer), "%d", old);
-      strcat(sharedBuffer, " -> ");
-      sprintf(sharedBuffer + strlen(sharedBuffer), "%d", pConfigInfo->WRAP);
-      
-      if (!handleConfirmation(sharedBuffer, str_save_eeprom, false, interactive)) {
-        // Discard changes
-        pConfigInfo->WRAP = old;
-        config_changed = 0; // Clear the changed flag
-        *showMenu = true; // Show menu after discard
-      }
-    } else {
-      configPrint("Invalid\r\n");
-    }
-    Serial.flush();
-    return true;
-  }
+// Main configuration menu system entry point
+void show_config_menu() {
+  bool showMenu = true;
+  bool interactive = true;
   
-  // C) Output decimal places
-  if (cmd == 'C') {
-    char *input = getInputOrPrompt(args, "Output Decimal Places (0..12): ", sharedBuffer, sizeof(sharedBuffer));
-    if (!input) {
-      *showMenu = true; // Return to main menu
-      return true;
-    }
-    int64_t places; 
-    if (parseInt64Simple(input, &places) && places >= 0 && places <= 12) { 
-      int16_t old = pConfigInfo->PLACES; 
-      pConfigInfo->PLACES = (int16_t)places; 
-      MARK_CONFIG_CHANGED();
-      
-      // Show confirmation and get user choice
-      strcpy(sharedBuffer, "OK -- Decimal Places ");
-      sprintf(sharedBuffer + strlen(sharedBuffer), "%d", old);
-      strcat(sharedBuffer, " -> ");
-      sprintf(sharedBuffer + strlen(sharedBuffer), "%d", pConfigInfo->PLACES);
-      
-      if (!handleConfirmation(sharedBuffer, str_save_eeprom, false, interactive)) {
-        // Discard changes
-        pConfigInfo->PLACES = old;
-        config_changed = 0; // Clear the changed flag
-        *showMenu = true; // Show menu after discard
-      }
-    } else {
-      configPrint("Invalid\r\n");
-    }
-    Serial.flush();
-    return true;
-  }
+  // Check if we're in batch mode (semicolons in input)
+  // This would be determined by the caller
   
-  // D) Trigger edges
-  if (cmd == 'D') {
-    char *input = getInputOrPrompt(args, "Enter Edges A/B (R or F): ", sharedBuffer, sizeof(sharedBuffer));
-    if (!input) {
-      *showMenu = true; // Return to main menu
-      return true;
-    }
-    if (input[0] && input[1] == '/' && input[2]) {
-      char e0 = toupper(input[0]), e1 = toupper(input[2]);
-      if ((e0 == 'R' || e0 == 'F') && (e1 == 'R' || e1 == 'F')) {
-        char o0 = pConfigInfo->START_EDGE[0], o1 = pConfigInfo->START_EDGE[1];
-        pConfigInfo->START_EDGE[0] = e0; 
-        pConfigInfo->START_EDGE[1] = e1;
-        MARK_CONFIG_CHANGED();
-        
-        // Show confirmation and get user choice
-        strcpy(sharedBuffer, "OK -- Edges ");
-        sharedBuffer[strlen(sharedBuffer)] = o0;
-        sharedBuffer[strlen(sharedBuffer)+1] = '/';
-        sharedBuffer[strlen(sharedBuffer)+2] = o1;
-        sharedBuffer[strlen(sharedBuffer)+3] = '\0';
-        strcat(sharedBuffer, " -> ");
-        sharedBuffer[strlen(sharedBuffer)] = e0;
-        sharedBuffer[strlen(sharedBuffer)+1] = '/';
-        sharedBuffer[strlen(sharedBuffer)+2] = e1;
-        sharedBuffer[strlen(sharedBuffer)+3] = '\0';
-        
-        if (!handleConfirmation(sharedBuffer, str_save_eeprom, false, interactive)) {
-          // Discard changes
-          pConfigInfo->START_EDGE[0] = o0;
-          pConfigInfo->START_EDGE[1] = o1;
-          config_changed = 0; // Clear the changed flag
-          *showMenu = true; // Show menu after discard
-        }
-      } else {
-        configPrint("Invalid\r\n");
-      }
-    } else {
-      configPrint("Invalid\r\n");
-    }
-    Serial.flush();
-    return true;
-  }
-  
-  // E) Sync mode
-  if (cmd == 'E') {
-    char *input = getInputOrPrompt(args, "Enter P or S: ", sharedBuffer, sizeof(sharedBuffer));
-    if (!input) {
-      *showMenu = true; // Return to main menu
-      return true;
-    }
-    char c = toupper(input[0]); 
-    if (c == 'P' || c == 'S') { 
-      char old = pConfigInfo->SYNC_MODE; 
-      pConfigInfo->SYNC_MODE = c; 
-      MARK_CONFIG_CHANGED();
-      
-      // Show confirmation and get user choice
-      strcpy(sharedBuffer, "OK -- Sync Mode ");
-      sharedBuffer[strlen(sharedBuffer)] = old;
-      sharedBuffer[strlen(sharedBuffer)+1] = '\0';
-      strcat(sharedBuffer, " -> ");
-      sharedBuffer[strlen(sharedBuffer)] = c;
-      sharedBuffer[strlen(sharedBuffer)+1] = '\0';
-      
-      if (!handleConfirmation(sharedBuffer, str_save_eeprom, false, interactive)) {
-        // Discard changes
-        pConfigInfo->SYNC_MODE = old;
-        config_changed = 0; // Clear the changed flag
-        *showMenu = true; // Show menu after discard
-      }
-    } else {
-      configPrint("Invalid\r\n");
-    }
-    Serial.flush();
-    return true;
-  }
-  
-  // F) Channel names (preserve case - no uppercasing)
-  if (cmd == 'F') {
-    char *input = getInputOrPrompt(args, "Enter Names A/B (any two chars): ", sharedBuffer, sizeof(sharedBuffer));
-    if (!input) {
-      *showMenu = true; // Return to main menu
-      return true;
-    }
-    if (input[0] && input[1] == '/' && input[2]) {
-      char o0 = pConfigInfo->NAME[0], o1 = pConfigInfo->NAME[1]; 
-      pConfigInfo->NAME[0] = input[0];  // No toupper() - preserve case
-      pConfigInfo->NAME[1] = input[2];  // No toupper() - preserve case
-      MARK_CONFIG_CHANGED();
-      
-      // Show confirmation and get user choice
-      sprintf(sharedBuffer, "OK -- Names %c/%c -> %c/%c", o0, o1, input[0], input[2]);
-      
-      if (!handleConfirmation(sharedBuffer, str_save_eeprom, true, interactive)) { // preserveCase = true
-        // Discard changes
-        pConfigInfo->NAME[0] = o0;
-        pConfigInfo->NAME[1] = o1;
-        config_changed = 0; // Clear the changed flag
-        *showMenu = true; // Show menu after discard
-      }
-    } else {
-      configPrint("Invalid\r\n");
-    }
-    Serial.flush();
-    return true;
-  }
-
-  // G) Poll char
-  if (cmd == 'G') {
-    char *input = getInputOrPrompt(args, "Enter Poll Character (space to clear): ", sharedBuffer, sizeof(sharedBuffer));
-    if (!input) {
-      *showMenu = true; // Return to main menu
-      return true;
-    }
-    char old = pConfigInfo->POLL_CHAR;
-    pConfigInfo->POLL_CHAR = (input[0] == '\0' || input[0] == ' ') ? 0x00 : input[0];
-    MARK_CONFIG_CHANGED();
-    
-    // Show confirmation and get user choice
-    strcpy(sharedBuffer, "OK -- Poll Character ");
-    if (old) {
-      sharedBuffer[strlen(sharedBuffer)] = old;
-      sharedBuffer[strlen(sharedBuffer)+1] = '\0';
-    } else {
-      strcat(sharedBuffer, "none");
-    }
-    strcat(sharedBuffer, " -> ");
-    if (pConfigInfo->POLL_CHAR) {
-      sharedBuffer[strlen(sharedBuffer)] = pConfigInfo->POLL_CHAR;
-      sharedBuffer[strlen(sharedBuffer)+1] = '\0';
-    } else {
-      strcat(sharedBuffer, "none");
+  while (true) {
+    if (showMenu) {
+      show_main_menu();
+      showMenu = false;
     }
     
-    if (!handleConfirmation(sharedBuffer, str_save_eeprom, false, interactive)) {
-      // Discard changes
-      pConfigInfo->POLL_CHAR = old;
-      config_changed = 0; // Clear the changed flag
-      *showMenu = true; // Show menu after discard
+    configPrint("> ");
+    readLine(sharedBuffer, sizeof(sharedBuffer));
+    char *line = trimInPlace(sharedBuffer);
+    
+    if (strlen(line) == 0) {
+      continue; // Empty input, show menu again
     }
-    Serial.flush();
-    return true;
-  }
-
-  // I) Serial baud rate
-  if (cmd == 'I') {
-    // Interactive baud rate submenu
-    for (;;) {
-      configPrint("\r\n");
-      copyProgStrToBuffer(str_baud_menu, sharedBuffer, sizeof(sharedBuffer));
-      strcat(sharedBuffer, "\r\n");
-      configPrint(sharedBuffer);
+    
+    // Check for batch mode (semicolons)
+    bool has_semicolons = (strchr(line, ';') != NULL);
+    interactive = !has_semicolons;
+    
+    // Process semicolon-separated commands
+    char *cmd_start = line;
+    char *cmd_end;
+    bool should_exit = false;
+    
+    while (cmd_start && *cmd_start && !should_exit) {
+      // Find the next semicolon or end of string
+      cmd_end = strchr(cmd_start, ';');
+      bool had_semicolon = (cmd_end != NULL);
+      if (cmd_end) {
+        *cmd_end = '\0';  // Temporarily null-terminate
+      } else {
+        cmd_end = cmd_start + strlen(cmd_start);  // Point to end of string
+      }
       
-      copyProgStrToBuffer(str_baud1, sharedBuffer, sizeof(sharedBuffer));
-      strcat(sharedBuffer, "\r\n");
-      configPrint(sharedBuffer);
-      copyProgStrToBuffer(str_baud2, sharedBuffer, sizeof(sharedBuffer));
-      strcat(sharedBuffer, "\r\n");
-      configPrint(sharedBuffer);
-      copyProgStrToBuffer(str_baud3, sharedBuffer, sizeof(sharedBuffer));
-      strcat(sharedBuffer, "\r\n");
-      configPrint(sharedBuffer);
-      copyProgStrToBuffer(str_baud4, sharedBuffer, sizeof(sharedBuffer));
-      strcat(sharedBuffer, "\r\n");
-      configPrint(sharedBuffer);
-      copyProgStrToBuffer(str_baud5, sharedBuffer, sizeof(sharedBuffer));
-      strcat(sharedBuffer, "\r\n");
-      configPrint(sharedBuffer);
-      copyProgStrToBuffer(str_baud6, sharedBuffer, sizeof(sharedBuffer));
-      strcat(sharedBuffer, "\r\n");
-      configPrint(sharedBuffer);
-      
-      configPrint("\r\n");
-      copyProgStrToBuffer(str_discard, sharedBuffer, sizeof(sharedBuffer));
-      strcat(sharedBuffer, "\r\n");
-      configPrint(sharedBuffer);
-      copyProgStrToBuffer(str_keep, sharedBuffer, sizeof(sharedBuffer));
-      strcat(sharedBuffer, "\r\n");
-      configPrint(sharedBuffer);
-      configPrint("> ");
-      size_t mn = readLine(sharedBuffer, sizeof(sharedBuffer)); 
-      char *mline = trimInPlace(sharedBuffer);
-      if (mn) {
-        if (mline[0] == '1' || mline[0] == '2') {
-          // Return options
-          if (mline[0] == '1') {
-            strcpy(sharedBuffer, "Baud rate changes discarded.\r\n");
-            configPrint(sharedBuffer);
-          } else {
-            strcpy(sharedBuffer, "Baud rate changes kept.\r\n");
-            configPrint(sharedBuffer);
-          }
-          *showMenu = true;
-          break; // Exit the submenu loop
-        } else {
-          // Baud rate setting options
-          if (strlen(mline) >= 2 && mline[0] == 'I' && mline[1] >= '1' && mline[1] <= '6') {
-            uint32_t old_rate = pConfigInfo->BAUD_RATE;
-            uint32_t new_rate;
-            switch (mline[1]) {
-              case '1': new_rate = 9600; break;
-              case '2': new_rate = 19200; break;
-              case '3': new_rate = 38400; break;
-              case '4': new_rate = 57600; break;
-              case '5': new_rate = 115200; break;
-              case '6': new_rate = 230400; break;
-              default: new_rate = old_rate; break;
-            }
-            
-            // Show baud rate change confirmation and mark config as changed
-            if (old_rate != new_rate) {
-              pConfigInfo->BAUD_RATE = new_rate;
-              strcpy(sharedBuffer, "Baud rate was ");
-              sprintf(sharedBuffer + strlen(sharedBuffer), "%ld", (long)old_rate);
-              strcat(sharedBuffer, "; now ");
-              sprintf(sharedBuffer + strlen(sharedBuffer), "%ld", (long)new_rate);
-              strcat(sharedBuffer, "\r\n");
-              configPrint(sharedBuffer);
-              MARK_CONFIG_CHANGED();
-            }
-          } else {
-            configPrint("Invalid selection\r\n");
-          }
+      // Process this command
+      char *cmd_line = trimInPlace(cmd_start);
+      if (strlen(cmd_line) > 0) {
+        if (!process_config_command(cmd_line, interactive)) {
+          should_exit = true;
+          break;
         }
       }
-    }
-    return true;
-  }
-
-  // J) Show startup info
-  if (cmd == 'J') {
-    configPrint("\r\n");
-    print_config(*pConfigInfo);
-    configPrint("\r\n");
-    return true;
-  }
-
-  // W) Write changes to EEPROM (without restart)
-  if (cmd == 'W') {
-    eeprom_write_config();
-    config_changed = 0; // Clear the changed flag since changes are now persistent
-    configPrint("Changes written to EEPROM (will persist across restarts)\r\n");
-    return true;
-  }
-
-  // H) Advanced submenu
-  if (cmd == 'H') {
-    // Interactive Advanced submenu
-    for (;;) {
-      configPrint("\r\n");
-      copyProgStrToBuffer(str_advanced_menu, sharedBuffer, sizeof(sharedBuffer));
-      strcat(sharedBuffer, "\r\n");
-      configPrint(sharedBuffer);
       
-      // H1 - Clock Speed MHz
-      {
-        copyProgStrToBuffer(str_h1_clock, sharedBuffer, sizeof(sharedBuffer));
-        int64_t MHz = pConfigInfo->CLOCK_HZ / 1000000LL;
-        int64_t Hz = MHz * 1000000LL;
-        int64_t fract = pConfigInfo->CLOCK_HZ - Hz;
-        sprintf(sharedBuffer + strlen(sharedBuffer), "%ld.%06ld", (int32_t)MHz, (int32_t)fract);
-        strcat(sharedBuffer, ")\r\n");
-        configPrint(sharedBuffer);
+      // Restore semicolon if we had one
+      if (had_semicolon) {
+        *cmd_end = ';';
       }
       
-      // H2 - Coarse Tick us
-      {
-        copyProgStrToBuffer(str_h2_coarse, sharedBuffer, sizeof(sharedBuffer));
-        int64_t us = pConfigInfo->PICTICK_PS / 1000000LL;
-        int64_t ps = us * 1000000LL;
-        int64_t fract = pConfigInfo->PICTICK_PS - ps;
-        sprintf(sharedBuffer + strlen(sharedBuffer), "%ld.%06ld", (int32_t)us, (int32_t)fract);
-        strcat(sharedBuffer, ")\r\n");
-        configPrint(sharedBuffer);
-      }
-      
-      // H3 - Propagation Delay ps A/B
-      {
-        copyProgStrToBuffer(str_h3_prop, sharedBuffer, sizeof(sharedBuffer));
-        sprintf(sharedBuffer + strlen(sharedBuffer), "%ld/%ld", (long)pConfigInfo->PROP_DELAY[0], (long)pConfigInfo->PROP_DELAY[1]);
-        strcat(sharedBuffer, ")\r\n");
-        configPrint(sharedBuffer);
-      }
-      
-      // H4 - Time Dilation A/B
-      {
-        copyProgStrToBuffer(str_h4_dilation, sharedBuffer, sizeof(sharedBuffer));
-        sprintf(sharedBuffer + strlen(sharedBuffer), "%ld/%ld", (long)pConfigInfo->TIME_DILATION[0], (long)pConfigInfo->TIME_DILATION[1]);
-        strcat(sharedBuffer, ")\r\n");
-        configPrint(sharedBuffer);
-      }
-      
-      // H5 - fixedTime2 ps A/B
-      {
-        copyProgStrToBuffer(str_h5_fixed, sharedBuffer, sizeof(sharedBuffer));
-        sprintf(sharedBuffer + strlen(sharedBuffer), "%ld/%ld", (long)pConfigInfo->FIXED_TIME2[0], (long)pConfigInfo->FIXED_TIME2[1]);
-        strcat(sharedBuffer, ")\r\n");
-        configPrint(sharedBuffer);
-      }
-      
-      // H6 - FUDGE0 ps A/B
-      {
-        copyProgStrToBuffer(str_h6_fudge, sharedBuffer, sizeof(sharedBuffer));
-        sprintf(sharedBuffer + strlen(sharedBuffer), "%ld/%ld", (long)pConfigInfo->FUDGE0[0], (long)pConfigInfo->FUDGE0[1]);
-        strcat(sharedBuffer, ")\r\n");
-        configPrint(sharedBuffer);
-      }
-      
-      configPrint("\r\n"); // Blank line between menu options and 1/2 choices
-      
-      copyProgStrToBuffer(str_discard, sharedBuffer, sizeof(sharedBuffer));
-      strcat(sharedBuffer, "\r\n");
-      configPrint(sharedBuffer);
-      copyProgStrToBuffer(str_keep, sharedBuffer, sizeof(sharedBuffer));
-      strcat(sharedBuffer, "\r\n");
-      configPrint(sharedBuffer);
-      configPrint("> ");
-      char buf[96];
-      size_t an = readLine(buf, sizeof(buf)); char *aline = trimInPlace(buf);
-      if (an) {
-        if (aline[0] == '1' || aline[0] == '2') {
-          // Return options - no changes needed
-          if (aline[0] == '1') {
-            configPrint("Changes discarded.\r\n");
-          } else {
-            configPrint("Changes kept.\r\n");
-          }
-          *showMenu = true;
-          break; // Exit the submenu loop
-        } else {
-          // Advanced setting options
-          char a = toupper(aline[0]);
-          const char *aargs = aline + 1; while (*aargs == ' ') aargs++;
-          
-          // H1) Clock speed MHz
-          if (a == 'H' && aline[1] == '1') {
-            configPrint("Clock MHz: "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
-            int64_t hz; if (parseDecimalScaled(cline, 1000000LL, &hz) && hz > 0) { int64_t old=pConfigInfo->CLOCK_HZ; pConfigInfo->CLOCK_HZ = hz; char m[64]; sprintf(m, "OK -- Clock %ld.%06ld -> %ld.%06ld\r\n", (int32_t)(old/1000000LL),(int32_t)(old%1000000LL),(int32_t)(hz/1000000LL),(int32_t)(hz%1000000LL)); configPrint(m); } else configPrint("Invalid\r\n");
-            Serial.flush();
-          }
-          // H2) Coarse tick us
-          else if (a == 'H' && aline[1] == '2') {
-            configPrint("Coarse Tick (us): "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
-            int64_t ps; if (parseDecimalScaled(cline, 1000000LL, &ps) && ps > 0) { int64_t old=pConfigInfo->PICTICK_PS; pConfigInfo->PICTICK_PS = ps; char m[64]; sprintf(m, "OK -- Coarse %ld.%06ld -> %ld.%06ld\r\n", (int32_t)(old/1000000LL),(int32_t)(old%1000000LL),(int32_t)(ps/1000000LL),(int32_t)(ps%1000000LL)); configPrint(m); } else configPrint("Invalid\r\n");
-            Serial.flush();
-          }
-          // H3) Prop delays
-          else if (a == 'H' && aline[1] == '3') {
-            configPrint("Enter Pair A/B: "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
-            if (!cline[0]) { configPrint("Cancelled\r\n"); Serial.flush(); } else {
-              bool s0=false, s1=false; int64_t v0=0, v1=0; if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { configPrint("Invalid\r\n"); Serial.flush(); } else { int32_t o0=pConfigInfo->PROP_DELAY[0], o1=pConfigInfo->PROP_DELAY[1]; if (s0) pConfigInfo->PROP_DELAY[0]=v0; if (s1) pConfigInfo->PROP_DELAY[1]=v1; char m[80]; sprintf(m, "OK -- PropDelay %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->PROP_DELAY[0],(long)pConfigInfo->PROP_DELAY[1]); configPrint(m); Serial.flush(); }
-            }
-          }
-          // H4) Time dilation
-          else if (a == 'H' && aline[1] == '4') {
-            configPrint("Enter Pair A/B: "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
-            if (!cline[0]) { configPrint("Cancelled\r\n"); Serial.flush(); } else {
-              bool s0=false, s1=false; int64_t v0=0, v1=0; if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { configPrint("Invalid\r\n"); Serial.flush(); } else { int32_t o0=pConfigInfo->TIME_DILATION[0], o1=pConfigInfo->TIME_DILATION[1]; if (s0) pConfigInfo->TIME_DILATION[0]=v0; if (s1) pConfigInfo->TIME_DILATION[1]=v1; char m[80]; sprintf(m, "OK -- TimeDilation %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->TIME_DILATION[0],(long)pConfigInfo->TIME_DILATION[1]); configPrint(m); Serial.flush(); }
-            }
-          }
-          // H5) fixedTime2
-          else if (a == 'H' && aline[1] == '5') {
-            configPrint("Enter Pair A/B: "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
-            if (!cline[0]) { configPrint("Cancelled\r\n"); Serial.flush(); } else {
-              bool s0=false, s1=false; int64_t v0=0, v1=0; if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { configPrint("Invalid\r\n"); Serial.flush(); } else { int32_t o0=pConfigInfo->FIXED_TIME2[0], o1=pConfigInfo->FIXED_TIME2[1]; if (s0) pConfigInfo->FIXED_TIME2[0]=v0; if (s1) pConfigInfo->FIXED_TIME2[1]=v1; char m[80]; sprintf(m, "OK -- fixedTime2 %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->FIXED_TIME2[0],(long)pConfigInfo->FIXED_TIME2[1]); configPrint(m); Serial.flush(); }
-            }
-          }
-          // H6) FUDGE0
-          else if (a == 'H' && aline[1] == '6') {
-            configPrint("Enter Pair A/B: "); size_t cn = readLine(buf, sizeof(buf)); char *cline = trimInPlace(buf);
-            if (!cline[0]) { configPrint("Cancelled\r\n"); Serial.flush(); } else {
-              bool s0=false, s1=false; int64_t v0=0, v1=0; if (!parseInt64Pair(cline, &s0, &v0, &s1, &v1)) { configPrint("Invalid\r\n"); Serial.flush(); } else { int32_t o0=pConfigInfo->FUDGE0[0], o1=pConfigInfo->FUDGE0[1]; if (s0) pConfigInfo->FUDGE0[0]=v0; if (s1) pConfigInfo->FUDGE0[1]=v1; char m[80]; sprintf(m, "OK -- FUDGE0 %ld/%ld -> %ld/%ld\r\n", (long)o0,(long)o1,(long)pConfigInfo->FUDGE0[0],(long)pConfigInfo->FUDGE0[1]); configPrint(m); Serial.flush(); }
-            }
-          }
-          else { configPrint("Invalid\r\n"); Serial.flush(); }
-        }
+      // Move to next command
+      if (had_semicolon) {
+        cmd_start = cmd_end + 1;
+        while (*cmd_start == ' ') cmd_start++;  // Skip leading spaces
+        if (*cmd_start == '\0') break;  // No more commands
+      } else {
+        break;  // No more commands
       }
     }
-    return true;
+    
+    if (should_exit) break;
+    
+    // Show menu again after processing commands
+    showMenu = true;
   }
-
-  // X) Developer EEPROM clear (undocumented)
-  if (cmd == 'X') {
-    configPrint("WARNING: This will completely erase the entire EEPROM including serial number!\r\n");
-    configPrint("Type 'YES' to confirm: ");
-    char buf[96];
-    size_t n = readLine(buf, sizeof(buf));
-    char *input = trimInPlace(buf);
-    if (strcmp(input, "YES") == 0) {
-      configPrint("Clearing entire EEPROM...\r\n");
-      eeprom_clear();
-      configPrint("EEPROM cleared. Restarting...\r\n");
-      // Force a restart by setting a flag that will cause main loop to exit
-      extern volatile uint8_t request_restart;
-      request_restart = 1;
-      return false;
-    } else {
-      configPrint("EEPROM clear cancelled.\r\n");
-    }
-    return true;
-  }
-
-  // Numbered exits
-  if (cmd == '1') { 
-    configPrint("Discarded changes.\r\n"); 
-    config_changed = 0; // Clear the changed flag since we're discarding
-    return false; 
-  }
-  if (cmd == '2') { 
-    // Apply changes and restart
-    configPrint("Applying changes and restarting...\r\n"); 
-    // Force a restart by setting a flag that will cause main loop to exit
-    extern volatile uint8_t request_restart;
-    request_restart = 1;
-    return false; 
-  }
-  if (cmd == '3') { 
-    // Apply changes and resume operation
-    configPrint("Applying changes and resuming operation...\r\n"); 
-    // Clear the changed flag since we're applying changes
-    config_changed = 0;
-    return false; 
-  }
-  if (cmd == '4') { 
-    // Reset all to defaults and restart
-    eeprom_write_config_default(CONFIG_START); 
-    configPrint("Defaults written. Restarting...\r\n"); 
-    // Force a restart by setting a flag that will cause main loop to exit
-    extern volatile uint8_t request_restart;
-    request_restart = 1;
-    return false; 
-  }
-
-  configPrint("? Unknown command\r\n");
-  return true;
 }

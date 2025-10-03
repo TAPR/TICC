@@ -7,8 +7,8 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-// 3 January 2025 - version 20250103.1
-extern const char SW_VERSION[17] = "20250103.1";
+// 3 October 2025 - version 20250103.1
+extern const char SW_VERSION[17] = "2025103.1";
 extern const char SW_TAG[6] = "BETA";
 
 

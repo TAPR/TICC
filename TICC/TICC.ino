@@ -8,7 +8,7 @@
 // Licensed under BSD 2-clause license
 
 // 3 October 2025 - version 20250103.1
-extern const char SW_VERSION[17] = "2025103.1";
+extern const char SW_VERSION[17] = "20251003.1";
 extern const char SW_TAG[6] = "BETA";
 
 

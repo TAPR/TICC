@@ -34,7 +34,7 @@ const char it_mode_ts[]        PROGMEM = "A1 - Timestamp";
 const char it_mode_bin[]       PROGMEM = "A2 - Binary Timestamp";
 const char it_mode_int[]       PROGMEM = "A3 - Time Interval A -> B";
 const char it_mode_period[]    PROGMEM = "A4 - Period";
-const char it_mode_3ch[]       PROGMEM = "A5 - TimeLab 3-Cornered Hat";
+const char it_mode_3ch[]       PROGMEM = "A5 - 3-Cornered Hat";
 const char it_mode_debug[]     PROGMEM = "A6 - Debug";
 const char it_mode_null[]      PROGMEM = "A7 - Null Output";
 
@@ -43,7 +43,7 @@ const char desc_timestamp[]    PROGMEM = "Timestamp";
 const char desc_binary[]       PROGMEM = "Binary Timestamp";
 const char desc_interval[]     PROGMEM = "Time Interval A->B";
 const char desc_period[]       PROGMEM = "Period";
-const char desc_timelab[]      PROGMEM = "TimeLab 3-Cornered Hat";
+const char desc_timelab[]      PROGMEM = "3-Cornered Hat";
 const char desc_debug[]        PROGMEM = "Debug";
 const char desc_null[]         PROGMEM = "Null Output";
 
@@ -107,7 +107,7 @@ const char mode_timestamp[]    PROGMEM = "Timestamp";
 const char mode_binary[]       PROGMEM = "Binary Timestamp";
 const char mode_interval[]     PROGMEM = "Time Interval A->B";
 const char mode_period[]       PROGMEM = "Period";
-const char mode_timelab[]      PROGMEM = "TimeLab 3-Cornered Hat";
+const char mode_timelab[]      PROGMEM = "3-Cornered Hat";
 const char mode_debug[]        PROGMEM = "Debug";
 const char mode_null[]         PROGMEM = "Null Output";
 const char mode_unknown[]      PROGMEM = "Unknown";

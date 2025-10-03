@@ -362,7 +362,7 @@ void print_config(config_t x) {
     case Binary: strcat(tmpbuf, "Binary Timestamp"); break;
     case Period: strcat(tmpbuf, "Period"); break;
     case Interval: strcat(tmpbuf, "Time Interval A->B"); break;
-    case timeLab: strcat(tmpbuf, "TimeLab 3-Cornered Hat"); break;
+    case Hat: strcat(tmpbuf, "3-Cornered Hat"); break;
     case Debug: strcat(tmpbuf, "Debug"); break;
     case Null: strcat(tmpbuf, "Null Output"); break;
   }

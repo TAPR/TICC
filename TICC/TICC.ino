@@ -31,7 +31,7 @@ extern const char SW_TAG[6] = "BETA";
  *
  * Pairing logic (two‑channel modes):
  * - Each channel sets new_ts_ready when a fresh timestamp is computed.
- * - Interval and TimeLab print once per pair when both channels are ready
+ * - Interval and 3-Cornered Hat print once per pair when both channels are ready
  *   (A→B order), then clear both flags. This prevents mixing new and old
  *   samples, which can appear as ±1 s artifacts.
  * - Timestamp mode prints in ordered pairs with one-sample latency: two
@@ -40,7 +40,7 @@ extern const char SW_TAG[6] = "BETA";
  *   the same channel, that channel is printed twice. Single-channel and 
  *   mismatched-rate cases are handled without timeouts or configuration.
  *
- * TimeLab chC synthesis:
+ * 3-Cornered Hat chC synthesis:
  * - chA and chB are printed as timestamps. chC represents (B − A) but 
  *   is synthesized to look like a timestamp by taking channel B's 
  *   seconds and using the signed delta (diffSplit) fractional. This 
@@ -282,7 +282,7 @@ void ticc_setup() {
       Serial.print(config.PLACES);
       Serial.println(" decimal places)");
       break;
-    case timeLab:
+    case Hat:
       Serial.print("# timestamp ch0, ch1; interval chA->B (seconds with ");
       Serial.print(config.PLACES);
       Serial.println(" decimal places)");
@@ -540,7 +540,7 @@ void loop() {
               }
               break;
 
-            case timeLab: // handled after channel loop (pairing logic)
+            case Hat: // handled after channel loop (pairing logic)
               break;
 
             case Debug:
@@ -643,7 +643,7 @@ void loop() {
       }
     }
 
-    // After processing both channels, pair and print once per matched sample for Interval and TimeLab
+    // After processing both channels, pair and print once per matched sample for Interval and 3-Cornered Hat
     if ((channels[0].new_ts_ready && channels[1].new_ts_ready) && (channels[0].totalize > 2) && (channels[1].totalize > 2)) {
       // Optional poll gating
       bool ok = (!config.POLL_CHAR);
@@ -664,9 +664,9 @@ void loop() {
               channels[1].new_ts_ready = 0;
               break;
             }
-          case timeLab:
+          case Hat:
             {
-              // TimeLab mode: chA, chB, and chC (synthesized)
+              // 3-Cornered Hat mode: chA, chB, and chC (synthesized)
               // chC = int(chB) + (chB - chA) - properly handle negative differences
               
               {

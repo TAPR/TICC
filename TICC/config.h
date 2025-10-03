@@ -12,7 +12,7 @@
 
 #define PS_PER_SEC                (int64_t)  1000000000000   // ps/s
 
-enum MeasureMode : unsigned char {Timestamp, Interval, Period, timeLab, Debug, Binary, Null};
+enum MeasureMode : unsigned char {Timestamp, Interval, Period, Hat, Debug, Binary, Null};
 
 /*****************************************************************/
 // system defines

@@ -48,7 +48,7 @@ static const char* getModeName(MeasureMode mode) {
     case Binary: return mode_binary;
     case Interval: return mode_interval;
     case Period: return mode_period;
-    case timeLab: return mode_timelab;
+    case Hat: return mode_timelab;
     case Debug: return mode_debug;
     case Null: return mode_null;
     default: return mode_unknown;
@@ -410,7 +410,7 @@ bool process_mode_command(char cmd, const char* args, bool interactive) {
     case '2': config.MODE = Binary; break;
     case '3': config.MODE = Interval; break;
     case '4': config.MODE = Period; break;
-    case '5': config.MODE = timeLab; break;
+    case '5': config.MODE = Hat; break;
     case '6': config.MODE = Debug; break;
     case '7': config.MODE = Null; break;
     default:

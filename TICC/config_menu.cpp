@@ -107,6 +107,56 @@ extern char SER_NUM[17];
 static char sharedBuffer[128];
 static char confirmBuffer[32];
 
+// Cursor-based safe appender helpers to avoid O(n^2) string operations
+// and provide automatic bounds checking
+static inline char* app_init(char* buf, size_t cap) {
+  if (cap) buf[0] = '\0';
+  return buf;
+}
+
+static inline size_t app_len(const char* buf) { 
+  return strlen(buf); 
+}
+
+static inline bool app_p(char* &cur, size_t &rem, const char* prog) {
+  // copy PROGMEM string into buffer at 'cur'
+  while (rem > 1) {
+    char c = pgm_read_byte(prog++);
+    if (!c) break;
+    *cur++ = c; *cur = '\0'; --rem;
+  }
+  return rem > 1;
+}
+
+static inline bool app_s(char* &cur, size_t &rem, const char* s) {
+  while (*s && rem > 1) { *cur++ = *s++; *cur = '\0'; --rem; }
+  return rem > 1;
+}
+
+static inline bool app_c(char* &cur, size_t &rem, char c) {
+  if (rem <= 1) return false;
+  *cur++ = c; *cur = '\0'; --rem; 
+  return true;
+}
+
+// Fast integer appenders to avoid pulling in full printf machinery
+static inline bool app_u32(char* &cur, size_t &rem, uint32_t v) {
+  char tmp[11]; // max 4294967295
+  char* p = &tmp[10]; *p = '\0';
+  do { *--p = '0' + (v % 10); v /= 10; } while (v && p > tmp);
+  return app_s(cur, rem, p);
+}
+
+static inline bool app_i32(char* &cur, size_t &rem, int32_t v) {
+  if (v < 0) { if (!app_c(cur, rem, '-')) return false; v = -v; }
+  return app_u32(cur, rem, (uint32_t)v);
+}
+
+// Powers of ten lookup table to avoid repeated multiplication
+static const uint32_t POW10[] PROGMEM = {
+  1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000
+};
+
 
 // Helper function to copy PROGMEM strings to buffer
 static void copyProgStrToBuffer(const char* str, char* buffer, size_t bufferSize) {
@@ -138,8 +188,7 @@ static const char* getWrapDescription(int16_t wrap) {
   if (wrap <= 0) {
     strcpy_P(desc, wrap_no_wrap);
   } else if (wrap <= 9) {
-    uint32_t wrap_seconds = 1;
-    for (int i = 0; i < wrap; i++) wrap_seconds *= 10;
+    uint32_t wrap_seconds = pgm_read_dword(&POW10[wrap]);
     sprintf_P(desc, wrap_format, (unsigned long)wrap_seconds);
   } else {
     sprintf_P(desc, wrap_scientific, wrap);
@@ -294,33 +343,33 @@ void show_main_menu() {
   
   // B - Wrap
   copyProgStrToBuffer(it_wrap, line, sizeof(line));
-  sprintf(line + strlen(line), "%d%s)", config.WRAP, getWrapDescription(config.WRAP));
+  snprintf(line + strlen(line), sizeof(line) - strlen(line), "%d%s)", config.WRAP, getWrapDescription(config.WRAP));
   configPrintln(line);
   
   // C - Places
   copyProgStrToBuffer(it_places, line, sizeof(line));
-  sprintf(line + strlen(line), "%d)", config.PLACES);
+  snprintf(line + strlen(line), sizeof(line) - strlen(line), "%d)", config.PLACES);
   configPrintln(line);
   
   // D - Trigger Edge
   copyProgStrToBuffer(it_edge, line, sizeof(line));
-  sprintf(line + strlen(line), "%c/%c)", config.START_EDGE[0], config.START_EDGE[1]);
+  snprintf(line + strlen(line), sizeof(line) - strlen(line), "%c/%c)", config.START_EDGE[0], config.START_EDGE[1]);
   configPrintln(line);
   
   // E - Sync Mode
   copyProgStrToBuffer(it_sync, line, sizeof(line));
-  sprintf(line + strlen(line), "%c)", config.SYNC_MODE);
+  snprintf(line + strlen(line), sizeof(line) - strlen(line), "%c)", config.SYNC_MODE);
   configPrintln(line);
   
   // F - Channel Names
   copyProgStrToBuffer(it_names, line, sizeof(line));
-  sprintf(line + strlen(line), "%c/%c)", config.NAME[0], config.NAME[1]);
+  snprintf(line + strlen(line), sizeof(line) - strlen(line), "%c/%c)", config.NAME[0], config.NAME[1]);
   configPrintln(line);
   
   // G - Poll Character
   copyProgStrToBuffer(it_pollchar, line, sizeof(line));
   if (config.POLL_CHAR) {
-    sprintf(line + strlen(line), "%c)", config.POLL_CHAR);
+    snprintf(line + strlen(line), sizeof(line) - strlen(line), "%c)", config.POLL_CHAR);
   } else {
     strcat_P(line, msg_poll_none);
   }
@@ -332,7 +381,7 @@ void show_main_menu() {
   
   // I - Baud Rate
   copyProgStrToBuffer(it_baud, line, sizeof(line));
-  sprintf(line + strlen(line), "%lu)", (unsigned long)config.BAUD_RATE);
+  snprintf(line + strlen(line), sizeof(line) - strlen(line), "%lu)", (unsigned long)config.BAUD_RATE);
   configPrintln(line);
   
   configPrintln("");
@@ -447,7 +496,7 @@ void show_advanced_menu() {
   int64_t MHz = config.CLOCK_HZ / 1000000;
   int64_t Hz = MHz * 1000000;
   int64_t fract = config.CLOCK_HZ - Hz;
-  sprintf(line + strlen(line), "%ld.%06ld MHz)", (int32_t)MHz, (int32_t)fract);
+  snprintf(line + strlen(line), sizeof(line) - strlen(line), "%ld.%06ld MHz)", (int32_t)MHz, (int32_t)fract);
   configPrintln(line);
   
   // H2 - Coarse Tick
@@ -455,27 +504,27 @@ void show_advanced_menu() {
   int64_t us = config.PICTICK_PS / 1000000;
   int64_t ps = us * 1000000;
   int64_t ps_fract = config.PICTICK_PS - ps;
-  sprintf(line + strlen(line), "%ld.%06ld usec)", (int32_t)us, (int32_t)ps_fract);
+  snprintf(line + strlen(line), sizeof(line) - strlen(line), "%ld.%06ld usec)", (int32_t)us, (int32_t)ps_fract);
   configPrintln(line);
   
   // H3 - Propagation Delay
   copyProgStrToBuffer(it_adv_prop, line, sizeof(line));
-  sprintf(line + strlen(line), "%ld/%ld)", (long)config.PROP_DELAY[0], (long)config.PROP_DELAY[1]);
+  snprintf(line + strlen(line), sizeof(line) - strlen(line), "%ld/%ld)", (long)config.PROP_DELAY[0], (long)config.PROP_DELAY[1]);
   configPrintln(line);
   
   // H4 - Time Dilation
   copyProgStrToBuffer(it_adv_dilation, line, sizeof(line));
-  sprintf(line + strlen(line), "%ld/%ld)", (long)config.TIME_DILATION[0], (long)config.TIME_DILATION[1]);
+  snprintf(line + strlen(line), sizeof(line) - strlen(line), "%ld/%ld)", (long)config.TIME_DILATION[0], (long)config.TIME_DILATION[1]);
   configPrintln(line);
   
   // H5 - Fixed Time2
   copyProgStrToBuffer(it_adv_fixed, line, sizeof(line));
-  sprintf(line + strlen(line), "%ld/%ld)", (long)config.FIXED_TIME2[0], (long)config.FIXED_TIME2[1]);
+  snprintf(line + strlen(line), sizeof(line) - strlen(line), "%ld/%ld)", (long)config.FIXED_TIME2[0], (long)config.FIXED_TIME2[1]);
   configPrintln(line);
   
   // H6 - FUDGE0
   copyProgStrToBuffer(it_adv_fudge, line, sizeof(line));
-  sprintf(line + strlen(line), "%ld/%ld)", (long)config.FUDGE0[0], (long)config.FUDGE0[1]);
+  snprintf(line + strlen(line), sizeof(line) - strlen(line), "%ld/%ld)", (long)config.FUDGE0[0], (long)config.FUDGE0[1]);
   configPrintln(line);
   
   configPrintln("");
@@ -501,8 +550,10 @@ bool process_mode_command(char cmd, const char* args, bool interactive) {
   
   if (oldMode != config.MODE) {
     config_changed = 1;
-    strcpy_P(sharedBuffer, msg_ok_mode);
-    strcat_P(sharedBuffer, getModeName(config.MODE));
+    char* p = app_init(sharedBuffer, sizeof(sharedBuffer));
+    size_t r = sizeof(sharedBuffer);
+    app_p(p, r, msg_ok_mode);
+    app_p(p, r, getModeName(config.MODE));
     configPrintln(sharedBuffer);
     
     // Show keep/discard options
@@ -552,10 +603,12 @@ bool process_baud_command(char cmd, const char* args, bool interactive) {
   if (oldRate != newRate) {
     config.BAUD_RATE = newRate;
     config_changed = 1;
-    strcpy_P(sharedBuffer, msg_ok_baud_was);
-    sprintf(sharedBuffer + strlen(sharedBuffer), "%ld", (long)oldRate);
-    strcat_P(sharedBuffer, msg_ok_baud_now);
-    sprintf(sharedBuffer + strlen(sharedBuffer), "%ld", (long)newRate);
+    char* p = app_init(sharedBuffer, sizeof(sharedBuffer));
+    size_t r = sizeof(sharedBuffer);
+    app_p(p, r, msg_ok_baud_was);
+    app_i32(p, r, (int32_t)oldRate);
+    app_p(p, r, msg_ok_baud_now);
+    app_i32(p, r, (int32_t)newRate);
     configPrintln(sharedBuffer);
     
     // Show keep/discard options
@@ -581,8 +634,10 @@ bool process_baud_command(char cmd, const char* args, bool interactive) {
     }
   } else {
     // Baud rate is already set to this value
-    strcpy_P(sharedBuffer, msg_ok_baud_already);
-    sprintf(sharedBuffer + strlen(sharedBuffer), "%ld", (long)newRate);
+    char* p = app_init(sharedBuffer, sizeof(sharedBuffer));
+    size_t r = sizeof(sharedBuffer);
+    app_p(p, r, msg_ok_baud_already);
+    app_i32(p, r, (int32_t)newRate);
     configPrintln(sharedBuffer);
   }
   
@@ -652,7 +707,7 @@ bool process_advanced_command(char cmd, const char* args, bool interactive) {
         char oldStr[32], newStr[32];
         formatPsAsUs(old, oldStr, sizeof(oldStr));
         formatPsAsUs(ps, newStr, sizeof(newStr));
-        sprintf(sharedBuffer, "OK -- Coarse Tick %s -> %s", oldStr, newStr);
+        snprintf(sharedBuffer, sizeof(sharedBuffer), "OK -- Coarse Tick %s -> %s", oldStr, newStr);
         configPrintln(sharedBuffer);
         
         // Show keep/discard options
@@ -769,7 +824,7 @@ bool process_wrap_command(char cmd, const char* args, bool interactive) {
     int16_t old = config.WRAP;
     config.WRAP = (int16_t)wrap;
     config_changed = 1;
-    sprintf(sharedBuffer, "OK -- Wrap Digits %d -> %d", old, config.WRAP);
+    snprintf(sharedBuffer, sizeof(sharedBuffer), "OK -- Wrap Digits %d -> %d", old, config.WRAP);
     if (!handleConfirmation(sharedBuffer, interactive)) {
       config.WRAP = old;
       config_changed = 0;
@@ -791,7 +846,7 @@ bool process_places_command(char cmd, const char* args, bool interactive) {
     int16_t old = config.PLACES;
     config.PLACES = (int16_t)places;
     config_changed = 1;
-    sprintf(sharedBuffer, "OK -- Decimal Places %d -> %d", old, config.PLACES);
+    snprintf(sharedBuffer, sizeof(sharedBuffer), "OK -- Decimal Places %d -> %d", old, config.PLACES);
     if (!handleConfirmation(sharedBuffer, interactive)) {
       config.PLACES = old;
       config_changed = 0;
@@ -818,7 +873,7 @@ bool process_edge_command(char cmd, const char* args, bool interactive) {
       if (set0) config.START_EDGE[0] = v0;
       if (set1) config.START_EDGE[1] = v1;
       config_changed = 1;
-      sprintf(sharedBuffer, "OK -- Edges %c/%c -> %c/%c", old0, old1, config.START_EDGE[0], config.START_EDGE[1]);
+      snprintf(sharedBuffer, sizeof(sharedBuffer), "OK -- Edges %c/%c -> %c/%c", old0, old1, config.START_EDGE[0], config.START_EDGE[1]);
       if (!handleConfirmation(sharedBuffer, interactive)) {
         config.START_EDGE[0] = old0;
         config.START_EDGE[1] = old1;
@@ -845,7 +900,7 @@ bool process_sync_command(char cmd, const char* args, bool interactive) {
     char old = config.SYNC_MODE;
     config.SYNC_MODE = c;
     config_changed = 1;
-    sprintf(sharedBuffer, "OK -- Sync Mode %c -> %c", old, c);
+    snprintf(sharedBuffer, sizeof(sharedBuffer), "OK -- Sync Mode %c -> %c", old, c);
     if (!handleConfirmation(sharedBuffer, interactive)) {
       config.SYNC_MODE = old;
       config_changed = 0;
@@ -869,7 +924,7 @@ bool process_names_command(char cmd, const char* args, bool interactive) {
     if (set0) config.NAME[0] = v0;
     if (set1) config.NAME[1] = v1;
     config_changed = 1;
-    sprintf(sharedBuffer, "OK -- Names %c/%c -> %c/%c", old0, old1, config.NAME[0], config.NAME[1]);
+    snprintf(sharedBuffer, sizeof(sharedBuffer), "OK -- Names %c/%c -> %c/%c", old0, old1, config.NAME[0], config.NAME[1]);
     if (!handleConfirmation(sharedBuffer, interactive)) {
       config.NAME[0] = old0;
       config.NAME[1] = old1;
@@ -927,17 +982,19 @@ bool process_info_command() {
 
 // Process version command
 bool process_version_command() {
-  // Build complete version string
+  // Build complete version string using cursor appender
   char versionStr[128];
-  strcpy(versionStr, "Firmware version: ");
-  strcat(versionStr, SW_VERSION);
+  char* p = app_init(versionStr, sizeof(versionStr));
+  size_t r = sizeof(versionStr);
+  app_s(p, r, "Firmware version: ");
+  app_s(p, r, SW_VERSION);
   if (strlen(SW_TAG) > 0) {
-    strcat(versionStr, " (");
-    strcat(versionStr, SW_TAG);
-    strcat(versionStr, ")");
+    app_s(p, r, " (");
+    app_s(p, r, SW_TAG);
+    app_c(p, r, ')');
   }
-  strcat(versionStr, ", Board serial: ");
-  strcat(versionStr, SER_NUM);
+  app_s(p, r, ", Board serial: ");
+  app_s(p, r, SER_NUM);
   
   // Single print call - configPrintln adds # prefix
   configPrintln(versionStr);

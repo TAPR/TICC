@@ -7,6 +7,78 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
+/*
+ * HOW TO ADD A NEW MENU ITEM
+ * ==========================
+ * 
+ * To add a new menu item to the configuration system, follow these steps:
+ * 
+ * 1. ADD MENU TEXT (config_menu_text.h):
+ *    - Add PROGMEM string constants for menu item text, prompts, and messages
+ *    - Use descriptive names like: it_newitem, prompt_newitem, msg_newitem_ok
+ *    - Example: const char it_newitem[] PROGMEM = "X - New Item (currently: value)";
+ * 
+ * 2. ADD COMMAND TO TABLE (config_command_table.h):
+ *    - Add forward declaration for your handler function
+ *    - Example: bool process_newitem_command(char cmd, const char* args, bool interactive);
+ * 
+ * 3. ADD COMMAND ENTRY (config_command_table.cpp):
+ *    - Add entry to command_table array with command letter, type, and handler
+ *    - Example: {'X', CMD_DIRECT, true, process_newitem_command, NULL}
+ *    - Command types: CMD_MAIN_MENU, CMD_SUBMENU, CMD_DIRECT
+ * 
+ * 4. ADD FUNCTION PROTOTYPE (config.h):
+ *    - Add function declaration to the command processing functions section
+ *    - Example: bool process_newitem_command(char cmd, const char* args, bool interactive);
+ * 
+ * 5. IMPLEMENT HANDLER FUNCTION (config_menu.cpp):
+ *    - Create the process_newitem_command() function
+ *    - Handle input validation, parameter parsing, and confirmation flow
+ *    - Use getInputOrPrompt() for user input, handlePairConfirmation() for pairs
+ *    - Follow existing patterns for error handling and user feedback
+ * 
+ * 6. UPDATE MAIN MENU DISPLAY (config_menu.cpp):
+ *    - Add menu item display to show_main_menu() function
+ *    - Use copyProgStrToBuffer() and strcat_P() for PROGMEM strings
+ *    - Show current value using appropriate formatting
+ * 
+ * 7. ADD CONFIGURATION PARAMETER (if needed):
+ *    - Add field to config_t struct in config.h
+ *    - Add default value constant
+ *    - Update defaultConfig() function in config_core.cpp
+ *    - Update print_config() function to display the parameter
+ * 
+ * 8. ADD EEPROM SUPPORT (if persistent):
+ *    - Update eeprom_write_config() and eeprom_read_config() in config_eeprom.cpp
+ *    - Ensure EEPROM version compatibility
+ * 
+ * 9. TEST COMPREHENSIVELY:
+ *    - Test interactive mode (direct commands like "X")
+ *    - Test batch mode (semicolon-separated commands)
+ *    - Test confirmation flows (keep/discard)
+ *    - Test error handling and validation
+ *    - Verify EEPROM persistence if applicable
+ * 
+ * COMMAND TYPE REFERENCE:
+ * - CMD_MAIN_MENU: Single command with no submenu (like 'W' for write)
+ * - CMD_SUBMENU: Command that shows a submenu (like 'A' for mode, 'H' for advanced)
+ * - CMD_DIRECT: Command that prompts for input directly (like 'B' for wrap, 'C' for places)
+ * 
+ * HELPER FUNCTIONS AVAILABLE:
+ * - getInputOrPrompt(): Get user input with prompt
+ * - handlePairConfirmation(): Confirmation flow for pair values
+ * - handleConfirmation(): General confirmation flow
+ * - parseScientificNotation(): Parse scientific notation input
+ * - parseScientificNotationPair(): Parse comma/space-separated pairs
+ * - configPrintlnProg(): Print PROGMEM strings with "# " prefix
+ * 
+ * MEMORY CONSIDERATIONS:
+ * - Use PROGMEM for all user-facing strings to save RAM
+ * - Use strcat_P() and sprintf_P() for PROGMEM string operations
+ * - Keep sharedBuffer[128] for temporary string operations
+ * - Be mindful of Arduino's limited RAM (8KB total)
+ */
+
 #include <stdint.h>
 #include <Arduino.h>
 #include <string.h>

@@ -20,8 +20,6 @@ extern void configPrintln(const char* msg);
 extern size_t readLine(char *buf, size_t cap);
 extern char* trimInPlace(char *s);
 extern bool parseInt64Simple(const char *s, int64_t *out);
-extern bool parseDecimalScaled(const char *s, int64_t scale, int64_t *out);
-extern bool parseInt64Pair(const char *s, bool *set0, int64_t *v0, bool *set1, int64_t *v1);
 extern bool parseCharPair(const char *s, bool *set0, char *v0, bool *set1, char *v1);
 extern char* getInputOrPrompt(const char* args, const char* prompt, char* buffer, size_t bufferSize);
 extern void eeprom_write_config();
@@ -73,20 +71,6 @@ static const char* getWrapDescription(int16_t wrap) {
 }
 
 
-// Print frequency as MHz
-static void printHzAsMHz(int64_t hz) {
-  int64_t MHz = hz / 1000000LL;
-  int64_t Hz = MHz * 1000000LL;
-  int64_t fract = hz - Hz;
-  Serial.print((int32_t)MHz);
-  Serial.print(".");
-  if (fract < 100000) Serial.print("0");
-  if (fract < 10000) Serial.print("0");
-  if (fract < 1000) Serial.print("0");
-  if (fract < 100) Serial.print("0");
-  if (fract < 10) Serial.print("0");
-  Serial.print((int32_t)fract);
-}
 
 // Format frequency as MHz string
 static void formatHzAsMHz(int64_t hz, char* buffer, size_t bufferSize) {
@@ -178,19 +162,6 @@ static bool handlePairConfirmation(int64_t oldA, int64_t oldB, int64_t newA, int
   }
 }
 
-// Print picoseconds as microseconds
-static void printPsAsUs(int64_t ps) {
-  int64_t us = ps / 1000000LL;
-  int64_t ps_remainder = ps - (us * 1000000LL);
-  Serial.print((int32_t)us);
-  Serial.print(".");
-  if (ps_remainder < 100000) Serial.print("0");
-  if (ps_remainder < 10000) Serial.print("0");
-  if (ps_remainder < 1000) Serial.print("0");
-  if (ps_remainder < 100) Serial.print("0");
-  if (ps_remainder < 10) Serial.print("0");
-  Serial.print((int32_t)ps_remainder);
-}
 
 // Handle confirmation flow with keep/discard options
 static bool handleConfirmation(const char* confirmationMsg, bool interactive = true) {

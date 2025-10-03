@@ -12,7 +12,7 @@
 #include <string.h>
 #include <Arduino.h>
 #include <EEPROM.h>
-#include "config_types.h"
+// config_types.h functionality now included in config.h
 #include "config.h"
 
 // External variables referenced by other files

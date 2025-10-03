@@ -10,7 +10,7 @@
 #include <stdint.h>
 #include <Arduino.h>
 #include <string.h>
-#include "config_types.h"
+#include "config.h"
 #include "config_menu_text.h"
 #include "config_command_table.h"
 

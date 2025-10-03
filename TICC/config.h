@@ -88,6 +88,28 @@ void show_config_menu();
 bool process_config_command(const char* cmd, bool interactive = true);
 void init_config_system();
 
+// Command processing functions
+bool process_mode_command(char cmd, const char* args, bool interactive);
+bool process_baud_command(char cmd, const char* args, bool interactive);
+bool process_advanced_command(char cmd, const char* args, bool interactive);
+bool process_wrap_command(char cmd, const char* args, bool interactive);
+bool process_places_command(char cmd, const char* args, bool interactive);
+bool process_edge_command(char cmd, const char* args, bool interactive);
+bool process_sync_command(char cmd, const char* args, bool interactive);
+bool process_names_command(char cmd, const char* args, bool interactive);
+bool process_poll_command(char cmd, const char* args, bool interactive);
+bool process_menu_command();
+bool process_info_command();
+bool process_write_command();
+bool process_eeprom_clear_command();
+bool process_exit_command(char cmd);
+
+// Menu display functions
+void show_main_menu();
+void show_mode_menu();
+void show_baud_menu();
+void show_advanced_menu();
+
 // Legacy function prototypes (for backward compatibility)
 // (none currently needed)
 

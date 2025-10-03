@@ -211,7 +211,7 @@ void show_main_menu() {
   
   // A - Mode
   copyProgStrToBuffer(it_mode, line, sizeof(line));
-  strcat(line, getModeName(config.MODE));
+  strcat_P(line, getModeName(config.MODE));
   strcat(line, ")");
   configPrintln(line);
   
@@ -317,7 +317,7 @@ void show_mode_menu() {
   configPrintln("");
   
   copyProgStrToBuffer(ln_current_mode, line, sizeof(line));
-  strcat(line, getModeName(config.MODE));
+  strcat_P(line, getModeName(config.MODE));
   configPrintln(line);
   
   configPrintln("");
@@ -422,7 +422,7 @@ bool process_mode_command(char cmd, const char* args, bool interactive) {
   if (oldMode != config.MODE) {
     config_changed = 1;
     strcpy_P(sharedBuffer, msg_ok_mode);
-    strcat(sharedBuffer, getModeName(config.MODE));
+    strcat_P(sharedBuffer, getModeName(config.MODE));
     configPrintln(sharedBuffer);
     
     // Show keep/discard options

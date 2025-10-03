@@ -21,13 +21,34 @@ extern const char SW_TAG[6] = "BETA";
  * from the coarse counter value (PICstop) that immediately follows
  * the TDC raising its interrupt flag.
  *
- * Math and ranges:
- * - Core state (PICcount, ts in ps) uses 64-bit signed integers to keep
- *   subtraction simple and avoid underflow surprises. 64-bit range 
- *   (±9.22e18) is ample: with 100 µs ticks, PICcount would take 
- *   ~2.9e11 years to overflow.
+ * Timestamp Calculation:
+ * - Uses mixed-radix accumulator: Timestamp64 = {int32_t seconds, uint64_t picos}
+ * - Avoids 64-bit division/modulo (very expensive on 8-bit AVR)
+ * - Algorithm: deltaT = dcount*PICTICK_PS - (tof_k - tof_{k-1})
+ * - Accumulates: timestamp.picos += deltaT with automatic carry/borrow to seconds
+ * - Preserves full picosecond precision (12 decimal places)
+ * - Performance: 1250 measurements/second tested on one channel
  *
- * Performance notes:
+ * Data types and overflow periods:
+ * - PICcount (int64_t): coarse counter, 100 µs per tick
+ *   Overflow: ~2.9×10^11 years (effectively never)
+ * - PICstop (int64_t): captured PICcount value per event
+ *   Same range as PICcount
+ * - tof (int32_t): TDC7200 time-of-flight in picoseconds
+ *   This will hold about 2.15 milliseconds of picos, but
+ *   the hardware architecture clamps the range to a maximum
+ *   of slightly more than 100 us.  To be more precise, tof
+ *   will always be in the range of ~300,000 to 100,300,000 ps
+ * - timestamp.seconds (int32_t): accumulated integer seconds
+ *   Overflow: ±68 years from epoch (sufficient for measurement deltas)
+ * - timestamp.picos (uint64_t): fractional part, 0..(1e12-1) picoseconds
+ *   Automatically normalized to stay within one second
+ *
+ * Binary mode (high-throughput):
+ * - Outputs PICstop (lower 32 bits) + tof (32 bits) + channel + CRC
+ * - PICstop truncated to uint32_t: ~4.97 days before overflow
+ * - User must detect rollover externally for long-duration captures
+ * - Achieves 1080 measurements/second @ 230400 baud
  *
  * Pairing logic (two‑channel modes):
  * - Each channel sets new_ts_ready when a fresh timestamp is computed.
@@ -38,45 +59,41 @@ extern const char SW_TAG[6] = "BETA";
  *   successive samples (across either channel) form a pair. If both 
  *   channels are present the order is chA then chB; if both are from 
  *   the same channel, that channel is printed twice. Single-channel and 
- *   mismatched-rate cases are handled without timeouts or configuration.
+ *   mismatched-rate cases are handled without timeouts or configuration
+ * - Interval and TimeLab print once per pair when both channels are ready
+ *   (A→B order), then clear both flags. This prevents mixing new and old
+ *   samples, which can appear as ±1 s artifacts
  *
  * 3-Cornered Hat chC synthesis:
  * - chA and chB are printed as timestamps. chC represents (B − A) but 
  *   is synthesized to look like a timestamp by taking channel B's 
  *   seconds and using the signed delta (diffSplit) fractional. This 
  *   avoids discontinuities at crossings and preserves three‑corner‑hat 
- *   compatibility.
+ *   compatibility
  *
- * Printing:
- * - Arduino printf lacks 64‑bit; we avoid floating point. We format 
- *   integer seconds and zero‑padded fractional parts using 32‑bit 
- *   helpers. Each line is buffered then emitted with a single 
- *   Serial.write() for lower overhead.
- * - We use writeln64() (in misc.cpp)to write lines to the serial port.
- *   This function is a wrapper around Serial.write() that ensures
- *   the line is terminated with a newline character.  NOTE: This
- *   wrapper is limited to 64 characters, which is more than sufficient
- *   for all TICC data output formats.
+ * Printing (print.cpp):
+ * - Avoids Arduino printf (lacks 64‑bit and floating point)
+ * - Uses optimized 32-bit division with reciprocal multiplication
+ * - Splits 12-digit picosecond fraction into two 6-digit chunks
+ * - Single Serial.write() call per line for minimum overhead
+ * - Supports configurable decimal places (0-12) and wraparound digits
+ * - Performance: about 560 timestamps/second
  *
- * Why signed:
- * - We frequently subtract (period = ts − last_ts; interval = B − A). 
- *   Results can be negative; signed avoids underflow and special‑case 
- *   handling.
+ * Why signed for Timestamp64.seconds:
+ * - We frequently subtract (period = ts − last_ts; interval = B − A)
+ * - Results can be negative; signed avoids underflow and special‑case handling
+ * - int32_t range (±68 years) is sufficient for all measurement scenarios
  */
 
-#include <stdint.h>  // define unint16_t, uint32_t
-
-
-#include <SPI.h>     // SPI support
-#include <EEPROM.h>  // eeprom library
-
-#include "EnableInterrupt.h"  // use faster interrupt library
-
-#include "board.h"            // LED macros and Arduino pin definitions
-#include "config.h"           // config and eeprom
-#include "tdc7200.h"          // TDC registers and structures
-#include "timestamp_utils.h"  // timestamp utility functions
-#include "print.h"  // optimized 64-bit printing routines
+#include <stdint.h>             // define unint16_t, uint32_t
+#include <SPI.h>                // SPI support
+#include <EEPROM.h>             // eeprom library
+#include "EnableInterrupt.h"    // use faster interrupt library
+#include "board.h"              // LED macros and Arduino pin definitions
+#include "config.h"             // config and eeprom
+#include "tdc7200.h"            // TDC registers and structures
+#include "timestamp_utils.h"    // timestamp utility functions
+#include "print.h"              // optimized 64-bit printing routines
 
 volatile int64_t PICcount;
 int64_t CLOCK_HZ;

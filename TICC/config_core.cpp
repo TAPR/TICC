@@ -313,8 +313,20 @@ void apply_config_changes() {
 
 // Handle restart vs. resume decision after config changes
 void handle_config_change_exit() {
-  if (config_change_requires_restart()) {
-    // Full restart required
+  // Check if restart was requested from config menu
+  extern volatile uint8_t request_restart;
+  
+  if (request_restart) {
+    // Restart was requested from config menu
+    if (config_changed) {
+      // Option 3 - reset to defaults (config_changed still set)
+      configPrintln("Restarting with default settings.");
+    } else {
+      // W command - changes written to EEPROM (config_changed cleared)
+      configPrintln("Restarting with new settings.");
+    }
+  } else if (config_change_requires_restart()) {
+    // Full restart required due to config changes
     configPrintln("Configuration changes require restart. Restarting...");
     delay(1000);
     // This would trigger a restart in the main program

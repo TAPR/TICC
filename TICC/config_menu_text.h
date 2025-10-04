@@ -26,9 +26,8 @@ const char it_save[]           PROGMEM = "W - Write changes to EEPROM (persist a
 // Menu navigation
 const char it_show_menu[]      PROGMEM = "M - Show this menu again";
 const char it_exit1[]          PROGMEM = "1 - Discard changes and exit";
-const char it_exit2[]          PROGMEM = "2 - Apply changes and restart";
-const char it_exit3[]          PROGMEM = "3 - Apply changes and resume operation";
-const char it_exit4[]          PROGMEM = "4 - Reset all to defaults and restart";
+const char it_exit2[]          PROGMEM = "2 - Apply changes and resume operation";
+const char it_exit3[]          PROGMEM = "3 - Reset all to defaults and restart";
 
 // Mode submenu items
 const char it_mode_ts[]        PROGMEM = "A1 - Timestamp";

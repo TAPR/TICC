@@ -78,3 +78,5 @@ The clock recovery functionality adds approximately 1135 bytes (14%) to global m
 5. User can force immediate restart with 'r' key in auto modes
 6. Config changes are cached for performance
 
+
+

@@ -14,6 +14,7 @@
 #include <EEPROM.h>
 // config_types.h functionality now included in config.h
 #include "config.h"
+#include "config_menu_text.h"
 
 // External variables referenced by other files
 char SER_NUM[17];          // set by get_ser_num();
@@ -320,26 +321,26 @@ void handle_config_change_exit() {
     // Restart was requested from config menu
     if (config_changed) {
       // Option 3 - reset to defaults (config_changed still set)
-      configPrintln("Restarting with default settings.");
+      configPrintlnProg(ln_restart_default);
     } else {
       // W command - changes written to EEPROM (config_changed cleared)
-      configPrintln("Restarting with new settings.");
+      configPrintlnProg(ln_restart_new);
     }
   } else if (config_change_requires_restart()) {
     // Full restart required due to config changes
-    configPrintln("Configuration changes require restart. Restarting...");
+    configPrintlnProg(ln_restart_required);
     delay(1000);
     // This would trigger a restart in the main program
   } else {
     // Can resume with flush
     if (config_changed) {
-      configPrintln("Applying configuration changes...");
+      configPrintlnProg(ln_applying_changes);
       apply_config_changes();
-      configPrintln("Resuming operation with new settings.");
-      configPrintln("(Changes are temporary - will revert on restart)");
+      configPrintlnProg(ln_resuming_operation);
+      configPrintlnProg(ln_changes_temporary);
     } else {
       // Changes were written to EEPROM, just resume
-      configPrintln("Resuming operation with new settings.");
+      configPrintlnProg(ln_resuming_operation);
     }
   }
 }
@@ -370,7 +371,9 @@ void print_config(config_t x) {
   // Measurement Mode (most important param)
   strcpy(tmpbuf, "Measurement Mode: ");
   switch (x.MODE) {
-    case Timestamp: strcat(tmpbuf, "Timestamp"); break;
+     case Paired_Timestamp: strcat(tmpbuf, "Paired_Timestamp"); break;
+    case Strict_Timestamp: strcat(tmpbuf, "Strict_Timestamp"); break;
+    case Immediate_Timestamp: strcat(tmpbuf, "Immediate_Timestamp"); break;
     case Binary: strcat(tmpbuf, "Binary Timestamp"); break;
     case Period: strcat(tmpbuf, "Period"); break;
     case Interval: strcat(tmpbuf, "Time Interval A->B"); break;

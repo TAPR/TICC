@@ -30,16 +30,20 @@ const char it_exit2[]          PROGMEM = "2 - Apply changes and resume operation
 const char it_exit3[]          PROGMEM = "3 - Reset all to defaults and restart";
 
 // Mode submenu items
-const char it_mode_ts[]        PROGMEM = "A1 - Timestamp";
-const char it_mode_bin[]       PROGMEM = "A2 - Binary Timestamp";
-const char it_mode_int[]       PROGMEM = "A3 - Time Interval A -> B";
-const char it_mode_period[]    PROGMEM = "A4 - Period";
-const char it_mode_3ch[]       PROGMEM = "A5 - 3-Cornered Hat";
-const char it_mode_debug[]     PROGMEM = "A6 - Debug";
-const char it_mode_null[]      PROGMEM = "A7 - Null Output";
+const char it_mode_ts[]        PROGMEM = "A1 - Paired Timestamp";
+const char it_mode_strict[]    PROGMEM = "A2 - Strict Timestamp";
+const char it_mode_immediate[] PROGMEM = "A3 - Immediate Timestamp";
+const char it_mode_bin[]       PROGMEM = "A4 - Binary Timestamp";
+const char it_mode_int[]       PROGMEM = "A5 - Time Interval A -> B";
+const char it_mode_period[]    PROGMEM = "A6 - Period";
+const char it_mode_3ch[]       PROGMEM = "A7 - 3-Cornered Hat";
+const char it_mode_debug[]     PROGMEM = "A8 - Debug";
+const char it_mode_null[]      PROGMEM = "A9 - Null Output";
 
 // Mode descriptions
-const char desc_timestamp[]    PROGMEM = "Timestamp";
+const char desc_timestamp[]    PROGMEM = "Paired Timestamp";
+const char desc_strict[]       PROGMEM = "Strict Timestamp";
+const char desc_immediate[]    PROGMEM = "Immediate Timestamp";
 const char desc_binary[]       PROGMEM = "Binary Timestamp";
 const char desc_interval[]     PROGMEM = "Time Interval A->B";
 const char desc_period[]       PROGMEM = "Period";
@@ -103,7 +107,9 @@ const char ln_mode_discarded[] PROGMEM = "Mode changes discarded.";
 const char ln_mode_kept[]      PROGMEM = "Mode changes kept.";
 
 // Mode names
-const char mode_timestamp[]    PROGMEM = "Timestamp";
+const char mode_timestamp[]    PROGMEM = "Paired Timestamp";
+const char mode_strict[]       PROGMEM = "Strict Timestamp";
+const char mode_immediate[]    PROGMEM = "Immediate Timestamp";
 const char mode_binary[]       PROGMEM = "Binary Timestamp";
 const char mode_interval[]     PROGMEM = "Time Interval A->B";
 const char mode_period[]       PROGMEM = "Period";
@@ -136,5 +142,13 @@ const char ln_eeprom_confirm[] PROGMEM = "Type 'YES' to confirm: ";
 const char ln_eeprom_clearing[] PROGMEM = "Clearing entire EEPROM...";
 const char ln_eeprom_cleared[] PROGMEM = "EEPROM cleared. Restarting...";
 const char ln_eeprom_cancelled[] PROGMEM = "EEPROM clear cancelled.";
+
+// Config change messages
+const char ln_restart_default[] PROGMEM = "Restarting with default settings.";
+const char ln_restart_new[] PROGMEM = "Restarting with new settings.";
+const char ln_restart_required[] PROGMEM = "Configuration changes require restart. Restarting...";
+const char ln_applying_changes[] PROGMEM = "Applying configuration changes...";
+const char ln_resuming_operation[] PROGMEM = "Resuming operation with new settings.";
+const char ln_changes_temporary[] PROGMEM = "(Changes are temporary - will revert on restart)";
 
 #endif

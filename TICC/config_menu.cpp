@@ -24,6 +24,12 @@
  *    - Add default value constant
  *    - Update defaultConfig() function in config_core.cpp
  *    - Update print_config() function to display the parameter
+ *    - Update show_config() function if it exists (for startup display)
+ * 
+ * 2a. ADD ENUM VALUES (if adding new enum options):
+ *    - Add new values to the enum definition in config.h
+ *    - Update getModeName() function in config_menu.cpp to handle new cases
+ *    - Add corresponding mode name constants in config_menu_text.h
  * 
  * 3. ADD COMMAND TABLE ENTRY (config_command_table.cpp):
  *    - Add entry to appropriate command table (main_menu_commands, advanced_commands, etc.)
@@ -35,6 +41,7 @@
  *    - Add menu item display to appropriate show_*_menu() function
  *    - Use copyProgStrToBuffer() and strcat_P() for PROGMEM strings
  *    - Show current value using appropriate formatting
+ *    - Update any other display functions that show configuration values
  * 
  * 5. ADD EEPROM SUPPORT (if needed):
  *    - Add EEPROM read/write functions in config_eeprom.cpp
@@ -206,7 +213,9 @@ static void copyProgStrToBuffer(const char* str, char* buffer, size_t bufferSize
 // Helper function to get mode name as string
 const char* getModeName(MeasureMode mode) {
   switch (mode) {
-    case Timestamp: return mode_timestamp;
+     case Paired_Timestamp: return mode_timestamp;
+    case Strict_Timestamp: return mode_strict;
+    case Immediate_Timestamp: return mode_immediate;
     case Binary: return mode_binary;
     case Interval: return mode_interval;
     case Period: return mode_period;
@@ -455,6 +464,12 @@ void show_mode_menu() {
   configPrintln(line);
   
   copyProgStrToBuffer(it_mode_ts, line, sizeof(line));
+  configPrintln(line);
+  
+  copyProgStrToBuffer(it_mode_strict, line, sizeof(line));
+  configPrintln(line);
+  
+  copyProgStrToBuffer(it_mode_immediate, line, sizeof(line));
   configPrintln(line);
   
   copyProgStrToBuffer(it_mode_bin, line, sizeof(line));

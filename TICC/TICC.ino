@@ -7,8 +7,8 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-// 3 October 2025 - version 20250103.1
-extern const char SW_VERSION[17] = "20251003.1";
+// 4 October 2025 - version 20251004.1
+extern const char SW_VERSION[17] = "20251004.1";
 extern const char SW_TAG[6] = "BETA";
 
 
@@ -284,10 +284,20 @@ void ticc_setup() {
   // print header to stdout
   Serial.println("# ");
   switch (config.MODE) {
-    case Timestamp:
-      Serial.print("# timestamp (seconds with ");
+    case Paired_Timestamp:
+      Serial.print("# paired timestamp (seconds with ");
       Serial.print(config.PLACES);
-      Serial.println(" decimal places)");
+      Serial.println(" decimal places) - 2-sample pairing with channel order");
+      break;
+    case Strict_Timestamp:
+      Serial.print("# strict timestamp (seconds with ");
+      Serial.print(config.PLACES);
+      Serial.println(" decimal places) - 6-sample buffer for chronological ordering");
+      break;
+    case Immediate_Timestamp:
+      Serial.print("# immediate timestamp (seconds with ");
+      Serial.print(config.PLACES);
+      Serial.println(" decimal places) - prints each timestamp as ready");
       break;
     case Interval:
       Serial.print("# time interval A->B (seconds with ");
@@ -385,7 +395,6 @@ void loop() {
 
     size_t i;
     for (i = 0; i < ARRAY_SIZE(channels); ++i) {
-
       // No work to do unless intb is low
       if (digitalRead(channels[i].INTB) == 0) {
         // turn LED on -- use board.h macro for speed
@@ -538,7 +547,18 @@ void loop() {
              ((Serial.available() > 0) && (Serial.read() == config.POLL_CHAR)))) {
 
           switch (config.MODE) {
-            case Timestamp: // Defer Timestamp printing to the post-loop pairing block to enforce ordering
+            case Paired_Timestamp: // Defer Paired_Timestamp printing to the post-loop pairing block to enforce ordering
+              break;
+
+            case Strict_Timestamp: // Defer Strict_Timestamp printing to the post-loop pairing block for chronological ordering
+              break;
+
+            case Immediate_Timestamp: // Print each timestamp immediately as ready
+              if (channels[i].new_ts_ready) {
+                char line[64];
+                print_timestamp(line, sizeof(line), &channels[i].timestamp, (char)channels[i].name);
+                channels[i].new_ts_ready = 0;
+              }
               break;
 
             case Interval: // handled after channel loop (pairing logic)
@@ -598,8 +618,8 @@ void loop() {
       }  // if INTB
     }    // for
 
-    // Timestamp mode: assemble and print pairs without timeout
-    if (config.MODE == Timestamp) {
+    // Paired_Timestamp mode: assemble and print pairs without timeout
+    if (config.MODE == Paired_Timestamp) {
       // Two-slot buffer; accumulate two successive samples (across either channel)
       // then emit exactly two lines per pair in fixed order: if both channels are
       // present print chA then chB; if both are the same channel, print that
@@ -656,6 +676,57 @@ void loop() {
             }
           }
           ts_pair_count = 0;  // clear pair buffer after printing
+        }
+      }
+    }
+
+    // Strict_Timestamp mode: 6-sample buffer for chronological ordering
+    if (config.MODE == Strict_Timestamp) {
+      // Six-slot buffer; accumulate up to 6 samples for sorting
+      struct StrictSlot {
+        Timestamp64 t;
+        uint8_t ch;
+      };
+      static StrictSlot strict_buffer[6];
+      static uint8_t strict_count = 0;
+
+      // Ingest any fresh samples into the strict buffer
+      for (int ci = 0; ci < 2; ++ci) {
+        if (channels[ci].new_ts_ready && (channels[ci].totalize > 2)) {
+          if (strict_count < 6) {
+            strict_buffer[strict_count].t = channels[ci].timestamp;
+            strict_buffer[strict_count].ch = (uint8_t)ci;
+            strict_count++;
+          }
+          channels[ci].new_ts_ready = 0;  // consume
+        }
+      }
+
+      // If we have a complete buffer (6 samples), sort and output
+      if (strict_count == 6) {
+        bool ok = (!config.POLL_CHAR);
+        if (!ok) {
+          if ((Serial.available() > 0) && (Serial.read() == config.POLL_CHAR)) ok = true;
+        }
+        if (ok) {
+          // Simple bubble sort by timestamp (earliest first)
+          for (int i = 0; i < 5; ++i) {
+            for (int j = 0; j < 5 - i; ++j) {
+              if (timestamp_ge(&strict_buffer[j].t, &strict_buffer[j + 1].t)) {
+                // Swap
+                StrictSlot temp = strict_buffer[j];
+                strict_buffer[j] = strict_buffer[j + 1];
+                strict_buffer[j + 1] = temp;
+              }
+            }
+          }
+          
+          // Output all 6 samples in chronological order
+          for (int k = 0; k < 6; ++k) {
+            char line[64];
+            print_timestamp(line, sizeof(line), &strict_buffer[k].t, (char)channels[strict_buffer[k].ch].name);
+          }
+          strict_count = 0;  // clear buffer after printing
         }
       }
     }

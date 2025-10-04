@@ -536,7 +536,9 @@ void loop() {
             m -= channels[i].timestamp.picos;
             uint64_t borrow_sec = 1 + (m / PS_PER_SEC);
             uint64_t rem = m % PS_PER_SEC;
-            channels[i].timestamp.seconds -= (uint32_t)borrow_sec;
+            // changed below from (uint32_t) cast to see if that solves
+            // issue at around 8000 seconds
+            channels[i].timestamp.seconds -= (int32_t)borrow_sec;
             channels[i].timestamp.picos = PS_PER_SEC - rem;
           }
         }

@@ -22,13 +22,13 @@ enum MeasureMode : unsigned char {Paired_Timestamp, Strict_Timestamp, Immediate_
 #define SER_NUM_START             (int16_t)  0x0FF0     // first byte of serial number in eeprom
 /*****************************************************************/
 // default values for config struct
-#define DEFAULT_MODE              (MeasureMode) 0       // Measurement mode -- 0 is Timestamp
+#define DEFAULT_MODE              (MeasureMode) 0       // Measurement mode -- 0 is Paired_Timestamp
 #define DEFAULT_POLL_CHAR         (char)    0x00        // In poll mode, wait for this before output
 #define DEFAULT_CLOCK_HZ          (int64_t) 10000000    // 10 MHz
 #define DEFAULT_PICTICK_PS        (int64_t) 100000000   // 100us
 #define DEFAULT_CAL_PERIODS       (int16_t) 20          // CAL_PERIODS (2, 10, 20, 40)
 #define DEFAULT_TIMEOUT           (int16_t) 0x05        // measurement timeout
-#define DEFAULT_WRAP              (int16_t) 2           // timestamp rollover in 100 us ticks; max 2^63 - 1
+#define DEFAULT_WRAP              (int16_t) 0           // timestamp rollover in 100 us ticks; 0 = no wrap
 #define DEFAULT_PLACES            (int16_t) 11          // decimal places for output (0-12, default 11)
 #define DEFAULT_SYNC_MODE         (char)    'P'         // (P)rimary or (S)econdary
 #define DEFAULT_NAME_0            (char)    'A'

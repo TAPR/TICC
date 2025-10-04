@@ -285,19 +285,19 @@ void ticc_setup() {
   Serial.println("# ");
   switch (config.MODE) {
     case Paired_Timestamp:
-      Serial.print("# paired timestamp (seconds with ");
+      Serial.print("# paired channel-order timestamp (seconds with ");
       Serial.print(config.PLACES);
-      Serial.println(" decimal places) - 2-sample pairing with channel order");
+      Serial.println(" decimal places)");
       break;
     case Strict_Timestamp:
-      Serial.print("# strict timestamp (seconds with ");
+      Serial.print("# strict timestamp order (seconds with ");
       Serial.print(config.PLACES);
-      Serial.println(" decimal places) - 6-sample buffer for chronological ordering");
+      Serial.println(" decimal places)");
       break;
     case Immediate_Timestamp:
       Serial.print("# immediate timestamp (seconds with ");
       Serial.print(config.PLACES);
-      Serial.println(" decimal places) - prints each timestamp as ready");
+      Serial.println(" decimal places)");
       break;
     case Interval:
       Serial.print("# time interval A->B (seconds with ");
@@ -658,6 +658,7 @@ void loop() {
             // Print chA timestamp - OPTIMIZED
             {
               char line[64];
+              // Debug code removed - issue resolved
               print_timestamp(line, sizeof(line), &A->t, (char)channels[0].name);
             }
             

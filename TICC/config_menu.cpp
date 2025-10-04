@@ -111,31 +111,29 @@
 #include <stdint.h>
 #include <Arduino.h>
 #include <string.h>
-#include "config.h"
+#include "TICC.h"
 #include "config_menu_text.h"
 #include "config_command_table.h"
 
 // Forward declarations for functions in config_core.cpp
-extern void configPrint(const char* msg);
-extern void configPrintln(const char* msg);
+// configPrint functions now in TICC.h
 extern size_t readLine(char *buf, size_t cap);
 extern char* trimInPlace(char *s);
 extern bool parseInt64Simple(const char *s, int64_t *out);
 extern bool parseCharPair(const char *s, bool *set0, char *v0, bool *set1, char *v1);
 extern char* getInputOrPrompt(const char* args, const char* prompt, char* buffer, size_t bufferSize);
-extern void eeprom_write_config();
+// eeprom_write_config now in TICC.h
 extern void eeprom_clear();
-extern struct config_t defaultConfig();
+// defaultConfig now in TICC.h
 
 // External variables from TICC.ino
 extern volatile uint8_t request_restart;
-extern uint8_t config_changed;
-extern config_t config;
+// config_changed and config now in TICC.h
 
 // Forward declarations for version info
-extern const char SW_VERSION[17];
+// SW_VERSION now in TICC.h
 extern const char SW_TAG[6];
-extern char SER_NUM[17];
+// SER_NUM now in TICC.h
 
 // Single shared buffer to reduce memory usage
 char sharedBuffer[128];
@@ -186,10 +184,7 @@ bool app_i32(char* &cur, size_t &rem, int32_t v) {
   return app_u32(cur, rem, (uint32_t)v);
 }
 
-// Powers of ten lookup table to avoid repeated multiplication
-static const uint32_t POW10[] PROGMEM = {
-  1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000
-};
+// POW10_TABLE now in TICC.h
 
 
 // Helper function to copy PROGMEM strings to buffer
@@ -224,7 +219,7 @@ static const char* getWrapDescription(int16_t wrap) {
   if (wrap <= 0) {
     strcpy_P(desc, wrap_no_wrap);
   } else if (wrap <= 9) {
-    uint32_t wrap_seconds = pgm_read_dword(&POW10[wrap]);
+    uint32_t wrap_seconds = pgm_read_dword(&POW10_TABLE[wrap]);
     sprintf_P(desc, wrap_format, (unsigned long)wrap_seconds);
   } else {
     sprintf_P(desc, wrap_scientific, wrap);

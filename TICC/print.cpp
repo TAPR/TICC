@@ -1,13 +1,12 @@
 // print.cpp -- optimized 64-bit printing routines for TICC
 
 #include <Arduino.h>
-#include "config.h"
+#include "TICC.h"
 #include "tdc7200.h"
 #include "timestamp_utils.h"
 #include "print.h"
 
-// External config variable (defined in TICC.ino)
-extern config_t config;
+// External variables now defined in TICC.h
 
 // Fast 64-bit to 12-digit conversion
 #define M6 1000000
@@ -51,7 +50,6 @@ static inline void frac12_to_chars_fast(uint64_t frac, char *out12) {
 
 // Pre-allocated buffers for maximum speed
 static char line_buffer[64];  // Reusable buffer
-static const uint32_t POW10_TABLE[10] = {1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
 
 // Cache config parameters to avoid external access on every call
 static uint8_t cached_places = 11;  // Default value
@@ -78,11 +76,26 @@ int print_timestamp(
   if (!out || out_size < 32 || !t) return -1;
   
   // Use cached config parameters for maximum speed
-  uint8_t places = cached_places;
-  uint8_t wrap = use_wrap ? cached_wrap : 0;  // Only use wrap if requested
+  // If config not cached, get values directly from config
+  uint8_t places, wrap;
+  if (config_cached) {
+    places = cached_places;
+    wrap = use_wrap ? cached_wrap : 0;
+  } else {
+    // Fallback to direct config access if not cached
+    extern struct config_t config;
+    places = (config.PLACES > 12) ? 12 : ((config.PLACES < 0) ? 0 : config.PLACES);
+    wrap = use_wrap ? config.WRAP : 0;
+  }
+  
+  // Debug: check if config values are reasonable
+  if (wrap > 9) wrap = 0;  // Sanity check
+  if (places > 12) places = 12;  // Sanity check
   
   // Pre-calculate common values to avoid repeated calculations
   int32_t sec = t->seconds;
+  
+  // Debug code removed - issue was POW10_TABLE corruption, now fixed with PROGMEM
   char* p = out;
   
   // Handle negative sign if needed
@@ -95,14 +108,21 @@ int print_timestamp(
   // Handle seconds with wrap logic - optimized for common cases
   if (wrap > 0 && wrap <= 9) {
     // Apply wrap: show only last 'wrap' digits using lookup table
-    uint32_t mod = POW10_TABLE[wrap];
+    // FIXED: Use PROGMEM table with pgm_read_dword()
+    uint32_t mod = pgm_read_dword(&POW10_TABLE[wrap]);
     uint32_t sec_u = (uint32_t)sec;  // Convert to unsigned for modulo
+    
+    // Debug code removed - POW10_TABLE corruption fixed
+    
     sec_u = sec_u % mod;
     
     // Zero-pad to wrap width - unrolled for common wrap values
     if (wrap == 2) {
       p[0] = '0' + (sec_u / 10);
       p[1] = '0' + (sec_u % 10);
+      
+      // Debug code removed - issue resolved
+      
       p += 2;
     } else if (wrap == 3) {
       p[0] = '0' + (sec_u / 100);

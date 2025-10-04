@@ -8,11 +8,17 @@
 // Licensed under BSD 2-clause license
 
 /*
- * HOW TO ADD A NEW MENU ITEM (Table-Driven System)
- * ================================================
+ * 4 October 2025
+ * This configuration menu system was re-implemented using Cursor AI with a very large
+ * amount of iterative testing by human beings.  The code may read as a bit robotic, but
+ * it seems to do the job and is much easier to follow than its predecessor.
  * 
- * The configuration system now uses a table-driven approach for maximum efficiency
- * and maintainability. To add a new menu item, follow these simplified steps:
+ * HOW TO ADD NEW MENU ITEMS
+ * =========================
+ * 
+ * The configuration code makes use of tables to simplify logic and stores
+ * strings in PROGMEM to reduce global memory use.  To add a new menu item, 
+ * follow these steps:
  * 
  * 1. ADD MENU TEXT (config_menu_text.h):
  *    - Add PROGMEM string constants for menu item text, prompts, and messages
@@ -21,6 +27,7 @@
  * 
  * 2. ADD CONFIGURATION PARAMETER (if needed):
  *    - Add field to config_t struct in config.h
+ *    - IMPORTANT -- increment EEPROM version if config_t changes!
  *    - Add default value constant
  *    - Update defaultConfig() function in config_core.cpp
  *    - Update print_config() function to display the parameter
@@ -47,12 +54,6 @@
  *    - Add EEPROM read/write functions in config_eeprom.cpp
  *    - Update loadConfig() and saveConfig() functions
  *    - Add to configChanged() function
- * 
- * 6. TEST THE IMPLEMENTATION:
- *    - Compile and test the new menu item
- *    - Verify input validation works correctly
- *    - Test both interactive and batch command modes
- *    - Ensure EEPROM persistence works
  * 
  * COMMAND TABLE ENTRY FORMAT:
  * ===========================
@@ -91,15 +92,6 @@
  * 
  * Submenu selection (like Mode):
  * {'1', SUBMENU_SELECTION, NULL, 0, 0, "", &config.MODE, 0, "Mode", CONFIRM_MANUAL, Timestamp}
- * 
- * BENEFITS OF TABLE-DRIVEN SYSTEM:
- * ================================
- * - 31.6% reduction in code size (1,225 → 838 lines)
- * - Centralized command processing logic
- * - Consistent validation and confirmation patterns
- * - Easy to add new commands (just table entries)
- * - Reduced maintenance overhead
- * - All command tables in config_command_table.cpp/.h
  * 
  * HELPER FUNCTIONS AVAILABLE:
  * - getInputOrPrompt(): Get user input with prompt

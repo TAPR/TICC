@@ -197,20 +197,25 @@ bool process_generic_command(char cmd, const char* args, bool interactive, const
         app_p(p, r, getModeName(config.MODE));
         configPrintln(sharedBuffer);
         
-        // Manual confirmation
-        configPrintln("");
-        configPrintlnProg(ln_1_keep);
-        configPrintlnProg(ln_2_discard);
-        configPrint("> ");
-        
-        readLine(sharedBuffer, sizeof(sharedBuffer));
-        char *choice = trimInPlace(sharedBuffer);
-        
-        if (choice[0] == '2' && strlen(choice) == 1) {
-          config.MODE = oldMode;
-          config_changed = 0;
-          configPrintlnProg(ln_discard_changes);
+        // Manual confirmation only in interactive mode
+        if (interactive) {
+          configPrintln("");
+          configPrintlnProg(ln_1_keep);
+          configPrintlnProg(ln_2_discard);
+          configPrint("> ");
+          
+          readLine(sharedBuffer, sizeof(sharedBuffer));
+          char *choice = trimInPlace(sharedBuffer);
+          
+          if (choice[0] == '2' && strlen(choice) == 1) {
+            config.MODE = oldMode;
+            config_changed = 0;
+            configPrintlnProg(ln_discard_changes);
+          } else {
+            configPrintlnProg(ln_keep_changes);
+          }
         } else {
+          // Batch mode - automatically keep changes
           configPrintlnProg(ln_keep_changes);
         }
       }
@@ -228,20 +233,25 @@ bool process_generic_command(char cmd, const char* args, bool interactive, const
         app_i32(p, r, (int32_t)config.BAUD_RATE);
         configPrintln(sharedBuffer);
         
-        // Manual confirmation
-        configPrintln("");
-        configPrintlnProg(ln_1_keep);
-        configPrintlnProg(ln_2_discard);
-        configPrint("> ");
-        
-        readLine(sharedBuffer, sizeof(sharedBuffer));
-        char *choice = trimInPlace(sharedBuffer);
-        
-        if (choice[0] == '2' && strlen(choice) == 1) {
-          config.BAUD_RATE = oldRate;
-          config_changed = 0;
-          configPrintlnProg(ln_discard_changes);
+        // Manual confirmation only in interactive mode
+        if (interactive) {
+          configPrintln("");
+          configPrintlnProg(ln_1_keep);
+          configPrintlnProg(ln_2_discard);
+          configPrint("> ");
+          
+          readLine(sharedBuffer, sizeof(sharedBuffer));
+          char *choice = trimInPlace(sharedBuffer);
+          
+          if (choice[0] == '2' && strlen(choice) == 1) {
+            config.BAUD_RATE = oldRate;
+            config_changed = 0;
+            configPrintlnProg(ln_discard_changes);
+          } else {
+            configPrintlnProg(ln_keep_changes);
+          }
         } else {
+          // Batch mode - automatically keep changes
           configPrintlnProg(ln_keep_changes);
         }
       }

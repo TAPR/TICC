@@ -318,14 +318,8 @@ void handle_config_change_exit() {
   extern volatile uint8_t request_restart;
   
   if (request_restart) {
-    // Restart was requested from config menu
-    if (config_changed) {
-      // Option 3 - reset to defaults (config_changed still set)
-      configPrintlnProg(ln_restart_default);
-    } else {
-      // W command - changes written to EEPROM (config_changed cleared)
-      configPrintlnProg(ln_restart_new);
-    }
+    // Restart was requested from config menu - main program will handle the restart message
+    // No need to print anything here as the main program will show appropriate restart message
   } else if (config_change_requires_restart()) {
     // Full restart required due to config changes
     configPrintlnProg(ln_restart_required);

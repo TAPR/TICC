@@ -151,4 +151,17 @@ const char ln_applying_changes[] PROGMEM = "Applying configuration changes...";
 const char ln_resuming_operation[] PROGMEM = "Resuming operation with new settings.";
 const char ln_changes_temporary[] PROGMEM = "(Changes are temporary - will revert on restart)";
 
+// Write command messages
+const char ln_changes_written[] PROGMEM = "Changes written to EEPROM (will persist across restarts)";
+const char ln_restart_now[] PROGMEM = "Restart now to apply changes?";
+const char ln_1_yes_restart[] PROGMEM = "1 - Yes, restart now";
+const char ln_2_no_continue[] PROGMEM = "2 - No, continue with current settings";
+const char ln_continuing_settings[] PROGMEM = "Continuing with current settings.";
+const char ln_changes_after_restart[] PROGMEM = "(Changes will take effect after restart)";
+
+// Exit command messages
+const char ln_discarded_changes[] PROGMEM = "Discarded changes.";
+const char ln_applying_resuming[] PROGMEM = "Applying changes and resuming operation...";
+const char ln_defaults_written[] PROGMEM = "Defaults written. Restarting...";
+
 #endif

@@ -100,7 +100,7 @@ bool process_names_command(char cmd, const char* args, bool interactive);
 bool process_poll_command(char cmd, const char* args, bool interactive);
 bool process_menu_command();
 bool process_info_command();
-bool process_write_command();
+bool process_write_command(bool interactive = true);
 bool process_eeprom_clear_command();
 bool process_exit_command(char cmd);
 

@@ -281,9 +281,10 @@ void ticc_setup() {
   digitalWrite(CLIENT_SYNC, LOW);                    // unassert -- results in ~22uS sync pulse
   pinMode(CLIENT_SYNC, INPUT);                       // set back to input just to be neat
 
-  // print header to stdout
-  Serial.println("# ");
-  switch (config.MODE) {
+  // print header to stdout (unless restart is pending)
+  if (!request_restart) {
+    Serial.println("# ");
+    switch (config.MODE) {
     case Paired_Timestamp:
       Serial.print("# paired channel-order timestamp (seconds with ");
       Serial.print(config.PLACES);
@@ -326,7 +327,7 @@ void ticc_setup() {
       Serial.println("# null output mode - no data");
       break;
   }  // switch
-
+  }  // if (!request_restart)
 
   // turn the LEDs off
   CLR_LED_0;
@@ -340,6 +341,15 @@ void ticc_setup() {
 /****************************************************************/
 void loop() {
   ticc_setup();  // initialize and optionally go to config
+  
+  // Check if restart was requested after config processing
+  if (request_restart) {
+    request_restart = 0;  // Clear the flag
+    just_restarted = 1;   // Set flag for next loop iteration
+    Serial.println("# Restart requested, reinitializing system...");
+    return;  // Exit loop to trigger fresh ticc_setup() call
+  }
+  
   while (1) {    // this is the actual loop!
 
     if ( (Serial.read() == '#') ) {        // direct entry to config menu
@@ -846,13 +856,7 @@ void loop() {
       config_changed = 0;
     }
 
-    // Check if restart was requested (option '2' from config menu)
-    if (request_restart) {
-      request_restart = 0;  // Clear the flag
-      just_restarted = 1;   // Set flag for next loop iteration
-      Serial.println("# Restart requested, reinitializing system...");
-      return;  // Exit loop to trigger fresh ticc_setup() call
-    }
+    // Restart handling moved to beginning of loop() function
 
   }  // while (1) loop
 

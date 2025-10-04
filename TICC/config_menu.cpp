@@ -648,32 +648,42 @@ bool process_version_command() {
   return true;
 }
 
+// Wrapper function for write command to match command table signature
+bool process_write_wrapper(char cmd, const char* args, bool interactive) {
+  return process_write_command(interactive);
+}
+
 // Process write command
-bool process_write_command() {
+bool process_write_command(bool interactive) {
   eeprom_write_config();
   config_changed = 0;
-  configPrintln("Changes written to EEPROM (will persist across restarts)");
+  configPrintlnProg(ln_changes_written);
   
-  // Ask if user wants to restart to apply changes
-  configPrintln("");
-  configPrintln("Restart now to apply changes?");
-  configPrintln("1 - Yes, restart now");
-  configPrintln("2 - No, continue with current settings");
-  configPrintln("");
-  configPrint("> ");
-  
-  char input[8];
-  readLine(input, sizeof(input));
-  char *trimmed = trimInPlace(input);
-  
-  if (strcmp(trimmed, "1") == 0) {
-    configPrintln("Restarting with new settings...");
+  if (interactive) {
+    // Ask if user wants to restart to apply changes
+    configPrintln("");
+    configPrintlnProg(ln_restart_now);
+    configPrintlnProg(ln_1_yes_restart);
+    configPrintlnProg(ln_2_no_continue);
+    configPrintln("");
+    configPrint("> ");
+    
+    char input[8];
+    readLine(input, sizeof(input));
+    char *trimmed = trimInPlace(input);
+    
+    if (strcmp(trimmed, "1") == 0) {
+      request_restart = 1;  // Set restart flag
+      return false; // Exit config system with restart
+    } else {
+      configPrintlnProg(ln_continuing_settings);
+      configPrintlnProg(ln_changes_after_restart);
+      return true; // Stay in config system
+    }
+  } else {
+    // Batch mode - automatically restart
     request_restart = 1;  // Set restart flag
     return false; // Exit config system with restart
-  } else {
-    configPrintln("Continuing with current settings.");
-    configPrintln("(Changes will take effect after restart)");
-    return true; // Stay in config system
   }
 }
 
@@ -700,22 +710,73 @@ bool process_eeprom_clear_command() {
 bool process_exit_command(char cmd) {
   switch (cmd) {
     case '1':
-      configPrintln("Discarded changes.");
+      configPrintlnProg(ln_discarded_changes);
       config_changed = 0;
       return false; // Exit config system
     case '2':
-      configPrintln("Applying changes and resuming operation...");
+      configPrintlnProg(ln_applying_resuming);
       config_changed = 0;
       return false; // Exit config system with resume
     case '3':
       config = defaultConfig();
       eeprom_write_config();
-      configPrintln("Defaults written. Restarting...");
+      configPrintlnProg(ln_defaults_written);
       request_restart = 1;  // Set restart flag
       return false; // Exit config system with restart
     default:
       return true;
   }
+}
+
+// ============================================================================
+// BATCH COMMAND PROCESSOR
+// ============================================================================
+
+// Process semicolon-separated commands in batch mode (no interactive prompts)
+bool process_batch_commands(const char* input_line) {
+  char line_copy[128];
+  strncpy(line_copy, input_line, sizeof(line_copy) - 1);
+  line_copy[sizeof(line_copy) - 1] = '\0';
+  
+  char *cmd_start = line_copy;
+  char *cmd_end;
+  bool success = true;
+  
+  while (cmd_start && *cmd_start && success) {
+    // Find the next semicolon or end of string
+    cmd_end = strchr(cmd_start, ';');
+    bool had_semicolon = (cmd_end != NULL);
+    if (cmd_end) {
+      *cmd_end = '\0';  // Temporarily null-terminate
+    } else {
+      cmd_end = cmd_start + strlen(cmd_start);  // Point to end of string
+    }
+    
+    // Process this command using existing processor with interactive=false
+    char *cmd_line = trimInPlace(cmd_start);
+    if (strlen(cmd_line) > 0) {
+      if (!process_config_command(cmd_line, false)) {  // Always non-interactive
+        success = false;
+        break;
+      }
+    }
+    
+    // Restore semicolon if we had one
+    if (had_semicolon) {
+      *cmd_end = ';';
+    }
+    
+    // Move to next command
+    if (had_semicolon) {
+      cmd_start = cmd_end + 1;
+      while (*cmd_start == ' ') cmd_start++;  // Skip leading spaces
+      if (*cmd_start == '\0') break;  // No more commands
+    } else {
+      break;  // No more commands
+    }
+  }
+  
+  return success;
 }
 
 // ============================================================================
@@ -843,48 +904,21 @@ void show_config_menu() {
     
     // Check for batch mode (semicolons)
     bool has_semicolons = (strchr(line, ';') != NULL);
-    interactive = !has_semicolons;
     
-    // Process semicolon-separated commands
-    char *cmd_start = line;
-    char *cmd_end;
-    bool should_exit = false;
-    
-    while (cmd_start && *cmd_start && !should_exit) {
-      // Find the next semicolon or end of string
-      cmd_end = strchr(cmd_start, ';');
-      bool had_semicolon = (cmd_end != NULL);
-      if (cmd_end) {
-        *cmd_end = '\0';  // Temporarily null-terminate
-      } else {
-        cmd_end = cmd_start + strlen(cmd_start);  // Point to end of string
+    if (has_semicolons) {
+      // Batch mode - process all commands without interactive prompts
+      if (!process_batch_commands(line)) {
+        break;  // Exit on error
       }
-      
-      // Process this command
-      char *cmd_line = trimInPlace(cmd_start);
-      if (strlen(cmd_line) > 0) {
-        if (!process_config_command(cmd_line, interactive)) {
-          should_exit = true;
-          break;
-        }
-      }
-      
-      // Restore semicolon if we had one
-      if (had_semicolon) {
-        *cmd_end = ';';
-      }
-      
-      // Move to next command
-      if (had_semicolon) {
-        cmd_start = cmd_end + 1;
-        while (*cmd_start == ' ') cmd_start++;  // Skip leading spaces
-        if (*cmd_start == '\0') break;  // No more commands
-      } else {
-        break;  // No more commands
+    } else {
+      // Interactive mode - process single command
+      interactive = true;
+      if (!process_config_command(line, interactive)) {
+        break;  // Exit on error
       }
     }
     
-    if (should_exit) break;
+    // Continue processing commands
     
     // Show menu again after processing commands
     showMenu = true;

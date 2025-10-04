@@ -55,7 +55,7 @@ const CommandEntry command_table[] PROGMEM = {
   {'M', CMD_MAIN_MENU, false, process_menu_command,  nullptr},
   {'S', CMD_DIRECT,  false, process_info_command,    nullptr},
   {'V', CMD_DIRECT,  false, process_version_command, nullptr},
-  {'W', CMD_DIRECT,  false, process_write_command,   nullptr},
+  {'W', CMD_DIRECT,  false, process_write_wrapper, nullptr},
   {'X', CMD_DIRECT,  false, process_eeprom_clear_command, nullptr},
   
   // Exit commands
@@ -262,6 +262,8 @@ bool process_generic_command(char cmd, const char* args, bool interactive, const
   // Handle input commands
   char* input = getInputOrPrompt(args, prompt_prog, sharedBuffer, sizeof(sharedBuffer));
   if (!input) return true;
+  
+  // Debug code removed - batch processing working correctly
   
   // Parse input based on type
   bool valid = false;

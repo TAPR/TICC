@@ -1,16 +1,11 @@
 # TICC Change Log
 
-## Version 2025090x.1
+## Version 202510xx
 
 **Major Release** - Reworked configuration menu system and internal
-improvements
+improvements; much rewritten code
 
-### ⚠️ Breaking Changes
-- **Default Timestamp Wraparound**: **The default behavior has changed
-  from no wrapping (0) to wrapping at 100 seconds (2)**. This is a major
-  behavioral change that may affect existing workflows and data analysis.
-  Users who rely on continuous timestamps without wrapping should set the
-  wrap value to 0 in the configuration menu.
+### Breaking Changes
 - **Many Configuration Menu Changes**: The configuration menu structure
   has changed and most parameter IDs are now different.  Also, a few
   parameter values have changed -- e.g., SYNC_MODE is now
@@ -22,6 +17,19 @@ improvements
   be retained.
 
 ### New Features
+- ** New Modes**:
+  - **Channel-Paired Timestamp**: Attempts to sort dual-channel output
+    for channel order (e.g., chA/chB/chA/chB) to meet TimeLab multi-channel
+    requirements.
+  - **Strict Order Timestamp**: Attempts to order dual-channel output
+    to maintain strict timestamp order (e.g., always increasing timestamp
+    regardless of channel order)
+  - **Immediate Timestamp**: This is the original timestamp mode; each
+    timestamp is printed as soon as it is ready, regardless of channel or
+    monotonic order.
+  - **Binary Timestamp**: Outputs binary data to achieve >1000
+    measurements/second on one channel
+  
 - **Enhanced Configuration Menus and New Options**: 
   - **Multiple commands per line**: Allows simplified scripting
   - **Timestamp Wraparound Configuration**: Timestamp wraparound can now be
@@ -29,8 +37,6 @@ improvements
   - **Configurable Precision**: The number of decimal places can now be set
     from the configuration menus
   - **Configurable Baud Rate**: Allows 230400 baud for maximum throughput
-- **New Binary Timestamp Mode**: Outputs binary data to achieve >1000
-  measurements/second on one channel
 - **Updated Documentation**: TICC User Guide completely rewritten and much
   expanded
 
@@ -42,9 +48,6 @@ improvements
   at 565 Hz.
 - **Extended Timestamp Range**: Timestamp calculation modified so that
   overflow will not happen for about 68 years
-- **Paired Channel Ordering**: When timestamp data is received from both
-  channels, the program attempts to ensure that the output order is always
-  ch0 followed by ch1.
 - **Print Function Fixes**: Resolved display errors that occurred when
   timestamps became very large
 - **Interrupt Processing**: Fixed fundamental problems processing TDC7200

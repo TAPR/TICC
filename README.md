@@ -29,7 +29,8 @@ User Guide which will be in the docs/ folder as soon as it's ready.
 See the CHANGES.md file for more details about versions.  This
 is just a short summary:
 
-September 2025: Major new release that adds/fixes:
+October 2025: Major new release that adds/fixes:
+* New timestamp modes -- channel paired, strict order, immediate
 * Much greater measurement speed, including binary
   timestamp mode that can do over 1000 measurements/second
   on one channel

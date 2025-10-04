@@ -31,7 +31,8 @@ improvements; much rewritten code
     measurements/second on one channel
   
 - **Enhanced Configuration Menus and New Options**: 
-  - **Multiple commands per line**: Allows simplified scripting
+  - **Multiple commands per line**: Allows simplified scripting with
+    multiple commands separated by ";" processed in batch, non-interactive mode
   - **Timestamp Wraparound Configuration**: Timestamp wraparound can now be
     enabled in the startup configuration menu (e.g., wrap at 100 seconds)
   - **Configurable Precision**: The number of decimal places can now be set

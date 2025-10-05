@@ -432,7 +432,7 @@ void loop() {
          * 3. Apply mixed-radix accumulation: seconds + picos (0..1e12-1 picoseconds)
          * 4. Handle carry/borrow between picos and seconds automatically
          * 
-         * - Uses Timestamp64 struct (uint32_t seconds + uint64_t picos) instead of
+         * - Uses Timestamp64 struct (int32_t seconds + uint64_t picos) instead of
          * - Incremental delta calculation avoids per-event 64-bit division
          * - Mixed-radix approach eliminates expensive modulo operations
          * - Preserves full picosecond precision (12 decimal places)

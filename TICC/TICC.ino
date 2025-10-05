@@ -41,7 +41,8 @@ extern const char SW_TAG[6] = "BETA";
  * when idle (no INTB asserted is about 2.5 to 3.0 us, and the through the loop
  * with INTB asserted, including time to process and print one timestamp at 
  * 115200 baud, is about 1.7 to 1.9 ms.  These were AI generated, so take them
- * for what they are worth.
+ * for what they are worth, but this is consistent with the measured one-channel
+ * throughput of about 540 measurements per second.
  
  * 
  * Timestamp Calculation:

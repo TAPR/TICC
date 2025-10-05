@@ -261,13 +261,13 @@ void ticc_setup() {
     channels[i].last_picstop = 0;
     channels[i].cached_sec = 0;
     channels[i].cached_rem_ticks = 0;
-
+   
+    update_cached_config(); // Initialize cached config parameters for maximum print performance
+   
     // set up the chips
     channels[i].tdc_setup();
     channels[i].ready_next();
   }
-
-  update_cached_config(); // Initialize cached config parameters for maximum print performance
 
   /*******************************************
    * Synchronize multiple TICCs sharing common
@@ -537,6 +537,7 @@ void loop() {
         noInterrupts();
         picstop_now64 = channels[i].PICstop;
         last_picstop64 = channels[i].last_picstop;
+        channels[i].last_picstop = picstop_now64; // Update last_picstop for next calculation
         interrupts();
         int64_t dcount = picstop_now64 - last_picstop64;
 
@@ -567,11 +568,9 @@ void loop() {
           }
         }
 
-        channels[i].last_picstop = channels[i].PICstop; // Update last_picstop for next calculation
         channels[i].new_ts_ready = 1;
         channels[i].totalize++;    // increment number of events
-        channels[i].ready_next();  // Re-arm for next measurement, clear TDC INTB
-
+        
         /******************************/
         /* Output routines start here */
         /******************************/

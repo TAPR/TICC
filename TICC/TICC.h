@@ -31,5 +31,9 @@ extern void eeprom_write_config();
 extern void eeprom_read_config();
 extern struct config_t defaultConfig();
 extern bool check_reference_clock();
+extern bool both_channels_ready();
+extern bool poll_gating_ok();
+extern void consume_both_flags();
+extern bool check_poll_gating();
 
 #endif // TICC_H

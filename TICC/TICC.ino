@@ -410,6 +410,53 @@ bool check_reference_clock() {
   return true; // Reference clock OK
 }
 
+// Check if both channels have ready timestamps with sufficient totalize
+bool both_channels_ready() {
+  return (channels[0].new_ts_ready && channels[1].new_ts_ready) && 
+         (channels[0].totalize > 2) && (channels[1].totalize > 2);
+}
+
+// Check poll character gating - returns true if output should proceed
+bool poll_gating_ok() {
+  bool ok = (!config.POLL_CHAR);
+  if (!ok) {
+    if ((Serial.available() > 0) && (Serial.read() == config.POLL_CHAR)) ok = true;
+  }
+  return ok;
+}
+
+// Global poll gating check - returns true if output should proceed
+// This implements proper poll gating: when POLL_CHAR is set, only output after receiving the character
+bool check_poll_gating() {
+  static bool poll_character_received = false;
+  
+  // If no poll character is configured, always allow output
+  if (!config.POLL_CHAR) {
+    return true;
+  }
+  
+  // Check if poll character is available
+  if (Serial.available() > 0) {
+    if (Serial.read() == config.POLL_CHAR) {
+      poll_character_received = true;
+    }
+  }
+  
+  // Return true if poll character was received, false otherwise
+  if (poll_character_received) {
+    poll_character_received = false;  // Reset for next measurement
+    return true;
+  }
+  
+  return false;
+}
+
+// Consume new_ts_ready flags for both channels
+void consume_both_flags() {
+  channels[0].new_ts_ready = 0;
+  channels[1].new_ts_ready = 0;
+}
+
 /****************************************************************/
 void loop() {
   ticc_setup();  // initialize and optionally go to config
@@ -505,185 +552,7 @@ void loop() {
       }
     }
 
-    // Timestamp mode: print each timestamp immediately as ready (with strict ordering)
-    if (config.MODE == Timestamp) {
-      for (int ci = 0; ci < 2; ++ci) {
-        if (channels[ci].new_ts_ready && (channels[ci].totalize > 2)) {
-          // Check poll character if set
-          bool ok = (!config.POLL_CHAR);
-          if (!ok) {
-            if ((Serial.available() > 0) && (Serial.read() == config.POLL_CHAR)) ok = true;
-          }
-          if (ok) {
-            char line[64];
-            print_timestamp(line, sizeof(line), &channels[ci].timestamp, (char)channels[ci].name);
-          }
-          channels[ci].new_ts_ready = 0;  // consume
-        }
-      }
-    }
-
-    // Period mode: print period (timestamp - previous_timestamp) for each channel
-    if (config.MODE == Period) {
-      // Static buffer to store previous timestamps for each channel
-      static Timestamp64 prev_timestamp[2] = {{0, 0}, {0, 0}};
-      
-      for (int ci = 0; ci < 2; ++ci) {
-        if (channels[ci].new_ts_ready && (channels[ci].totalize > 2)) {
-          // Check poll character if set
-          bool ok = (!config.POLL_CHAR);
-          if (!ok) {
-            if ((Serial.available() > 0) && (Serial.read() == config.POLL_CHAR)) ok = true;
-          }
-          if (ok) {
-            // Calculate period: current timestamp - previous timestamp from buffer
-            Timestamp64 period = timestamp_difference(&channels[ci].timestamp, 
-                &prev_timestamp[ci]);
-            char line[64];
-            print_timestamp(line, sizeof(line), &period, (char)channels[ci].name, false);  // No wrap
-          }
-          channels[ci].new_ts_ready = 0;  // consume
-          
-          // Update buffer with current timestamp for next calculation
-          prev_timestamp[ci] = channels[ci].timestamp;
-        }
-      }
-    }
-
-
-    // Paired_Timestamp mode: assemble and print pairs without timeout
-    if (config.MODE == Paired_Timestamp) {
-      // Two-slot buffer; accumulate two successive samples (across either channel)
-      // then emit exactly two lines per pair in fixed order: if both channels are
-      // present print chA then chB; if both are the same channel, print that
-      // channel twice.
-      struct PairSlot {
-        Timestamp64 t;
-        uint8_t ch;
-      };
-      static PairSlot ts_pair[2];
-      static uint8_t ts_pair_count = 0;
-
-      // Ingest any fresh samples into the pair buffer
-      for (int ci = 0; ci < 2; ++ci) {
-        if (channels[ci].new_ts_ready && (channels[ci].totalize > 2)) {
-          if (ts_pair_count < 2) {
-            ts_pair[ts_pair_count].t = channels[ci].timestamp;
-            ts_pair[ts_pair_count].ch = (uint8_t)ci;
-            ts_pair_count++;
-          }
-          channels[ci].new_ts_ready = 0;  // consume
-        }
-      }
-
-      // If we have a complete pair, emit in fixed order with poll gating
-      if (ts_pair_count == 2) {
-        bool ok = (!config.POLL_CHAR);
-        if (!ok) {
-          if ((Serial.available() > 0) && (Serial.read() == config.POLL_CHAR)) ok = true;
-        }
-        if (ok) {
-          // Determine composition and enforce chA then chB order when both present
-          if ((ts_pair[0].ch == 0 && ts_pair[1].ch == 1) || (ts_pair[0].ch == 1 && ts_pair[1].ch == 0)) {
-            // Mixed channels: find A then B
-            const PairSlot *A = (ts_pair[0].ch == 0) ? &ts_pair[0] : &ts_pair[1];
-            const PairSlot *B = (ts_pair[0].ch == 1) ? &ts_pair[0] : &ts_pair[1];
-            // Print chA timestamp - OPTIMIZED
-            {
-              char line[64];
-              // Debug code removed - issue resolved
-              print_timestamp(line, sizeof(line), &A->t, (char)channels[0].name);
-            }
-            
-            // Print chB timestamp
-            {
-              char line[64];
-              print_timestamp(line, sizeof(line), &B->t, (char)channels[1].name);
-            }
-          } else {
-            // Same channel twice: print both with that channel's name
-            uint8_t ci = ts_pair[0].ch;
-            char cname = channels[ci].name;
-            for (int k = 0; k < 2; ++k) {
-              char line[64];
-              print_timestamp(line, sizeof(line), &ts_pair[k].t, cname);
-            }
-          }
-          ts_pair_count = 0;  // clear pair buffer after printing
-        }
-      }
-    }
-
-
-    // After processing both channels, pair and print once per matched sample for Interval and 3-Cornered Hat
-    if ((channels[0].new_ts_ready && channels[1].new_ts_ready) && (channels[0].totalize > 2) && (channels[1].totalize > 2)) {
-      // Optional poll gating
-      bool ok = (!config.POLL_CHAR);
-      if (!ok) {
-        if ((Serial.available() > 0) && (Serial.read() == config.POLL_CHAR)) ok = true;
-      }
-      if (ok) {
-        switch (config.MODE) {
-          case Interval:
-            {
-              // Calculate time interval A->B
-              Timestamp64 interval = timestamp_difference(&channels[1].timestamp, &channels[0].timestamp);
-              {
-                char line[64];
-                print_timestamp(line, sizeof(line), &interval, '\0', false);  // No wrap, no channel name
-              }
-              channels[0].new_ts_ready = 0;
-              channels[1].new_ts_ready = 0;
-              break;
-            }
-          case Hat:
-            {
-              // 3-Cornered Hat mode: chA, chB, and chC (synthesized)
-              // chC = int(chB) + (chB - chA) - properly handle negative differences
-              
-              {
-                char line[64];
-                print_timestamp(line, sizeof(line), &channels[0].timestamp, (char)channels[0].name);
-              }
-              {
-                char line[64];
-                print_timestamp(line, sizeof(line), &channels[1].timestamp, (char)channels[1].name);
-              }
-              
-              // Calculate chC = int(chB) + (chB - chA)
-              Timestamp64 interval = timestamp_difference(&channels[1].timestamp, &channels[0].timestamp);
-              Timestamp64 chC;
-              
-              // chC uses the integer seconds from chB, plus the fractional difference
-              chC.seconds = channels[1].timestamp.seconds;  // int(chB) - integer seconds from chB
-              chC.picos = interval.picos;              // (chB - chA) fractional part
-              
-              // Handle negative fractional differences (interval.seconds < 0 means negative difference)
-              if (interval.seconds < 0) {
-                // The fractional part is in complement representation, convert to normal
-                if (interval.picos != 0) {
-                  chC.picos = PS_PER_SEC - interval.picos;
-                  // Since we're subtracting from the integer seconds, borrow if needed
-                  chC.seconds -= 1;
-                }
-              }
-              
-              // Print chC (synthesized)
-              {
-                char line[64];
-                print_timestamp(line, sizeof(line), &chC, 'C');
-              }
-              
-              channels[0].new_ts_ready = 0;
-              channels[1].new_ts_ready = 0;
-              break;
-            }
-          default: break;
-        }
-      }
-    }
-
-    // Check if config was requested during this loop iteration
+    // Check if config was requested during this loop iteration (before early exit)
     if (config_requested) {
       config_requested = 0;  // Clear the flag
       
@@ -728,6 +597,167 @@ void loop() {
       // Clear the config_changed flag for next time
       config_changed = 0;
     }
+
+    // Early exit optimization: skip output processing if no new timestamps are ready
+    bool has_ready_timestamps = false;
+    for (int ci = 0; ci < 2; ++ci) {
+      if (channels[ci].new_ts_ready) {
+        has_ready_timestamps = true;
+        break;
+      }
+    }
+    if (!has_ready_timestamps) {
+      continue; // Skip all output processing
+    }
+
+    // Timestamp mode: print each timestamp immediately as ready (with strict ordering)
+    if (config.MODE == Timestamp) {
+      for (int ci = 0; ci < 2; ++ci) {
+        if (channels[ci].new_ts_ready && (channels[ci].totalize > 2)) {
+          if (check_poll_gating()) {
+            char line[64];
+            print_timestamp(line, sizeof(line), &channels[ci].timestamp, (char)channels[ci].name);
+          }
+          channels[ci].new_ts_ready = 0;  // consume
+        }
+      }
+    }
+
+    // Period mode: print period (timestamp - previous_timestamp) for each channel
+    if (config.MODE == Period) {
+      // Static buffer to store previous timestamps for each channel
+      static Timestamp64 prev_timestamp[2] = {{0, 0}, {0, 0}};
+      
+      for (int ci = 0; ci < 2; ++ci) {
+        if (channels[ci].new_ts_ready && (channels[ci].totalize > 2)) {
+          if (check_poll_gating()) {
+            // Calculate period: current timestamp - previous timestamp from buffer
+            Timestamp64 period = timestamp_difference(&channels[ci].timestamp, 
+                &prev_timestamp[ci]);
+            char line[64];
+            print_timestamp(line, sizeof(line), &period, (char)channels[ci].name, false);  // No wrap
+          }
+          channels[ci].new_ts_ready = 0;  // consume
+          
+          // Update buffer with current timestamp for next calculation
+          prev_timestamp[ci] = channels[ci].timestamp;
+        }
+      }
+    }
+
+
+    // Paired_Timestamp mode: assemble and print pairs without timeout
+    if (config.MODE == Paired_Timestamp) {
+      // Two-slot buffer; accumulate two successive samples (across either channel)
+      // then emit exactly two lines per pair in fixed order: if both channels are
+      // present print chA then chB; if both are the same channel, print that
+      // channel twice.
+      struct PairSlot {
+        Timestamp64 t;
+        uint8_t ch;
+      };
+      static PairSlot ts_pair[2];
+      static uint8_t ts_pair_count = 0;
+
+      // Ingest any fresh samples into the pair buffer
+      for (int ci = 0; ci < 2; ++ci) {
+        if (channels[ci].new_ts_ready && (channels[ci].totalize > 2)) {
+          if (ts_pair_count < 2) {
+            ts_pair[ts_pair_count].t = channels[ci].timestamp;
+            ts_pair[ts_pair_count].ch = (uint8_t)ci;
+            ts_pair_count++;
+          }
+          channels[ci].new_ts_ready = 0;  // consume
+        }
+      }
+
+      // If we have a complete pair, emit in fixed order with poll gating
+      if (ts_pair_count == 2) {
+        if (check_poll_gating()) {
+          // Determine composition and enforce chA then chB order when both present
+          if ((ts_pair[0].ch == 0 && ts_pair[1].ch == 1) || (ts_pair[0].ch == 1 && ts_pair[1].ch == 0)) {
+            // Mixed channels: find A then B
+            const PairSlot *A = (ts_pair[0].ch == 0) ? &ts_pair[0] : &ts_pair[1];
+            const PairSlot *B = (ts_pair[0].ch == 1) ? &ts_pair[0] : &ts_pair[1];
+            // Print chA timestamp - OPTIMIZED
+            {
+              char line[64];
+              // Debug code removed - issue resolved
+              print_timestamp(line, sizeof(line), &A->t, (char)channels[0].name);
+            }
+            
+            // Print chB timestamp
+            {
+              char line[64];
+              print_timestamp(line, sizeof(line), &B->t, (char)channels[1].name);
+            }
+          } else {
+            // Same channel twice: print both with that channel's name
+            uint8_t ci = ts_pair[0].ch;
+            char cname = channels[ci].name;
+            for (int k = 0; k < 2; ++k) {
+              char line[64];
+              print_timestamp(line, sizeof(line), &ts_pair[k].t, cname);
+            }
+          }
+          ts_pair_count = 0;  // clear pair buffer after printing
+        }
+      }
+    }
+
+
+    // Shared pairing logic for Interval and 3-Cornered Hat modes
+    if (both_channels_ready()) {
+      if (poll_gating_ok()) {
+        switch (config.MODE) {
+          case Interval:
+            {
+              // Calculate time interval A->B
+              Timestamp64 interval = timestamp_difference(&channels[1].timestamp, &channels[0].timestamp);
+              char line[64];
+              print_timestamp(line, sizeof(line), &interval, '\0', false);  // No wrap, no channel name
+              consume_both_flags();
+              break;
+            }
+          case Hat:
+            {
+              // 3-Cornered Hat mode: chA, chB, and chC (synthesized)
+              // chC = int(chB) + (chB - chA) - properly handle negative differences
+              
+              // Print chA and chB timestamps
+              char line[64];
+              print_timestamp(line, sizeof(line), &channels[0].timestamp, (char)channels[0].name);
+              print_timestamp(line, sizeof(line), &channels[1].timestamp, (char)channels[1].name);
+              
+              // Calculate chC = int(chB) + (chB - chA)
+              Timestamp64 interval = timestamp_difference(&channels[1].timestamp, &channels[0].timestamp);
+              Timestamp64 chC;
+              
+              // chC uses the integer seconds from chB, plus the fractional difference
+              chC.seconds = channels[1].timestamp.seconds;  // int(chB) - integer seconds from chB
+              chC.picos = interval.picos;              // (chB - chA) fractional part
+              
+              // Handle negative fractional differences (interval.seconds < 0 means negative difference)
+              if (interval.seconds < 0) {
+                // The fractional part is in complement representation, convert to normal
+                if (interval.picos != 0) {
+                  chC.picos = PS_PER_SEC - interval.picos;
+                  // Since we're subtracting from the integer seconds, borrow if needed
+                  chC.seconds -= 1;
+                }
+              }
+              
+              // Print chC (synthesized)
+              print_timestamp(line, sizeof(line), &chC, 'C');
+              
+              consume_both_flags();
+              break;
+            }
+          default: break;
+        }
+      }
+    }
+
 
     // Restart handling moved to beginning of loop() function
 

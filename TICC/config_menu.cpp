@@ -200,13 +200,12 @@ static void copyProgStrToBuffer(const char* str, char* buffer, size_t bufferSize
 // Helper function to get mode name as string
 const char* getModeName(MeasureMode mode) {
   switch (mode) {
-     case Paired_Timestamp: return mode_timestamp;
-    case Strict_Timestamp: return mode_strict;
-    case Immediate_Timestamp: return mode_immediate;
-    case Binary: return mode_binary;
-    case Interval: return mode_interval;
-    case Period: return mode_period;
-    case Hat: return mode_timelab;
+     case Timestamp: return desc_timestamp;
+    case Paired_Timestamp: return desc_paired;
+    case Binary: return desc_binary;
+    case Interval: return desc_interval;
+    case Period: return desc_period;
+    case Hat: return desc_timelab;
     case Debug: return mode_debug;
     case Null: return mode_null;
     default: return mode_unknown;
@@ -453,10 +452,7 @@ void show_mode_menu() {
   copyProgStrToBuffer(it_mode_ts, line, sizeof(line));
   configPrintln(line);
   
-  copyProgStrToBuffer(it_mode_strict, line, sizeof(line));
-  configPrintln(line);
-  
-  copyProgStrToBuffer(it_mode_immediate, line, sizeof(line));
+  copyProgStrToBuffer(it_mode_paired, line, sizeof(line));
   configPrintln(line);
   
   copyProgStrToBuffer(it_mode_bin, line, sizeof(line));

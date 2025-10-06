@@ -30,20 +30,18 @@ const char it_exit2[]          PROGMEM = "2 - Apply changes and resume operation
 const char it_exit3[]          PROGMEM = "3 - Reset all to defaults and restart";
 
 // Mode submenu items
-const char it_mode_ts[]        PROGMEM = "A1 - Paired Timestamp";
-const char it_mode_strict[]    PROGMEM = "A2 - Strict Timestamp";
-const char it_mode_immediate[] PROGMEM = "A3 - Immediate Timestamp";
-const char it_mode_bin[]       PROGMEM = "A4 - Binary Timestamp";
-const char it_mode_int[]       PROGMEM = "A5 - Time Interval A -> B";
-const char it_mode_period[]    PROGMEM = "A6 - Period";
-const char it_mode_3ch[]       PROGMEM = "A7 - 3-Cornered Hat";
-const char it_mode_debug[]     PROGMEM = "A8 - Debug";
-const char it_mode_null[]      PROGMEM = "A9 - Null Output";
+const char it_mode_ts[]        PROGMEM = "A1 - Timestamp";
+const char it_mode_paired[]    PROGMEM = "A2 - Paired Timestamp";
+const char it_mode_bin[]       PROGMEM = "A3 - Binary Timestamp";
+const char it_mode_int[]       PROGMEM = "A4 - Time Interval A -> B";
+const char it_mode_period[]    PROGMEM = "A5 - Period";
+const char it_mode_3ch[]       PROGMEM = "A6 - 3-Cornered Hat";
+const char it_mode_debug[]     PROGMEM = "A7 - Debug";
+const char it_mode_null[]      PROGMEM = "A8 - Null Output";
 
 // Mode descriptions
-const char desc_timestamp[]    PROGMEM = "Paired Timestamp";
-const char desc_strict[]       PROGMEM = "Strict Timestamp";
-const char desc_immediate[]    PROGMEM = "Immediate Timestamp";
+const char desc_timestamp[]    PROGMEM = "Timestamp";
+const char desc_paired[]       PROGMEM = "Paired Timestamp";
 const char desc_binary[]       PROGMEM = "Binary Timestamp";
 const char desc_interval[]     PROGMEM = "Time Interval A->B";
 const char desc_period[]       PROGMEM = "Period";

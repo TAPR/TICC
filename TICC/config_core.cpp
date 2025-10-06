@@ -365,9 +365,8 @@ void print_config(config_t x) {
   // Measurement Mode (most important param)
   strcpy(tmpbuf, "Measurement Mode: ");
   switch (x.MODE) {
-     case Paired_Timestamp: strcat(tmpbuf, "Paired_Timestamp"); break;
-    case Strict_Timestamp: strcat(tmpbuf, "Strict_Timestamp"); break;
-    case Immediate_Timestamp: strcat(tmpbuf, "Immediate_Timestamp"); break;
+     case Timestamp: strcat(tmpbuf, "Timestamp"); break;
+    case Paired_Timestamp: strcat(tmpbuf, "Paired_Timestamp"); break;
     case Binary: strcat(tmpbuf, "Binary Timestamp"); break;
     case Period: strcat(tmpbuf, "Period"); break;
     case Interval: strcat(tmpbuf, "Time Interval A->B"); break;

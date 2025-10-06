@@ -12,7 +12,7 @@
 
 #define PS_PER_SEC                (int64_t)  1000000000000   // ps/s
 
-enum MeasureMode : unsigned char {Paired_Timestamp, Strict_Timestamp, Immediate_Timestamp, Interval, Period, Hat, Debug, Binary, Null};
+enum MeasureMode : unsigned char {Timestamp, Paired_Timestamp, Binary, Interval, Period, Hat, Debug, Null};
 
 /*****************************************************************/
 // system defines
@@ -22,7 +22,7 @@ enum MeasureMode : unsigned char {Paired_Timestamp, Strict_Timestamp, Immediate_
 #define SER_NUM_START             (int16_t)  0x0FF0     // first byte of serial number in eeprom
 /*****************************************************************/
 // default values for config struct
-#define DEFAULT_MODE              (MeasureMode) 0       // Measurement mode -- 0 is Paired_Timestamp
+#define DEFAULT_MODE              (MeasureMode) 0       // Measurement mode -- 0 is Timestamp
 #define DEFAULT_POLL_CHAR         (char)    0x00        // In poll mode, wait for this before output
 #define DEFAULT_CLOCK_HZ          (int64_t) 10000000    // 10 MHz
 #define DEFAULT_PICTICK_PS        (int64_t) 100000000   // 100us

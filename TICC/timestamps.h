@@ -1,4 +1,4 @@
-// timestamp_utils.h -- timestamp utility functions for TICC
+// timestamps.h -- timestamp utility functions for TICC
 
 // TICC Time interval Counter based on TICC Shield using TDC7200
 //
@@ -7,8 +7,8 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-#ifndef TIMESTAMP_UTILS_H
-#define TIMESTAMP_UTILS_H
+#ifndef TIMESTAMPS_H
+#define TIMESTAMPS_H
 
 #include "tdc7200.h"  // For Timestamp64 definition
 
@@ -34,4 +34,13 @@ int format_time_difference(
 // Generate CRC-8 Dallas/Maxim (poly 0x31, reflected => 0x8C, init 0x00)
 uint8_t crc8_maxim(const uint8_t *data, size_t len);
 
-#endif // TIMESTAMP_UTILS_H
+// Calculate timestamp from channel data (pure calculation, no I/O)
+// Updates channel.last_picstop, channel.timestamp, channel.new_ts_ready, channel.totalize
+void calculate_timestamp(tdc7200Channel* channel, int64_t pictick_ps);
+
+// Process binary mode: read TDC data and output binary format
+// Updates channel.last_picstop, channel.totalize
+// Returns true if binary mode was processed, false if not in binary mode
+bool process_binary_mode(tdc7200Channel* channel);
+
+#endif // TIMESTAMPS_H

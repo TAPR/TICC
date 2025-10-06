@@ -22,6 +22,6 @@ void update_cached_config();
 // Efficient 64-bit integer printing function
 void print_int64(int64_t value, bool add_crlf = true);
 
-// Timestamp difference functions moved to timestamp_utils.h
+// Timestamp difference functions moved to timestamps.h
 
 #endif // PRINT_H

@@ -3,7 +3,7 @@
 #include <Arduino.h>
 #include "TICC.h"
 #include "tdc7200.h"
-#include "timestamp_utils.h"
+#include "timestamps.h"
 #include "print.h"
 
 // External variables now defined in TICC.h

@@ -7,8 +7,8 @@
 // Portions Copyright Jeremy McDermond NH6Z 2016
 // Licensed under BSD 2-clause license
 
-// 4 October 2025 - version 20251004.1
-extern const char SW_VERSION[17] = "20251004.1";
+// 6 October 2025 - version 20251006.1
+extern const char SW_VERSION[17] = "20251006.1";
 extern const char SW_TAG[6] = "BETA";
 
 
@@ -116,7 +116,7 @@ extern const char SW_TAG[6] = "BETA";
 #include "board.h"              // LED macros and Arduino pin definitions
 #include "config.h"             // config and eeprom
 #include "tdc7200.h"            // TDC registers and structures
-#include "timestamp_utils.h"    // timestamp utility functions
+#include "timestamps.h"    // timestamp utility functions
 #include "print.h"              // optimized 64-bit printing routines
 
 volatile int64_t PICcount;
@@ -264,9 +264,13 @@ void ticc_setup() {
    
     update_cached_config(); // Initialize cached config parameters for maximum print performance
    
-    // set up the chips
+    // set up the chips with aggressive reset to clear any stuck interrupt flags
+    // Some TDC7200 chips occasionally get stuck interrupt flags that cause rapid
+    // repeated processing of the same timestamp. flush_and_reset() is more thorough
+    // than just ready_next() and should clear these stuck flags, making serial
+    // port restarts as reliable as USB power cycles for fixing this hardware issue.
     channels[i].tdc_setup();
-    channels[i].ready_next();
+    channels[i].flush_and_reset();  // More thorough than just ready_next()
   }
 
   /*******************************************
@@ -309,18 +313,13 @@ void ticc_setup() {
   if (!request_restart) {
     Serial.println("# ");
     switch (config.MODE) {
+    case Timestamp:
+      Serial.print("# timestamp (seconds with ");
+      Serial.print(config.PLACES);
+      Serial.println(" decimal places)");
+      break;
     case Paired_Timestamp:
       Serial.print("# paired channel-order timestamp (seconds with ");
-      Serial.print(config.PLACES);
-      Serial.println(" decimal places)");
-      break;
-    case Strict_Timestamp:
-      Serial.print("# strict timestamp order (seconds with ");
-      Serial.print(config.PLACES);
-      Serial.println(" decimal places)");
-      break;
-    case Immediate_Timestamp:
-      Serial.print("# immediate timestamp (seconds with ");
       Serial.print(config.PLACES);
       Serial.println(" decimal places)");
       break;
@@ -427,231 +426,121 @@ void loop() {
     } // end of reflock test
 
 
-    size_t i;
-    for (i = 0; i < ARRAY_SIZE(channels); ++i) {
-      // No work to do unless intb is low
-      if (digitalRead(channels[i].INTB) == 0) {
-        // turn LED on -- use board.h macro for speed
-        if (i == 0) {
-          SET_LED_0;
-          SET_EXT_LED_0;
-        };
-        if (i == 1) {
-          SET_LED_1;
-          SET_EXT_LED_1;
-        };
-
-        /***************************************************************************
-         * The algorithm to calculate timestamps is entirely new in the 202509xx
-         * firmware.  It uses a mixed-radix accumulator to avoid 64 bit
-         * division/modulo operations, which are very expensive in the Arduino 8
-         * bit architecture.  In tests with a minimal print routine, this
-         * algorithm did 1250 measurements/second on one channel.  (Printing
-         * is a major botteneck; see print.cpp for details on how we
-         * optimize that.)
-         * 
-         * Algorithm:
-         * 1. Read TDC7200 measurement data (tof = time-of-flight in picoseconds)
-         * 2. Calculate delta time since last measurement using coarse counter (PICstop)
-         * 3. Apply mixed-radix accumulation: seconds + picos (0..1e12-1 picoseconds)
-         * 4. Handle carry/borrow between picos and seconds automatically
-         * 
-         * - Uses Timestamp64 struct (int32_t seconds + uint64_t picos) instead of
-         * - Incremental delta calculation avoids per-event 64-bit division
-         * - Mixed-radix approach eliminates expensive modulo operations
-         * - Preserves full picosecond precision (12 decimal places)
-         * 
-         * Mathematical basis:
-         * Absolute timestamp: T_k = PICstop_k * PICTICK_PS - tof_k
-         * dcount = delta PICcount ticks since last event
-         * Delta between events: deltaT_k = dcount * PICTICK_PS - (tof_k - tof_{k-1})
-         * Accumulator: timestamp += deltaT_k (with automatic carry/borrow)
-         ***************************************************************************/
-
-        channels[i].last_tof = channels[i].tof;                 // preserve last tof
-        channels[i].last_timestamp = channels[i].timestamp;     // preserve last timestamp if needed
-        channels[i].tof = channels[i].read();                   // get new tof (absolute per event)
-        uint32_t tof_raw = (uint32_t)channels[i].tof;         // local copy for fast reuse
-
-        // Clear TDC INTB immediately to prevent duplicate processing
-        channels[i].ready_next();
-
-        // turn LED off (visual feedback that event was processed)
-        if (i == 0) {
-          CLR_LED_0;
-          CLR_EXT_LED_0;
-        };
-        if (i == 1) {
-          CLR_LED_1;
-          CLR_EXT_LED_1;
-        };
-
-        // High-throughput binary output mode: minimal output for maximum speed
-        // Output: PICstop (bottom 4 bytes) + tof (4 bytes) + channel + CRLF
-        // Note: PICstop truncated to 32-bit for speed, so holds about 5 days
-        // (100 us per tick) before overflow.  User must detect rollover 
-        // for full 64-bit timestamp. Binary frames use Ox55,0xAA for framing plus 8 bit CRC
-        // This routine can sustain timestamp output at 1080 measurements/second
-        // on one channel at 230400 baud.  At 115200 baud, serial output is a
-        // bottlenck and maximum throughput is about 1040 measurements/second on
-        // one channel.
-          
-        if (config.MODE == Binary) {
-          uint8_t buffer[11];
-
-          // protect this read from ISR trips
-          uint32_t picstop_low32;
-          noInterrupts();
-          picstop_low32 = (uint32_t)channels[i].PICstop;
-          interrupts();
-          
-          // Build buffer: 2 byte header + 4 bytes PICstop + 4 bytes tof + 1 // byte channel + CRC
-          uint8_t buf[12];
-          buf[0] = 0x55;
-          buf[1] = 0xAA;
-          buf[2] = channels[i].name;
-          buf[3] = (uint8_t)(picstop_low32 & 0xFF);
-          buf[4] = (uint8_t)((picstop_low32 >> 8) & 0xFF);
-          buf[5] = (uint8_t)((picstop_low32 >> 16) & 0xFF);
-          buf[6] = (uint8_t)((picstop_low32 >> 24) & 0xFF);
-          buf[7] = (uint8_t)(tof_raw & 0xFF);
-          buf[8] = (uint8_t)((tof_raw >> 8) & 0xFF);
-          buf[9] = (uint8_t)((tof_raw >> 16) & 0xFF);
-          buf[10] = (uint8_t)((tof_raw >> 24) & 0xFF);
-          buf[11] = crc8_maxim(&buf[2], 9); // CRC over payload only
-          
-          // Single Serial.write call
-          while (Serial.availableForWrite() < 12) {}
-          Serial.write(buf, 12);
-          
-          // Skip timestamp calculation and normal processing
-          channels[i].last_picstop = channels[i].PICstop;
-          channels[i].totalize++;
-          continue;
-        } // end of binary mode
-        
-        // delta ticks since previous event on this channel
-        
-        // protect PICstop reads from ISR trips
-        int64_t picstop_now64, last_picstop64;
-        noInterrupts();
-        picstop_now64 = channels[i].PICstop;
-        last_picstop64 = channels[i].last_picstop;
-        channels[i].last_picstop = picstop_now64; // Update last_picstop for next calculation
-        interrupts();
-        int64_t dcount = picstop_now64 - last_picstop64;
-
-        // delta_ps = dcount*PICTICK_PS - (int64_t)channels[i].tof + (int64_t)channels[i].last_tof;
-        int64_t delta_ps = dcount * (int64_t)PICTICK_PS
-                         - (int64_t)channels[i].tof
-                         + (int64_t)channels[i].last_tof;
-
-        // Mixed-radix accumulation with automatic carry/borrow
-        if (delta_ps >= 0) {
-          channels[i].timestamp.picos += (uint64_t)delta_ps;
-          if (channels[i].timestamp.picos >= PS_PER_SEC) {
-            channels[i].timestamp.picos -= PS_PER_SEC;
-            channels[i].timestamp.seconds += 1u;
-          }
-        } else {
-          uint64_t m = (uint64_t)(-delta_ps);
-          if (m <= channels[i].timestamp.picos) {
-            channels[i].timestamp.picos -= m;
-          } else {
-            m -= channels[i].timestamp.picos;
-            uint64_t borrow_sec = 1 + (m / PS_PER_SEC);
-            uint64_t rem = m % PS_PER_SEC;
-            // changed below from (uint32_t) cast to see if that solves
-            // issue at around 8000 seconds
-            channels[i].timestamp.seconds -= (int32_t)borrow_sec;
-            channels[i].timestamp.picos = PS_PER_SEC - rem;
-          }
+    // Check both channels simultaneously for better timestamp ordering
+    bool ready_chA = (digitalRead(channels[0].INTB) == 0);
+    bool ready_chB = (digitalRead(channels[1].INTB) == 0);
+    
+    if (ready_chA && ready_chB) {
+      // Both channels ready - process both simultaneously for better ordering
+      
+      // Turn on both LEDs
+      SET_LED_0; SET_EXT_LED_0;
+      SET_LED_1; SET_EXT_LED_1;
+      
+      // Process binary mode if selected
+      if (config.MODE == Binary) {
+        if (process_binary_mode(&channels[0])) {
+          CLR_LED_0; CLR_EXT_LED_0;
         }
-
-        channels[i].new_ts_ready = 1;
-        channels[i].totalize++;    // increment number of events
+        if (process_binary_mode(&channels[1])) {
+          CLR_LED_1; CLR_EXT_LED_1;
+        }
+      } else {
+        // Calculate timestamps for both channels
+        calculate_timestamp(&channels[0], PICTICK_PS);
+        calculate_timestamp(&channels[1], PICTICK_PS);
         
-        /******************************/
-        /* Output routines start here */
-        /******************************/
+        // Turn off both LEDs
+        CLR_LED_0; CLR_EXT_LED_0;
+        CLR_LED_1; CLR_EXT_LED_1;
+      }
+      
+    } else if (ready_chA) {
+      // Only channel A ready
+      SET_LED_0; SET_EXT_LED_0;
+      
+      if (config.MODE == Binary) {
+        if (process_binary_mode(&channels[0])) {
+          CLR_LED_0; CLR_EXT_LED_0;
+        }
+      } else {
+        calculate_timestamp(&channels[0], PICTICK_PS);
+        CLR_LED_0; CLR_EXT_LED_0;
+        
+        // Check if channel B became ready during processing
+        if (digitalRead(channels[1].INTB) == 0) {
+          SET_LED_1; SET_EXT_LED_1;
+          calculate_timestamp(&channels[1], PICTICK_PS);
+          CLR_LED_1; CLR_EXT_LED_1;
+        }
+      }
+      
+    } else if (ready_chB) {
+      // Only channel B ready
+      SET_LED_1; SET_EXT_LED_1;
+      
+      if (config.MODE == Binary) {
+        if (process_binary_mode(&channels[1])) {
+          CLR_LED_1; CLR_EXT_LED_1;
+        }
+      } else {
+        calculate_timestamp(&channels[1], PICTICK_PS);
+        CLR_LED_1; CLR_EXT_LED_1;
+        
+        // Check if channel A became ready during processing
+        if (digitalRead(channels[0].INTB) == 0) {
+          SET_LED_0; SET_EXT_LED_0;
+          calculate_timestamp(&channels[0], PICTICK_PS);
+          CLR_LED_0; CLR_EXT_LED_0;
+        }
+      }
+    }
 
-        // if poll character is not null, only output if we've received that character via serial
-        // NOTE: this may provide random results if measuring timestamp from both channels!
-        if ((channels[i].totalize > 2) &&  // throw away first readings
-            ((!config.POLL_CHAR) ||        // if unset, output everything
-             ((Serial.available() > 0) && (Serial.read() == config.POLL_CHAR)))) {
+    // Timestamp mode: print each timestamp immediately as ready (with strict ordering)
+    if (config.MODE == Timestamp) {
+      for (int ci = 0; ci < 2; ++ci) {
+        if (channels[ci].new_ts_ready && (channels[ci].totalize > 2)) {
+          // Check poll character if set
+          bool ok = (!config.POLL_CHAR);
+          if (!ok) {
+            if ((Serial.available() > 0) && (Serial.read() == config.POLL_CHAR)) ok = true;
+          }
+          if (ok) {
+            char line[64];
+            print_timestamp(line, sizeof(line), &channels[ci].timestamp, (char)channels[ci].name);
+          }
+          channels[ci].new_ts_ready = 0;  // consume
+        }
+      }
+    }
 
-          switch (config.MODE) {
-            case Paired_Timestamp: // Defer Paired_Timestamp printing to the post-loop pairing block to enforce ordering
-              break;
+    // Period mode: print period (timestamp - previous_timestamp) for each channel
+    if (config.MODE == Period) {
+      // Static buffer to store previous timestamps for each channel
+      static Timestamp64 prev_timestamp[2] = {{0, 0}, {0, 0}};
+      
+      for (int ci = 0; ci < 2; ++ci) {
+        if (channels[ci].new_ts_ready && (channels[ci].totalize > 2)) {
+          // Check poll character if set
+          bool ok = (!config.POLL_CHAR);
+          if (!ok) {
+            if ((Serial.available() > 0) && (Serial.read() == config.POLL_CHAR)) ok = true;
+          }
+          if (ok) {
+            // Calculate period: current timestamp - previous timestamp from buffer
+            Timestamp64 period = timestamp_difference(&channels[ci].timestamp, 
+                &prev_timestamp[ci]);
+            char line[64];
+            print_timestamp(line, sizeof(line), &period, (char)channels[ci].name, false);  // No wrap
+          }
+          channels[ci].new_ts_ready = 0;  // consume
+          
+          // Update buffer with current timestamp for next calculation
+          prev_timestamp[ci] = channels[ci].timestamp;
+        }
+      }
+    }
 
-            case Strict_Timestamp: // Defer Strict_Timestamp printing to the post-loop pairing block for chronological ordering
-              break;
-
-            case Immediate_Timestamp: // Print each timestamp immediately as ready
-              if (channels[i].new_ts_ready) {
-                char line[64];
-                print_timestamp(line, sizeof(line), &channels[i].timestamp, (char)channels[i].name);
-                channels[i].new_ts_ready = 0;
-              }
-              break;
-
-            case Interval: // handled after channel loop (pairing logic)
-              break;
-
-            case Period: // Period mode: timestamp(n) - timestamp(n-1) for this channel
-              if (channels[i].new_ts_ready) {
-                // Calculate period: current timestamp - previous timestamp
-                Timestamp64 period = timestamp_difference(&channels[i].timestamp, 
-                    &channels[i].last_timestamp);
-                {
-                  char line[64];
-                  print_timestamp(line, sizeof(line), &period, (char)channels[i].name, false);  // No wrap
-                }
-                channels[i].new_ts_ready = 0;
-              }
-              break;
-
-            case Hat: // handled after channel loop (pairing logic)
-              break;
-
-            case Debug:
-              {
-                char line[128];
-                size_t n = 0;
-                
-                // Raw TDC7200 values (6 digits each)
-                n += sprintf(line + n, "%06lu ", (unsigned long)channels[i].time1Result);
-                n += sprintf(line + n, "%06lu ", (unsigned long)channels[i].time2Result);
-                n += sprintf(line + n, "%06lu ", (unsigned long)channels[i].clock1Result);
-                n += sprintf(line + n, "%06lu ", (unsigned long)channels[i].cal1Result);
-                n += sprintf(line + n, "%06lu ", (unsigned long)channels[i].cal2Result);
-                
-                // Write the line so far
-                Serial.write((const uint8_t*)line, n);
-                
-                // PICstop (int64_t - use new print_int64 function)
-                print_int64(channels[i].PICstop, false);
-                Serial.write(' ');
-                
-                // tof (int64_t - use new print_int64 function) 
-                print_int64(channels[i].tof, false);
-                Serial.write(' ');
-                
-                // timestamp (no WRAP, PLACES=12) with channel name
-                print_timestamp(line, sizeof(line), &channels[i].timestamp, (char)channels[i].name, false);
-              }
-              break;
-
-            case Null:
-              break;
-          }  // switch
-
-
-        }  // print result
-
-      }  // if INTB
-    }    // for
 
     // Paired_Timestamp mode: assemble and print pairs without timeout
     if (config.MODE == Paired_Timestamp) {
@@ -716,56 +605,6 @@ void loop() {
       }
     }
 
-    // Strict_Timestamp mode: 6-sample buffer for chronological ordering
-    if (config.MODE == Strict_Timestamp) {
-      // Six-slot buffer; accumulate up to 6 samples for sorting
-      struct StrictSlot {
-        Timestamp64 t;
-        uint8_t ch;
-      };
-      static StrictSlot strict_buffer[6];
-      static uint8_t strict_count = 0;
-
-      // Ingest any fresh samples into the strict buffer
-      for (int ci = 0; ci < 2; ++ci) {
-        if (channels[ci].new_ts_ready && (channels[ci].totalize > 2)) {
-          if (strict_count < 6) {
-            strict_buffer[strict_count].t = channels[ci].timestamp;
-            strict_buffer[strict_count].ch = (uint8_t)ci;
-            strict_count++;
-          }
-          channels[ci].new_ts_ready = 0;  // consume
-        }
-      }
-
-      // If we have a complete buffer (6 samples), sort and output
-      if (strict_count == 6) {
-        bool ok = (!config.POLL_CHAR);
-        if (!ok) {
-          if ((Serial.available() > 0) && (Serial.read() == config.POLL_CHAR)) ok = true;
-        }
-        if (ok) {
-          // Simple bubble sort by timestamp (earliest first)
-          for (int i = 0; i < 5; ++i) {
-            for (int j = 0; j < 5 - i; ++j) {
-              if (timestamp_ge(&strict_buffer[j].t, &strict_buffer[j + 1].t)) {
-                // Swap
-                StrictSlot temp = strict_buffer[j];
-                strict_buffer[j] = strict_buffer[j + 1];
-                strict_buffer[j + 1] = temp;
-              }
-            }
-          }
-          
-          // Output all 6 samples in chronological order
-          for (int k = 0; k < 6; ++k) {
-            char line[64];
-            print_timestamp(line, sizeof(line), &strict_buffer[k].t, (char)channels[strict_buffer[k].ch].name);
-          }
-          strict_count = 0;  // clear buffer after printing
-        }
-      }
-    }
 
     // After processing both channels, pair and print once per matched sample for Interval and 3-Cornered Hat
     if ((channels[0].new_ts_ready && channels[1].new_ts_ready) && (channels[0].totalize > 2) && (channels[1].totalize > 2)) {

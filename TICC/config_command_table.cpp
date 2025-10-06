@@ -116,15 +116,14 @@ const size_t ADVANCED_COMMANDS_SIZE = sizeof(advanced_commands) / sizeof(advance
 
 // Mode submenu commands table
 const CommandConfig mode_commands[] PROGMEM = {
-   {'1', SUBMENU_SELECTION, NULL, 0, 0, "", &config.MODE, 0, "Mode", CONFIRM_MANUAL, Paired_Timestamp},
-  {'2', SUBMENU_SELECTION, NULL, 0, 0, "", &config.MODE, 0, "Mode", CONFIRM_MANUAL, Strict_Timestamp},
-  {'3', SUBMENU_SELECTION, NULL, 0, 0, "", &config.MODE, 0, "Mode", CONFIRM_MANUAL, Immediate_Timestamp},
-  {'4', SUBMENU_SELECTION, NULL, 0, 0, "", &config.MODE, 0, "Mode", CONFIRM_MANUAL, Binary},
-  {'5', SUBMENU_SELECTION, NULL, 0, 0, "", &config.MODE, 0, "Mode", CONFIRM_MANUAL, Interval},
-  {'6', SUBMENU_SELECTION, NULL, 0, 0, "", &config.MODE, 0, "Mode", CONFIRM_MANUAL, Period},
-  {'7', SUBMENU_SELECTION, NULL, 0, 0, "", &config.MODE, 0, "Mode", CONFIRM_MANUAL, Hat},
-  {'8', SUBMENU_SELECTION, NULL, 0, 0, "", &config.MODE, 0, "Mode", CONFIRM_MANUAL, Debug},
-  {'9', SUBMENU_SELECTION, NULL, 0, 0, "", &config.MODE, 0, "Mode", CONFIRM_MANUAL, Null}
+   {'1', SUBMENU_SELECTION, NULL, 0, 0, "", &config.MODE, 0, "Mode", CONFIRM_MANUAL, Timestamp},
+  {'2', SUBMENU_SELECTION, NULL, 0, 0, "", &config.MODE, 0, "Mode", CONFIRM_MANUAL, Paired_Timestamp},
+  {'3', SUBMENU_SELECTION, NULL, 0, 0, "", &config.MODE, 0, "Mode", CONFIRM_MANUAL, Binary},
+  {'4', SUBMENU_SELECTION, NULL, 0, 0, "", &config.MODE, 0, "Mode", CONFIRM_MANUAL, Interval},
+  {'5', SUBMENU_SELECTION, NULL, 0, 0, "", &config.MODE, 0, "Mode", CONFIRM_MANUAL, Period},
+  {'6', SUBMENU_SELECTION, NULL, 0, 0, "", &config.MODE, 0, "Mode", CONFIRM_MANUAL, Hat},
+  {'7', SUBMENU_SELECTION, NULL, 0, 0, "", &config.MODE, 0, "Mode", CONFIRM_MANUAL, Debug},
+  {'8', SUBMENU_SELECTION, NULL, 0, 0, "", &config.MODE, 0, "Mode", CONFIRM_MANUAL, Null}
 };
 
 const size_t MODE_COMMANDS_SIZE = sizeof(mode_commands) / sizeof(mode_commands[0]);

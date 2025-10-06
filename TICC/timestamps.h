@@ -12,6 +12,15 @@
 
 #include "tdc7200.h"  // For Timestamp64 definition
 
+// Calculate timestamp from channel data (pure calculation, no I/O)
+// Updates channel.last_picstop, channel.timestamp, channel.new_ts_ready, channel.totalize
+void calculate_timestamp(tdc7200Channel* channel, int64_t pictick_ps);
+
+// Process binary mode: read TDC data and output binary format
+// Updates channel.last_picstop, channel.totalize
+// Returns true if binary mode was processed, false if not in binary mode
+bool process_binary_mode(tdc7200Channel* channel);
+
 // Compare two Timestamp64 structs: returns true if a >= b
 bool timestamp_ge(const Timestamp64* a, const Timestamp64* b);
 
@@ -33,14 +42,5 @@ int format_time_difference(
 
 // Generate CRC-8 Dallas/Maxim (poly 0x31, reflected => 0x8C, init 0x00)
 uint8_t crc8_maxim(const uint8_t *data, size_t len);
-
-// Calculate timestamp from channel data (pure calculation, no I/O)
-// Updates channel.last_picstop, channel.timestamp, channel.new_ts_ready, channel.totalize
-void calculate_timestamp(tdc7200Channel* channel, int64_t pictick_ps);
-
-// Process binary mode: read TDC data and output binary format
-// Updates channel.last_picstop, channel.totalize
-// Returns true if binary mode was processed, false if not in binary mode
-bool process_binary_mode(tdc7200Channel* channel);
 
 #endif // TIMESTAMPS_H

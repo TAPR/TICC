@@ -30,5 +30,6 @@ extern void configPrintlnProg(const char* msg);
 extern void eeprom_write_config();
 extern void eeprom_read_config();
 extern struct config_t defaultConfig();
+extern bool check_reference_clock();
 
 #endif // TICC_H

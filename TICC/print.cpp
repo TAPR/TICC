@@ -210,6 +210,7 @@ int print_timestamp(
   
   // Write directly with calculated length
   Serial.write((const uint8_t*)out, p - out);
+  Serial.flush();  // Ensure all bytes are transmitted before returning
   return p - out;
 }
 

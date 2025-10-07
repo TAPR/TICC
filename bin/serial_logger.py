@@ -12,7 +12,7 @@ import argparse
 import sys
 import time
 
-def serial_logger(device, output_file, baud_rate=115200, timeout=1, 
+def serial_logger(device, output_file, baud_rate=115200, timeout=10, 
                   echo=False, encoding='latin-1'):
     """
     Logs data from a serial port to a file, using a permissive encoding.
@@ -51,6 +51,7 @@ def serial_logger(device, output_file, baud_rate=115200, timeout=1,
                 line = ser.readline().decode(encoding).strip()
                 if line:
                     f.write(line + '\n')
+                    f.flush()  # Force write to disk immediately to prevent partial writes
                     if echo:
                         print(line)  # Optionally print to console as well
                 time.sleep(0.01) # Small delay to prevent busy-waiting
@@ -68,7 +69,7 @@ if __name__ == "__main__":
     parser.add_argument("device", help="The serial port device (e.g., COM3 or /dev/ttyUSB0).")
     parser.add_argument("output_file", help="The name of the file to write the logged data.")
     parser.add_argument("--baud", type=int, default=115200, help="Baud rate for the serial connection (default: 9600).")
-    parser.add_argument("--timeout", type=int, default=1, help="Read timeout in seconds (default: 1).")
+    parser.add_argument("--timeout", type=int, default=10, help="Read timeout in seconds (default: 10).")
     parser.add_argument("--echo", action="store_true", default=False,         # default is False if not provided (implicit for store_true)
             help="Enable verbose output")
     parser.add_argument("--encoding", type=str, default="latin-1", # Changed default to latin-1

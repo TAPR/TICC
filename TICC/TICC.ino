@@ -517,15 +517,34 @@ void loop() {
       continue; // Skip all output processing
     }
 
-    // Timestamp mode: print each timestamp immediately as ready (with strict ordering)
+    // Timestamp mode: print each timestamp in timestamp order (earlier timestamp first)
     if (config.MODE == Timestamp) {
-      for (int ci = 0; ci < 2; ++ci) {
-        if (channels[ci].new_ts_ready && (channels[ci].totalize > 2)) {
-          if (check_poll_gating()) {
-            char line[64];
-            print_timestamp(line, sizeof(line), &channels[ci].timestamp, (char)channels[ci].name);
+      bool ready_chA = channels[0].new_ts_ready && (channels[0].totalize > 2);
+      bool ready_chB = channels[1].new_ts_ready && (channels[1].totalize > 2);
+      
+      if (ready_chA && ready_chB) {
+        // Both ready: print earlier timestamp first, then later one
+        if (check_poll_gating()) {
+          bool A_earlier = timestamp_ge(&channels[1].timestamp, &channels[0].timestamp);
+          int first_ch = A_earlier ? 0 : 1;
+          int second_ch = A_earlier ? 1 : 0;
+          
+          char line[64];
+          print_timestamp(line, sizeof(line), &channels[first_ch].timestamp, (char)channels[first_ch].name);
+          print_timestamp(line, sizeof(line), &channels[second_ch].timestamp, (char)channels[second_ch].name);
+        }
+        channels[0].new_ts_ready = 0;  // consume both
+        channels[1].new_ts_ready = 0;
+      } else {
+        // Only one ready: print that one
+        for (int ci = 0; ci < 2; ++ci) {
+          if (channels[ci].new_ts_ready && (channels[ci].totalize > 2)) {
+            if (check_poll_gating()) {
+              char line[64];
+              print_timestamp(line, sizeof(line), &channels[ci].timestamp, (char)channels[ci].name);
+            }
+            channels[ci].new_ts_ready = 0;  // consume
           }
-          channels[ci].new_ts_ready = 0;  // consume
         }
       }
     }

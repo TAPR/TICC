@@ -12,8 +12,8 @@
  * firmware works.
  */
 
-// 6 October 2025 - version 20251006.1
-extern const char SW_VERSION[17] = "20251006.1";
+// 7 October 2025 - version 20251007.1
+extern const char SW_VERSION[17] = "20251007.1";
 extern const char SW_TAG[6] = "BETA";
 
 #include <stdint.h>             // define unint16_t, uint32_t
@@ -271,44 +271,44 @@ void ticc_setup() {
 // Check reference clock and handle reference lost condition
 // Returns true if reference clock is OK, false if reference lost (restart needed)
 bool check_reference_clock() {
-  // Ref Clock indicator:
-  // Test every 2.5 coarse tick periods for PICcount changes,
-  // and turn on EXT_LED_CLK if changes are detected
-  static uint32_t last_micros = 0;    // Loop watchdog timestamp
-  static int64_t last_PICcount = 0;   // Counter state memory
-  static uint8_t ext_clk_led_on = 0;  // LED state cache to avoid redundant writes
+    // Ref Clock indicator:
+    // Test every 2.5 coarse tick periods for PICcount changes,
+    // and turn on EXT_LED_CLK if changes are detected
+    static uint32_t last_micros = 0;    // Loop watchdog timestamp
+    static int64_t last_PICcount = 0;   // Counter state memory
+    static uint8_t ext_clk_led_on = 0;  // LED state cache to avoid redundant writes
 
-  // Reset static variables if we just restarted to prevent false "Reference lost" messages
-  if (just_restarted) {
-    last_micros = 0;
-    last_PICcount = PICcount;  // Initialize with current PICcount value
-    ext_clk_led_on = 0;
-    just_restarted = 0;  // Clear the flag
-    delay(100); // Small delay to allow coarseTimer ISR to start firing
-  }
+    // Reset static variables if we just restarted to prevent false "Reference lost" messages
+    if (just_restarted) {
+      last_micros = 0;
+      last_PICcount = PICcount;  // Initialize with current PICcount value
+      ext_clk_led_on = 0;
+      just_restarted = 0;  // Clear the flag
+      delay(100); // Small delay to allow coarseTimer ISR to start firing
+    }
 
-  uint32_t now = micros();
-  if ((now - last_micros) > 250) {       // 2.5 ticks at 100 uS/tick
-    last_micros = now;                   // Update the watchdog timestamp
-    int64_t pc_snapshot;
-    noInterrupts(); // protect read from ISR trips
-    pc_snapshot = PICcount;
-    interrupts();
-    if (pc_snapshot != last_PICcount) {  // Has the counter changed since last sampled?
-      if (!ext_clk_led_on) {             // turn on only if was off
-        SET_EXT_LED_CLK;
-        ext_clk_led_on = 1;
-      }
-      last_PICcount = pc_snapshot;  // Save the current counter state
-    } else {
-      if (ext_clk_led_on) {  // turn off only if was on
-        CLR_EXT_LED_CLK;
-        Serial.println("# 10 MHZ Reference lost!");
-        Serial.println("# Press any key to restart after reference is restored.");
-        ext_clk_led_on = 0;
-        // Wait for a key press, then restart (reinitialize on next loop entry)
-        while (Serial.available() == 0) { delay(10); }
-        (void)Serial.read();
+      uint32_t now = micros();
+      if ((now - last_micros) > 250) {       // 2.5 ticks at 100 uS/tick
+        last_micros = now;                   // Update the watchdog timestamp
+        int64_t pc_snapshot;
+        noInterrupts(); // protect read from ISR trips
+        pc_snapshot = PICcount;
+        interrupts();
+        if (pc_snapshot != last_PICcount) {  // Has the counter changed since last sampled?
+          if (!ext_clk_led_on) {             // turn on only if was off
+            SET_EXT_LED_CLK;
+            ext_clk_led_on = 1;
+          }
+          last_PICcount = pc_snapshot;  // Save the current counter state
+        } else {
+          if (ext_clk_led_on) {  // turn off only if was on
+            CLR_EXT_LED_CLK;
+            Serial.println("# 10 MHZ Reference lost!");
+            Serial.println("# Press any key to restart after reference is restored.");
+            ext_clk_led_on = 0;
+            // Wait for a key press, then restart (reinitialize on next loop entry)
+            while (Serial.available() == 0) { delay(10); }
+            (void)Serial.read();
         return false; // Reference lost, restart needed
       }
     }
@@ -445,8 +445,8 @@ void loop() {
       if (config.MODE == Binary) {
         if (process_binary_mode(&channels[1])) {
           CLR_LED_1; CLR_EXT_LED_1;
-        }
-      } else {
+          }
+        } else {
         calculate_timestamp(&channels[1], PICTICK_PS);
         CLR_LED_1; CLR_EXT_LED_1;
         
@@ -621,8 +621,8 @@ void loop() {
             {
               // Calculate time interval A->B
               Timestamp64 interval = timestamp_difference(&channels[1].timestamp, &channels[0].timestamp);
-              char line[64];
-              print_timestamp(line, sizeof(line), &interval, '\0', false);  // No wrap, no channel name
+                char line[64];
+                print_timestamp(line, sizeof(line), &interval, '\0', false);  // No wrap, no channel name
               consume_both_flags();
               break;
             }
@@ -632,9 +632,9 @@ void loop() {
               // chC = int(chB) + (chB - chA) - properly handle negative differences
               
               // Print chA and chB timestamps
-              char line[64];
-              print_timestamp(line, sizeof(line), &channels[0].timestamp, (char)channels[0].name);
-              print_timestamp(line, sizeof(line), &channels[1].timestamp, (char)channels[1].name);
+                char line[64];
+                print_timestamp(line, sizeof(line), &channels[0].timestamp, (char)channels[0].name);
+                print_timestamp(line, sizeof(line), &channels[1].timestamp, (char)channels[1].name);
               
               // Calculate chC = int(chB) + (chB - chA)
               Timestamp64 interval = timestamp_difference(&channels[1].timestamp, &channels[0].timestamp);
@@ -655,7 +655,7 @@ void loop() {
               }
               
               // Print chC (synthesized)
-              print_timestamp(line, sizeof(line), &chC, 'C');
+                print_timestamp(line, sizeof(line), &chC, 'C');
               
               consume_both_flags();
               break;

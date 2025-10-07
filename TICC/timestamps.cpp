@@ -45,9 +45,10 @@ void calculate_timestamp(tdc7200Channel* channel, int64_t pictick_ps) {
   // Mixed-radix accumulation with automatic carry/borrow
   if (delta_ps >= 0) {
     channel->timestamp.picos += (uint64_t)delta_ps;
-    if (channel->timestamp.picos >= PS_PER_SEC) {
+    // Handle multiple second carries when delta_ps is large (e.g., after input gaps)
+    while (channel->timestamp.picos >= PS_PER_SEC) {
       channel->timestamp.picos -= PS_PER_SEC;
-      channel->timestamp.seconds += 1u;
+      channel->timestamp.seconds += 1;
     }
   } else {
     uint64_t m = (uint64_t)(-delta_ps);

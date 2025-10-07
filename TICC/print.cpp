@@ -26,6 +26,16 @@ static inline uint32_t div1e6_u64_u32(uint64_t x) {
 static inline void split12_fast(uint64_t frac, uint32_t *high6, uint32_t *low6) {
   uint32_t hi = div1e6_u64_u32(frac);
   uint32_t lo = (uint32_t)(frac - (uint64_t)hi * M6);
+  
+  // Due to the trick of using RECIP_M6, if the fractional part
+  // is an exact multiple of 1 us, that would introduce an error
+  // of 1 us into the printed output.  This catches and fixes
+  // this: if lo >= 1000000, carry to hi
+  if (lo >= 1000000U) {
+    hi++;
+    lo -= 1000000U;
+  }
+  
   *high6 = hi;
   *low6 = lo;
 }

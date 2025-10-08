@@ -1,6 +1,6 @@
 # TICC Architecture Documentation
 
-**Date:** October 7, 2025  **Version:** 20251007.1
+**Date:** October 8, 2025  **Version:** 20251008.1
 
 ## Overview
 
@@ -67,10 +67,14 @@ multiple times for both channels, and when both are present outputting the
 earlier timestamp first.
 
 ### Performance Characteristics
-- **Idle loop iteration time:** ~2.5 to 3.0 µs (no INTB asserted)
-- **Active loop iteration time:** ~1.7 to 1.9 ms (INTB asserted, including
-  processing and printing at 115200 baud)
+- **Idle loop iteration time:** ~1.7 µs (no INTB asserted, no serial data) 
+  (was ~2.5 to 3.0 µs before optimization)
+- **Single-channel active:** ~1.84 ms (INTB asserted, including processing and 
+  printing at 115200 baud) (was ~1.7 to 1.9 ms)
+- **Both channels active:** ~3.65 ms (both INTB asserted, processing and printing 
+  both timestamps at 115200 baud)
 - **One-channel throughput:** ~540 measurements per second
+- **Both-channel throughput:** ~274 measurement pairs per second (548 total timestamps)
 
 ## Timestamp Calculation
 The timestamp calculation uses a mixed-radix accumulator approach:
@@ -169,15 +173,22 @@ The seconds field uses signed integers for several important reasons:
 
 The firmware includes several optimization strategies:
 
-1. **Early exit optimization:** Skips output processing when no new
-timestamps are ready
-2. **Shared pairing framework:** Eliminates code duplication between pairing
-modes
-3. **Global poll gating:** Consistent behavior across all output modes
-4. **Function extraction:** Modular timestamp calculation and binary
-processing
-5. **Critical section protection:** Proper interrupt handling for atomic
-operations
+1. **Single serial read per loop:** Combined config and poll gating check 
+   (saves ~15-25 µs per iteration)
+2. **Poll gating flag instead of function calls:** Uses `output_allowed` boolean 
+   set once per loop (eliminates function call overhead)
+3. **Combined mode and output checks:** Single conditional evaluation 
+   (e.g., `if ((config.MODE == Timestamp) && output_allowed)`)
+4. **Early exit optimization:** Skips output processing when no new timestamps 
+   are ready or when first timestamps are invalid (totalize <= 1)
+5. **Inline timestamp comparison:** Avoids function call overhead for critical 
+   timestamp ordering
+6. **Shared pairing framework:** Eliminates code duplication between pairing modes
+7. **Function extraction:** Modular timestamp calculation (`calculate_timestamp()`) 
+   and binary processing (`process_binary_mode()`)
+8. **Critical section protection:** Proper interrupt handling for atomic operations
+9. **Code organization:** Separated setup and utility functions into dedicated 
+   files for better maintainability
 
 ---
 

@@ -90,19 +90,16 @@ This approach avoids 64-bit division/modulo operations, which are very
 expensive on 8-bit AVR microcontrollers.
 
 ## Data Types and Overflow Periods
-| Variable | Type | Range/Overflow Period |<br>
-|----------|------|----------------------|<br>
-| **PICcount** | int64_t | Coarse counter, 100 µs per tick<br>
-Overflow: ~2.9×10¹¹ years (effectively never) |
-| **PICstop** | int64_t | Captured PICcount value per event<br>
-Same range as PICcount |
-| **tof** | int32_t | TDC7200 time-of-flight in picoseconds<br>
-Hardware range: ~300,000 to 100,300,000 ps<br>
-Can hold ~2.15 ms of picos |
-| **timestamp.seconds** | int32_t | Accumulated integer seconds<br>
-Overflow: ±68 years from epoch | | **timestamp.picos** | uint64_t
-| Fractional part, 0..(10¹²-1) picoseconds<br>Automatically normalized to
-stay within one second |
+
+| Variable | Type | Range/Overflow Period |
+|----------|------|----------------------|
+| **PICcount** | int64_t | Coarse counter, 100 µs per tick<br>Overflow: ~2.9×10¹¹ years (effectively never) |
+| **PICstop** | int64_t | Captured PICcount value per event<br>Same range as PICcount |
+| **tof** | int32_t | TDC7200 time-of-flight in picoseconds<br>Hardware range: ~300,000 to 100,300,000 ps<br>Can hold ~2.15 ms of picos |
+| **timestamp.seconds** | int32_t | Accumulated integer seconds<br>Overflow: ±68 years from epoch |
+| **timestamp.picos** | uint64_t | Fractional part, 0..(10¹²-1) picoseconds<br>Automatically normalized to stay within one second |
+| **dcount** | int64_t | Delta ticks between events (in `calculate_timestamp`)<br>Maximum gap before overflow: 9.22×10¹³ ticks (~292 years)<br>Limited by `dcount × pictick_ps` multiplication |
+| **delta_ps** | int64_t | Delta time in picoseconds (in `calculate_timestamp`)<br>Maximum value: 9.22×10¹⁸ ps (~292 years)<br>Result of `dcount × 100,000 ps` ± tof adjustments |
 
 ## Binary Mode (High-Throughput)
 Binary mode provides maximum throughput for high-speed data collection:

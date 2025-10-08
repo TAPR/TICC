@@ -95,6 +95,28 @@ earlier timestamp first.
 - **Single-channel:** ~530 measurements/second (limited by serial output)
 - **Both-channel:** ~264 pairs/second = 528 total timestamps/second
 
+**Impact of Baud Rate on Throughput:**
+
+Serial output is the bottleneck (~1.73 ms per timestamp @ 115200 baud), with USB 
+CDC overhead (~1.3 ms) dominating the transmission time (~304 µs). Increasing baud 
+rate provides modest improvement:
+
+| Baud Rate | Est. Time/Timestamp | Est. Throughput | Improvement |
+|-----------|---------------------|-----------------|-------------|
+| 115200 (default) | ~1.73 ms | ~530/sec | baseline |
+| 230400 | ~1.50 ms | ~667/sec | +26% |
+| 460800 | ~1.40 ms | ~714/sec | +35% |
+| 921600 | ~1.35 ms | ~741/sec | +40% |
+
+**Binary Mode provides much better throughput:**
+- Only 12 bytes vs. 35 bytes per timestamp
+- No formatting overhead (~125 µs saved)
+- Measured: 1080 measurements/second @ 230400 baud
+- **2× faster than text mode** due to reduced data size and no formatting
+
+**Conclusion:** USB CDC overhead limits the benefit of higher baud rates in text 
+mode. For maximum throughput, use Binary mode which achieves ~1080 measurements/sec.
+
 ## Timestamp Calculation
 The timestamp calculation uses a mixed-radix accumulator approach:
 

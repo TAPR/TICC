@@ -67,14 +67,33 @@ multiple times for both channels, and when both are present outputting the
 earlier timestamp first.
 
 ### Performance Characteristics
-- **Idle loop iteration time:** ~1.7 µs (no INTB asserted, no serial data) 
-  (was ~2.5 to 3.0 µs before optimization)
-- **Single-channel active:** ~1.84 ms (INTB asserted, including processing and 
-  printing at 115200 baud) (was ~1.7 to 1.9 ms)
-- **Both channels active:** ~3.65 ms (both INTB asserted, processing and printing 
-  both timestamps at 115200 baud)
-- **One-channel throughput:** ~540 measurements per second
-- **Both-channel throughput:** ~274 measurement pairs per second (548 total timestamps)
+
+**Loop Timing:**
+- **Idle loop:** ~1.2 µs (no INTB asserted, no serial data)
+  - Was ~2.5 to 3.0 µs before optimization
+  - Breakdown: Serial check (52 cycles), reference clock watchdog (20 cycles),
+    two digitalRead() calls (100 cycles), early exit checks (15 cycles)
+
+**Single-Channel Active (per timestamp):**
+- **Calculation phase:** ~164 µs
+  - TDC SPI read: ~94 µs
+  - TDC ready_next(): ~31 µs  
+  - Timestamp arithmetic & accumulation: ~19 µs
+  - LED operations & overhead: ~20 µs
+- **Print phase:** ~1.73 ms @ 115200 baud
+  - Formatting: ~125 µs
+  - Serial transmission: ~304 µs (35 bytes × 8.68 µs/byte)
+  - USB CDC overhead: ~1.3 ms
+- **Total per timestamp:** ~1.89 ms (was ~1.7 to 1.9 ms)
+
+**Both-Channels Active (per pair):**
+- **Calculation phase:** ~328 µs (both channels)
+- **Print phase:** ~3.46 ms (two timestamps @ 115200 baud)
+- **Total per pair:** ~3.79 ms (was ~3.65 ms estimated)
+
+**Throughput:**
+- **Single-channel:** ~530 measurements/second (limited by serial output)
+- **Both-channel:** ~264 pairs/second = 528 total timestamps/second
 
 ## Timestamp Calculation
 The timestamp calculation uses a mixed-radix accumulator approach:

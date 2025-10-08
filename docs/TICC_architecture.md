@@ -90,8 +90,8 @@ This approach avoids 64-bit division/modulo operations, which are very
 expensive on 8-bit AVR microcontrollers.
 
 ## Data Types and Overflow Periods
-| Variable | Type | Range/Overflow Period |
-|----------|------|----------------------|i
+| Variable | Type | Range/Overflow Period |<br>
+|----------|------|----------------------|<br>
 | **PICcount** | int64_t | Coarse counter, 100 µs per tick<br>
 Overflow: ~2.9×10¹¹ years (effectively never) |
 | **PICstop** | int64_t | Captured PICcount value per event<br>

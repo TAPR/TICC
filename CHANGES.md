@@ -2,8 +2,9 @@
 
 ## Version 202510xx
 
-**Major Release** - Reworked configuration menu system and internal
-improvements; much rewritten code
+**Major Release** - Most of the code has been rewritten and new algorithms
+introduced.  Bug fixes, new capabilities, rewritten configuration menu
+system and more measurements/second.
 
 ### Breaking Changes
 - **Many Configuration Menu Changes**: The configuration menu structure
@@ -21,12 +22,6 @@ improvements; much rewritten code
   - **Channel-Paired Timestamp**: Attempts to sort dual-channel output
     for channel order (e.g., chA/chB/chA/chB) to meet TimeLab multi-channel
     requirements.
-  - **Strict Order Timestamp**: Attempts to order dual-channel output
-    to maintain strict timestamp order (e.g., always increasing timestamp
-    regardless of channel order)
-  - **Immediate Timestamp**: This is the original timestamp mode; each
-    timestamp is printed as soon as it is ready, regardless of channel or
-    monotonic order.
   - **Binary Timestamp**: Outputs binary data to achieve >1000
     measurements/second on one channel
   
@@ -42,6 +37,9 @@ improvements; much rewritten code
   expanded
 
 ### Improvements
+- **Timestamp Ordering**: When both channels are active, timestamps are output
+  in strict ascending order by default; new "Channel-Paired" mode allows output
+  in chA/chB/chA/chB sequence for multi-channel input using TimeLab software.
 - **Timestamp Calculation Optimized**: Removed much 64 bit math to increase
   throughput; raw calculation speed is >1250 measurements/second in one channel
 - **Optimized Print Routines**: Reworked printing to optimize 64 bit variable

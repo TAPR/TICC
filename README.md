@@ -29,8 +29,11 @@ User Guide which will be in the docs/ folder as soon as it's ready.
 See the CHANGES.md file for more details about versions.  This
 is just a short summary:
 
-October 2025: Major new release that adds/fixes:
-* New timestamp modes -- channel paired, strict order, immediate
+October 2025: This is a new release in which much of the code has been
+rewritten with (hopefully) better performance, more features, and 
+several bug fixes.  Highlights:
+* New timestamp modes -- strict ascending timestamp order, or paired
+  channel output (e.g., always chA/chB/chA/chB ordering)
 * Much greater measurement speed, including binary
   timestamp mode that can do over 1000 measurements/second
   on one channel

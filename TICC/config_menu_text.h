@@ -13,12 +13,12 @@ const char pg_advanced_title[] PROGMEM = "-- Advanced Settings --";
 const char it_mode[]           PROGMEM = "A - Mode (currently: ";
 const char it_wrap[]           PROGMEM = "B - Timestamp Wrap digits (currently: ";
 const char it_places[]         PROGMEM = "C - Output Decimal Places (currently: ";
-const char it_edge[]           PROGMEM = "D - Trigger Edge A/B (currently: ";
-const char it_sync[]           PROGMEM = "E - Primary/Secondary (currently: ";
-const char it_names[]          PROGMEM = "F - Channel Names (currently: ";
-const char it_pollchar[]       PROGMEM = "G - Poll Character (currently: ";
-const char it_advanced[]       PROGMEM = "H - Advanced settings";
-const char it_baud[]           PROGMEM = "I - Serial Baud Rate (currently: ";
+const char it_edge[]           PROGMEM = "D - Trigger Edge A/B (currently: ";  // Hidden but kept for undocumented access
+const char it_sync[]           PROGMEM = "D - Primary/Secondary (currently: ";
+const char it_names[]          PROGMEM = "E - Channel Names (currently: ";
+const char it_pollchar[]       PROGMEM = "F - Poll Character (currently: ";
+const char it_advanced[]       PROGMEM = "G - Advanced settings";
+const char it_baud[]           PROGMEM = "H - Serial Baud Rate (currently: ";
 const char it_printcfg[]       PROGMEM = "S - Show startup info";
 const char it_version[]        PROGMEM = "V - Show firmware version";
 const char it_save[]           PROGMEM = "W - Write changes to EEPROM (persist across restarts)";
@@ -50,20 +50,20 @@ const char desc_debug[]        PROGMEM = "Debug";
 const char desc_null[]         PROGMEM = "Null Output";
 
 // Serial baud rate options
-const char it_baud_9600[]      PROGMEM = "I1 - 9600 bps";
-const char it_baud_19200[]     PROGMEM = "I2 - 19200 bps";
-const char it_baud_38400[]     PROGMEM = "I3 - 38400 bps";
-const char it_baud_57600[]     PROGMEM = "I4 - 57600 bps";
-const char it_baud_115200[]    PROGMEM = "I5 - 115200 bps (default)";
-const char it_baud_230400[]    PROGMEM = "I6 - 230400 bps";
+const char it_baud_9600[]      PROGMEM = "H1 - 9600 bps";
+const char it_baud_19200[]     PROGMEM = "H2 - 19200 bps";
+const char it_baud_38400[]     PROGMEM = "H3 - 38400 bps";
+const char it_baud_57600[]     PROGMEM = "H4 - 57600 bps";
+const char it_baud_115200[]    PROGMEM = "H5 - 115200 bps (default)";
+const char it_baud_230400[]    PROGMEM = "H6 - 230400 bps";
 
 // Advanced submenu items
-const char it_adv_clock[]      PROGMEM = "H1 - Clock Speed MHz (currently: ";
-const char it_adv_pictick[]    PROGMEM = "H2 - Coarse Tick us (currently: ";
-const char it_adv_prop[]       PROGMEM = "H3 - Propagation Delay ps A/B (currently: ";
-const char it_adv_dilation[]   PROGMEM = "H4 - Time Dilation A/B (currently: ";
-const char it_adv_fixed[]      PROGMEM = "H5 - fixedTime2 ps A/B (currently: ";
-const char it_adv_fudge[]      PROGMEM = "H6 - FUDGE0 ps A/B (currently: ";
+const char it_adv_clock[]      PROGMEM = "G1 - Clock Speed MHz (currently: ";
+const char it_adv_pictick[]    PROGMEM = "G2 - Coarse Tick us (currently: ";
+const char it_adv_prop[]       PROGMEM = "G3 - Propagation Delay ps A/B (currently: ";
+const char it_adv_dilation[]   PROGMEM = "G4 - Time Dilation A/B (currently: ";
+const char it_adv_fixed[]      PROGMEM = "G5 - fixedTime2 ps A/B (currently: ";
+const char it_adv_fudge[]      PROGMEM = "G6 - FUDGE0 ps A/B (currently: ";
 
 // Prompts and status messages
 const char ln_current_mode[]   PROGMEM = "Current mode: ";
@@ -83,7 +83,7 @@ const char prompt_places[]     PROGMEM = "Output Decimal Places (0..12): ";
 const char prompt_edge[]       PROGMEM = "Enter Edges A/B (R or F): ";
 const char prompt_sync[]       PROGMEM = "Enter P or S: ";
 const char prompt_names[]      PROGMEM = "Enter Names A/B (any two chars): ";
-const char prompt_poll[]       PROGMEM = "Enter Poll Character (space to clear): ";
+const char prompt_poll[]       PROGMEM = "Enter Poll Character (- to clear): ";
 
 // Advanced prompts
 const char prompt_clock[]      PROGMEM = "Clock Hz (e.g., 1e7 for 10 MHz): ";
@@ -133,6 +133,9 @@ const char msg_poll_none[]     PROGMEM = "none)";
 // Error messages
 const char ln_invalid[]        PROGMEM = "Invalid";
 const char ln_unknown[]        PROGMEM = "Unknown command";
+
+// Warning messages
+const char ln_falling_edge_warning[] PROGMEM = "WARNING: Falling edge trigger is unreliable; use at your own risk!";
 
 // EEPROM clear messages
 const char ln_eeprom_warning[] PROGMEM = "WARNING: This will completely erase the entire EEPROM including serial number!";

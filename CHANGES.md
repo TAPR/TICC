@@ -11,6 +11,12 @@ system and more measurements/second.
   has changed and most parameter IDs are now different.  Also, a few
   parameter values have changed -- e.g., SYNC_MODE is now
   [P]rimary/[S]econdary instead of [M]aster/[C]lient.
+- **Falling Edge Trigger Support Hidden**: It turns out that the option
+  to trigger on the falling edge of an event pulse is incompatible with
+  the hardware design and will give unreliable results.  The option to
+  set trigger edge has been removed from the config menu, but remains
+  accessible as an undocumented feature via the 'T' command with a
+  prominent warning message.
 - **New EEPROM Layout**: The layout of configuration values stored in
   EEPROM has been updated from version 10 to version 12.  On first
   execution the EEPROM will be updated to the new version.  All config 

@@ -12,8 +12,8 @@
  * firmware works.
  */
 
-// 7 October 2025 - version 20251007.1
-extern const char SW_VERSION[17] = "20251008.1";
+// 9 October 2025 - version 20251009.1
+extern const char SW_VERSION[17] = "20251009.1";
 extern const char SW_TAG[6] = "BETA";
 
 #include <stdint.h>             // define unint16_t, uint32_t
@@ -165,8 +165,8 @@ void loop() {
     } else if (ready_chB) {
       // Only channel B ready
       SET_LED_1; SET_EXT_LED_1;
-      
-      if (config.MODE == Binary) {
+          
+        if (config.MODE == Binary) {
         if (process_binary_mode(&channels[1])) {
           CLR_LED_1; CLR_EXT_LED_1;
         }
@@ -197,6 +197,16 @@ void loop() {
       continue;
     }
 
+    /*
+    // TEMPORARY: Speed test - minimal output to measure max processing rate (ch0 only)
+    if (channels[0].new_ts_ready) {
+      Serial.println("@");  // 3 bytes: '@' '\r' '\n'
+      channels[0].new_ts_ready = 0;
+      continue; // Skip all normal print routines
+    }
+    continue; // Skip if ch1 had data but we're only testing ch0
+    */
+    
     // Timestamp mode: print each timestamp in timestamp order (earlier timestamp first)
     if ((config.MODE == Timestamp) && output_allowed) {
       if (channels[0].new_ts_ready && channels[1].new_ts_ready) {
@@ -216,7 +226,7 @@ void loop() {
         
         channels[0].new_ts_ready = 0;  // consume both
         channels[1].new_ts_ready = 0;
-      } else {
+        } else {
         // Only one ready: print that one
         for (int ci = 0; ci < 2; ++ci) {
           if (channels[ci].new_ts_ready) {
@@ -238,7 +248,7 @@ void loop() {
           // Calculate period: current timestamp - previous timestamp from buffer
           Timestamp64 period = timestamp_difference(&channels[ci].timestamp, 
               &prev_timestamp[ci]);
-          char line[64];
+                char line[64];
           print_timestamp(line, sizeof(line), &period, (char)channels[ci].name, false);  // No wrap
           
           channels[ci].new_ts_ready = 0;  // consume
@@ -276,83 +286,83 @@ void loop() {
 
       // If we have a complete pair, emit in fixed order with poll gating
       if ((ts_pair_count == 2) && output_allowed) {
-        // Determine composition and enforce chA then chB order when both present
-        if ((ts_pair[0].ch == 0 && ts_pair[1].ch == 1) || (ts_pair[0].ch == 1 && ts_pair[1].ch == 0)) {
-          // Mixed channels: find A then B
-          const PairSlot *A = (ts_pair[0].ch == 0) ? &ts_pair[0] : &ts_pair[1];
-          const PairSlot *B = (ts_pair[0].ch == 1) ? &ts_pair[0] : &ts_pair[1];
+          // Determine composition and enforce chA then chB order when both present
+          if ((ts_pair[0].ch == 0 && ts_pair[1].ch == 1) || (ts_pair[0].ch == 1 && ts_pair[1].ch == 0)) {
+            // Mixed channels: find A then B
+            const PairSlot *A = (ts_pair[0].ch == 0) ? &ts_pair[0] : &ts_pair[1];
+            const PairSlot *B = (ts_pair[0].ch == 1) ? &ts_pair[0] : &ts_pair[1];
           // Print chA timestamp
-          {
-            char line[64];
-            print_timestamp(line, sizeof(line), &A->t, (char)channels[0].name);
+            {
+              char line[64];
+              print_timestamp(line, sizeof(line), &A->t, (char)channels[0].name);
+            }
+            // Print chB timestamp
+            {
+              char line[64];
+              print_timestamp(line, sizeof(line), &B->t, (char)channels[1].name);
+            }
+          } else {
+            // Same channel twice: print both with that channel's name
+            uint8_t ci = ts_pair[0].ch;
+            char cname = channels[ci].name;
+            for (int k = 0; k < 2; ++k) {
+              char line[64];
+              print_timestamp(line, sizeof(line), &ts_pair[k].t, cname);
+            }
           }
-          // Print chB timestamp
-          {
-            char line[64];
-            print_timestamp(line, sizeof(line), &B->t, (char)channels[1].name);
-          }
-        } else {
-          // Same channel twice: print both with that channel's name
-          uint8_t ci = ts_pair[0].ch;
-          char cname = channels[ci].name;
-          for (int k = 0; k < 2; ++k) {
-            char line[64];
-            print_timestamp(line, sizeof(line), &ts_pair[k].t, cname);
-          }
-        }
-        ts_pair_count = 0;  // clear pair buffer after printing
+          ts_pair_count = 0;  // clear pair buffer after printing
       }
     }
 
     // Shared pairing logic for Interval and 3-Cornered Hat modes
     if (both_channels_ready() && output_allowed) {
-      switch (config.MODE) {
-        case Interval:
-          {
-            // Calculate time interval A->B
-            Timestamp64 interval = timestamp_difference(&channels[1].timestamp, &channels[0].timestamp);
-            char line[64];
-            print_timestamp(line, sizeof(line), &interval, '\0', false);  // No wrap, no channel name
+        switch (config.MODE) {
+          case Interval:
+            {
+              // Calculate time interval A->B
+              Timestamp64 interval = timestamp_difference(&channels[1].timestamp, &channels[0].timestamp);
+                char line[64];
+                print_timestamp(line, sizeof(line), &interval, '\0', false);  // No wrap, no channel name
             consume_both_flags();
-            break;
-          }
-        case Hat:
-          {
-            // 3-Cornered Hat mode: chA, chB, and chC (synthesized)
-            // chC = int(chB) + (chB - chA) - properly handle negative differences
-            
-            // Print chA and chB timestamps
-            char line[64];
-            print_timestamp(line, sizeof(line), &channels[0].timestamp, (char)channels[0].name);
-            print_timestamp(line, sizeof(line), &channels[1].timestamp, (char)channels[1].name);
-            
-            // Calculate chC = int(chB) + (chB - chA)
-            Timestamp64 interval = timestamp_difference(&channels[1].timestamp, &channels[0].timestamp);
-            Timestamp64 chC;
-            
-            // chC uses the integer seconds from chB, plus the fractional difference
-            chC.seconds = channels[1].timestamp.seconds;  // int(chB) - integer seconds from chB
-            chC.picos = interval.picos;              // (chB - chA) fractional part
-            
-            // Handle negative fractional differences (interval.seconds < 0 means negative difference)
-            if (interval.seconds < 0) {
-              // The fractional part is in complement representation, convert to normal
-              if (interval.picos != 0) {
-                chC.picos = PS_PER_SEC - interval.picos;
-                // Since we're subtracting from the integer seconds, borrow if needed
-                chC.seconds -= 1;
-              }
+              break;
             }
-            
-            // Print chC (synthesized)
-            print_timestamp(line, sizeof(line), &chC, 'C');
-            
+          case Hat:
+            {
+              // 3-Cornered Hat mode: chA, chB, and chC (synthesized)
+              // chC = int(chB) + (chB - chA) - properly handle negative differences
+              
+            // Print chA and chB timestamps
+                char line[64];
+                print_timestamp(line, sizeof(line), &channels[0].timestamp, (char)channels[0].name);
+                print_timestamp(line, sizeof(line), &channels[1].timestamp, (char)channels[1].name);
+              
+              // Calculate chC = int(chB) + (chB - chA)
+              Timestamp64 interval = timestamp_difference(&channels[1].timestamp, &channels[0].timestamp);
+              Timestamp64 chC;
+              
+              // chC uses the integer seconds from chB, plus the fractional difference
+              chC.seconds = channels[1].timestamp.seconds;  // int(chB) - integer seconds from chB
+              chC.picos = interval.picos;              // (chB - chA) fractional part
+              
+              // Handle negative fractional differences (interval.seconds < 0 means negative difference)
+              if (interval.seconds < 0) {
+                // The fractional part is in complement representation, convert to normal
+                if (interval.picos != 0) {
+                  chC.picos = PS_PER_SEC - interval.picos;
+                  // Since we're subtracting from the integer seconds, borrow if needed
+                  chC.seconds -= 1;
+                }
+              }
+              
+              // Print chC (synthesized)
+                print_timestamp(line, sizeof(line), &chC, 'C');
+              
             consume_both_flags();
-            break;
-          }
-        default: break;
+              break;
+            }
+          default: break;
+        }
       }
-    }
 
   }  // while (1) loop
 

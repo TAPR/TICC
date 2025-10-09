@@ -381,22 +381,17 @@ void show_main_menu() {
   snprintf(line + strlen(line), sizeof(line) - strlen(line), "%d)", config.PLACES);
   configPrintln(line);
   
-  // D - Trigger Edge
-  copyProgStrToBuffer(it_edge, line, sizeof(line));
-  snprintf(line + strlen(line), sizeof(line) - strlen(line), "%c/%c)", config.START_EDGE[0], config.START_EDGE[1]);
-  configPrintln(line);
-  
-  // E - Sync Mode
+  // D - Sync Mode (was E)
   copyProgStrToBuffer(it_sync, line, sizeof(line));
   snprintf(line + strlen(line), sizeof(line) - strlen(line), "%c)", config.SYNC_MODE);
   configPrintln(line);
   
-  // F - Channel Names
+  // E - Channel Names (was F)
   copyProgStrToBuffer(it_names, line, sizeof(line));
   snprintf(line + strlen(line), sizeof(line) - strlen(line), "%c/%c)", config.NAME[0], config.NAME[1]);
   configPrintln(line);
   
-  // G - Poll Character
+  // F - Poll Character (was G)
   copyProgStrToBuffer(it_pollchar, line, sizeof(line));
   if (config.POLL_CHAR) {
     snprintf(line + strlen(line), sizeof(line) - strlen(line), "%c)", config.POLL_CHAR);
@@ -405,11 +400,11 @@ void show_main_menu() {
   }
   configPrintln(line);
   
-  // H - Advanced
+  // G - Advanced (was H)
   copyProgStrToBuffer(it_advanced, line, sizeof(line));
   configPrintln(line);
   
-  // I - Baud Rate
+  // H - Baud Rate (was I)
   copyProgStrToBuffer(it_baud, line, sizeof(line));
   snprintf(line + strlen(line), sizeof(line) - strlen(line), "%lu)", (unsigned long)config.BAUD_RATE);
   configPrintln(line);
@@ -806,17 +801,17 @@ bool process_config_command(const char* cmdLine, bool interactive) {
     args = args_buffer;
   }
   
-  // Handle direct submenu commands (A1-A7, I1-I6, H1-H6)
+  // Handle direct submenu commands (A1-A8, G1-G6, H1-H6)
   if (cmd == 'A' && strlen(line) >= 2 && isdigit(line[1])) {
     return process_mode_command(line[1], args, interactive);
   }
   
-  if (cmd == 'I' && strlen(line) >= 2 && isdigit(line[1])) {
-    return process_baud_command(line[1], args, interactive);
+  if (cmd == 'G' && strlen(line) >= 2 && isdigit(line[1])) {
+    return process_advanced_command(line[1], args, interactive);
   }
   
   if (cmd == 'H' && strlen(line) >= 2 && isdigit(line[1])) {
-    return process_advanced_command(line[1], args, interactive);
+    return process_baud_command(line[1], args, interactive);
   }
   
   // Look up command in table
@@ -846,12 +841,12 @@ bool process_config_command(const char* cmdLine, bool interactive) {
       readLine(sharedBuffer, sizeof(sharedBuffer));
       char *input = trimInPlace(sharedBuffer);
       if (strlen(input) > 0) {
-        // Handle submenu selection (1-7 for mode, 1-6 for baud/advanced)
+        // Handle submenu selection (1-8 for mode, 1-6 for baud/advanced)
         if (isdigit(input[0])) {
           bool (*handler_func)(char, const char*, bool) = (bool (*)(char, const char*, bool))pgm_read_word(&entry->handler_func);
           return handler_func(input[0], input + 1, interactive);
         }
-        // Handle direct submenu commands (A1-A7, H1-H6, I1-I6)
+        // Handle direct submenu commands (A1-A8, G1-G6, H1-H6)
         else if (strlen(input) >= 2 && toupper(input[0]) == cmd && isdigit(input[1])) {
           bool (*handler_func)(char, const char*, bool) = (bool (*)(char, const char*, bool))pgm_read_word(&entry->handler_func);
           return handler_func(input[1], input + 2, interactive);

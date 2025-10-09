@@ -34,6 +34,7 @@ extern const char ln_2_discard[];
 extern const char ln_keep_changes[];
 extern const char ln_discard_changes[];
 extern const char ln_invalid[];
+extern const char ln_falling_edge_warning[];
 
 // Additional extern declarations for functions used in generic processor
 extern char* app_init(char* buffer, size_t bufferSize);
@@ -46,17 +47,19 @@ const CommandEntry command_table[] PROGMEM = {
   {'A', CMD_SUBMENU, true,  process_mode_command,    show_mode_menu},
   {'B', CMD_DIRECT,  false, process_wrap_command,    nullptr},
   {'C', CMD_DIRECT,  false, process_places_command,  nullptr},
-  {'D', CMD_DIRECT,  false, process_edge_command,    nullptr},
-  {'E', CMD_DIRECT,  false, process_sync_command,    nullptr},
-  {'F', CMD_DIRECT,  false, process_names_command,   nullptr},
-  {'G', CMD_DIRECT,  false, process_poll_command,    nullptr},
-  {'H', CMD_SUBMENU, true,  process_advanced_command, show_advanced_menu},
-  {'I', CMD_SUBMENU, true,  process_baud_command,    show_baud_menu},
+  {'D', CMD_DIRECT,  false, process_sync_command,    nullptr},
+  {'E', CMD_DIRECT,  false, process_names_command,   nullptr},
+  {'F', CMD_DIRECT,  false, process_poll_command,    nullptr},
+  {'G', CMD_SUBMENU, true,  process_advanced_command, show_advanced_menu},
+  {'H', CMD_SUBMENU, true,  process_baud_command,    show_baud_menu},
   {'M', CMD_MAIN_MENU, false, process_menu_command,  nullptr},
   {'S', CMD_DIRECT,  false, process_info_command,    nullptr},
   {'V', CMD_DIRECT,  false, process_version_command, nullptr},
   {'W', CMD_DIRECT,  false, process_write_wrapper, nullptr},
   {'X', CMD_DIRECT,  false, process_eeprom_clear_command, nullptr},
+  
+  // Undocumented commands (hidden from menu)
+  {'T', CMD_DIRECT,  false, process_edge_command,    nullptr},  // 'T' for undocumented trigger edge
   
   // Exit commands
   {'1', CMD_EXIT, false, process_exit_command, nullptr},
@@ -76,39 +79,39 @@ const CommandConfig main_menu_commands[] PROGMEM = {
   // C - Decimal Places
   {'C', SIMPLE_INT, prompt_places, 0, 12, "", &config.PLACES, 0, "Decimal Places", CONFIRM_HANDLE, 0},
   
-  // D - Start Edge
-  {'D', CHAR_PAIR, prompt_edge, 0, 0, "RF", config.START_EDGE, 0, "Start Edge", CONFIRM_HANDLE, 0},
+  // D - Sync Mode (was E)
+  {'D', SIMPLE_CHAR, prompt_sync, 0, 0, "PS", &config.SYNC_MODE, 0, "Sync Mode", CONFIRM_HANDLE, 0},
   
-  // E - Sync Mode
-  {'E', SIMPLE_CHAR, prompt_sync, 0, 0, "PS", &config.SYNC_MODE, 0, "Sync Mode", CONFIRM_HANDLE, 0},
+  // E - Channel Names (was F)
+  {'E', CHAR_PAIR, prompt_names, 0, 0, "", config.NAME, 0, "Channel Names", CONFIRM_HANDLE, 0},
   
-  // F - Channel Names
-  {'F', CHAR_PAIR, prompt_names, 0, 0, "", config.NAME, 0, "Channel Names", CONFIRM_HANDLE, 0},
+  // F - Poll Character (was G)
+  {'F', SIMPLE_CHAR, prompt_poll, 0, 0, "", &config.POLL_CHAR, 0, "Poll Character", CONFIRM_HANDLE, 0},
   
-  // G - Poll Character
-  {'G', SIMPLE_CHAR, prompt_poll, 0, 0, "", &config.POLL_CHAR, 0, "Poll Character", CONFIRM_HANDLE, 0}
+  // T - Start Edge (undocumented, was D)
+  {'T', CHAR_PAIR, prompt_edge, 0, 0, "RF", config.START_EDGE, 0, "Start Edge", CONFIRM_HANDLE, 0}
 };
 
 const size_t MAIN_MENU_COMMANDS_SIZE = sizeof(main_menu_commands) / sizeof(main_menu_commands[0]);
 
-// Advanced commands table
+// Advanced commands table (was H, now G)
 const CommandConfig advanced_commands[] PROGMEM = {
-  // H1 - Clock Speed
+  // G1 - Clock Speed (was H1)
   {'1', SCIENTIFIC, prompt_clock, 1000000, 16000000, "", &config.CLOCK_HZ, 0, "Clock Speed", CONFIRM_MANUAL, 0},
   
-  // H2 - Coarse Tick
+  // G2 - Coarse Tick (was H2)
   {'2', SCIENTIFIC, prompt_pictick, 100000000, 100000000000, "", &config.PICTICK_PS, 0, "Coarse Tick", CONFIRM_MANUAL, 0},
   
-  // H3 - Propagation Delay
+  // G3 - Propagation Delay (was H3)
   {'3', SCIENTIFIC_PAIR, prompt_prop, 0, 1000000000000, "", config.PROP_DELAY, 0, "PropDelay", CONFIRM_PAIR, 0},
   
-  // H4 - Time Dilation
+  // G4 - Time Dilation (was H4)
   {'4', SCIENTIFIC_PAIR, prompt_dilation, 0, 1000000000000, "", config.TIME_DILATION, 0, "Time Dilation", CONFIRM_PAIR, 0},
   
-  // H5 - Fixed Time2
+  // G5 - Fixed Time2 (was H5)
   {'5', SCIENTIFIC_PAIR, prompt_fixed, 0, 1000000000000, "", config.FIXED_TIME2, 0, "fixedTime2", CONFIRM_PAIR, 0},
   
-  // H6 - FUDGE0
+  // G6 - FUDGE0 (was H6)
   {'6', SCIENTIFIC_PAIR, prompt_fudge, 0, 1000000000000, "", config.FUDGE0, 0, "FUDGE0", CONFIRM_PAIR, 0}
 };
 
@@ -128,7 +131,7 @@ const CommandConfig mode_commands[] PROGMEM = {
 
 const size_t MODE_COMMANDS_SIZE = sizeof(mode_commands) / sizeof(mode_commands[0]);
 
-// Baud rate submenu commands table
+// Baud rate submenu commands table (was I, now H)
 const CommandConfig baud_commands[] PROGMEM = {
   {'1', SUBMENU_SELECTION, NULL, 0, 0, "", &config.BAUD_RATE, 0, "Baud Rate", CONFIRM_MANUAL, 9600},
   {'2', SUBMENU_SELECTION, NULL, 0, 0, "", &config.BAUD_RATE, 0, "Baud Rate", CONFIRM_MANUAL, 19200},
@@ -260,6 +263,8 @@ bool process_generic_command(char cmd, const char* args, bool interactive, const
   
   // Handle input commands
   char* input = getInputOrPrompt(args, prompt_prog, sharedBuffer, sizeof(sharedBuffer));
+  
+  // Empty input (just Enter) means cancel and return to menu
   if (!input) return true;
   
   // Debug code removed - batch processing working correctly
@@ -279,7 +284,7 @@ bool process_generic_command(char cmd, const char* args, bool interactive, const
         charValue = toupper(input[0]);
         // Check if character is in allowed set
         char allowed[8];
-        strcpy_P(allowed, (const char*)pgm_read_word(&cmd_config->allowed_chars));
+        memcpy_P(allowed, cmd_config->allowed_chars, sizeof(allowed));
         valid = (strlen(allowed) == 0) || (strchr(allowed, charValue) != nullptr);
       }
       break;
@@ -342,7 +347,7 @@ bool process_generic_command(char cmd, const char* args, bool interactive, const
         }
       } else if (config_ptr == &config.POLL_CHAR) {
         char old = config.POLL_CHAR;
-        config.POLL_CHAR = (charValue == '\0' || charValue == ' ') ? 0x00 : charValue;
+        config.POLL_CHAR = (charValue == '-') ? 0x00 : charValue;
         config_changed = 1;
         strcpy(sharedBuffer, "OK -- Poll Character ");
         if (old) {
@@ -449,6 +454,13 @@ bool process_generic_command(char cmd, const char* args, bool interactive, const
         if (set0) config.START_EDGE[0] = charA;
         if (set1) config.START_EDGE[1] = charB;
         config_changed = 1;
+        
+        // Check if falling edge is being set and display warning
+        if (config.START_EDGE[0] == 'F' || config.START_EDGE[1] == 'F') {
+          configPrintlnProg(ln_falling_edge_warning);
+          configPrintln("");
+        }
+        
         snprintf(sharedBuffer, sizeof(sharedBuffer), "OK -- Start Edge %c%c -> %c%c", 
                  old0, old1, config.START_EDGE[0], config.START_EDGE[1]);
         if (!handleConfirmation(sharedBuffer, interactive)) {

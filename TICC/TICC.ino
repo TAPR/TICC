@@ -23,7 +23,7 @@ extern const char SW_TAG[6] = "BETA";
 #include "board.h"              // LED macros and Arduino pin definitions
 #include "config.h"             // config and eeprom
 #include "tdc7200.h"            // TDC registers and structures
-#include "timestamps.h"    // timestamp utility functions
+#include "timestamps.h"         // timestamp utility functions
 #include "print.h"              // optimized 64-bit printing routines
 #include "setup.h"              // initialization functions
 #include "utils.h"              // utility functions
@@ -34,18 +34,18 @@ int64_t PICTICK_PS;
 int64_t CLOCK_PERIOD;
 int16_t CAL_PERIODS;
 int16_t WRAP;
-int64_t ticksPerSecond;  // number of coarse ticks per second
+int64_t ticksPerSecond;        // number of coarse ticks per second
 
 config_t config;
 MeasureMode MODE, lastMODE;
-uint8_t skip_config_prompt_once = 0;  // Not static - accessed from setup.cpp and utils.cpp
+uint8_t skip_config_prompt_once = 0;  
 volatile uint8_t request_restart = 0;
-uint8_t just_restarted = 1;  // Not static - accessed from utils.cpp
+uint8_t just_restarted = 1; 
 
 // Configuration change tracking
 static config_t config_backup;  // Backup of config before changes
-uint8_t config_changed = 0;  // Flag indicating config was modified (global for config.cpp access)
-uint8_t config_requested = 0;  // Not static - accessed from utils.cpp
+uint8_t config_changed = 0;     // Flag indicating config was modified (global for config.cpp access)
+uint8_t config_requested = 0;  
 
 // Serial input handling
 char serial_char = 0;  // Last character read from serial (for config and poll gating)

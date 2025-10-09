@@ -14,3 +14,6 @@ __pycache__/
 *.o
 *.so
 *.a
+
+# Arduino IDE build directory
+build/

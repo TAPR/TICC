@@ -26,7 +26,8 @@ from the external 10 MHz source.  COARSE_CLOCK provides timing in
 100 us increments and the TDC provides precise timing within those 
 increments.
 
-The TDC7200 has a minimum time interval constraint of 12 ns.  To ensure
+The TDC7200 in measurement mode 2 (which we use) has a minimum time 
+interval constraint of 2 clock cycles, or 200 ns in our case.  To ensure
 that the STOP signal (derived from COARSE_CLOCK) meets this, a set of
 logic gates ensure that the STOP signal comes from a COARSE_CLOCK tick
 occurring at least 300 ns after the START signal.  That STOP signal is
@@ -92,11 +93,16 @@ earlier timestamp first.
 - **Total per pair:** ~3.79 ms (was ~3.65 ms estimated)
 
 **Throughput:**
-- **Single-channel:** ~530 measurements/second (limited by serial output)
-- **Both-channel:** ~264 pairs/second = 528 total timestamps/second
+- **Single-channel:** measured at 560 measurements/second at 115200 baud 
+  (limited by serial output); at 230400 baud sustained throughput of 585
+  measurements/second.
+- **Binary timestamp single-channel:** 1135 measurements/second sustained
+  at 230400 baud.
+- **Loop speed test:** printing a single character for each calculated
+  timestamp generates throughput of about 1350 measurements/second
+  which indicates that the loop speed is a bit more than that.
 
 **Impact of Baud Rate on Throughput:**
-
 Serial output is the bottleneck (~1.73 ms per timestamp @ 115200 baud), with USB 
 CDC overhead (~1.3 ms) dominating the transmission time (~304 µs). Increasing baud 
 rate provides modest improvement:
@@ -125,7 +131,7 @@ The timestamp calculation uses a mixed-radix accumulator approach:
 - **Accumulation:** `timestamp.picos += deltaT` with automatic carry/borrow
   to seconds
 - **Precision:** Full picosecond precision (12 decimal places)
-- **Performance:** 1250 measurements/second tested on one channel
+- **Performance:** 1350 measurements/second tested on one channel
 
 This approach avoids 64-bit division/modulo operations, which are very
 expensive on 8-bit AVR microcontrollers.
@@ -194,39 +200,12 @@ The printing system is optimized for performance on 8-bit AVR:
 ## Why Signed for Timestamp64.seconds
 The seconds field uses signed integers for several important reasons:
 
-- **Frequent subtraction operations:** `period = ts − last_ts; interval = B
-  − A`
+- **Frequent subtraction operations:**<br>
+  `period = ts − last_ts; interval = B − A`
 - **Negative results:** Can occur and signed integers avoid underflow
 - **Special-case handling:** Eliminates need for complex underflow logic
 - **Range adequacy:** int32_t range (±68 years) is sufficient for all
   measurement scenarios
-
-## Hardware Timing Considerations
-- **INTB assertion delay:** 2330 ns to 2472 ns after PICstop latching
-- **Sequential channel checking:** Can cause ordering issues with
-  dual-channel operation
-- **Variable processing delays:** Require careful synchronization logic
-
-## Performance Optimization
-
-The firmware includes several optimization strategies:
-
-1. **Single serial read per loop:** Combined config and poll gating check 
-   (saves ~15-25 µs per iteration)
-2. **Poll gating flag instead of function calls:** Uses `output_allowed` boolean 
-   set once per loop (eliminates function call overhead)
-3. **Combined mode and output checks:** Single conditional evaluation 
-   (e.g., `if ((config.MODE == Timestamp) && output_allowed)`)
-4. **Early exit optimization:** Skips output processing when no new timestamps 
-   are ready or when first timestamps are invalid (totalize <= 1)
-5. **Inline timestamp comparison:** Avoids function call overhead for critical 
-   timestamp ordering
-6. **Shared pairing framework:** Eliminates code duplication between pairing modes
-7. **Function extraction:** Modular timestamp calculation (`calculate_timestamp()`) 
-   and binary processing (`process_binary_mode()`)
-8. **Critical section protection:** Proper interrupt handling for atomic operations
-9. **Code organization:** Separated setup and utility functions into dedicated 
-   files for better maintainability
 
 ---
 

@@ -1,1 +1,16 @@
+# Vi/Vim swap files
 *.swp
+*.swo
+*~
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Compiled / build artifacts
+*.o
+*.so
+*.a

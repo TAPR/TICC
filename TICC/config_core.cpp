@@ -293,6 +293,11 @@ void backup_config() {
 
 // Check if a config change requires a full restart vs. just a flush
 uint8_t config_change_requires_restart() {
+  extern volatile uint8_t request_restart;
+  
+  // Check if restart was explicitly requested (e.g., after EEPROM write or defaults reset)
+  if (request_restart) return 1;
+  
   // These parameters require full restart (hardware reinitialization)
   if (config.CLOCK_HZ != config_backup.CLOCK_HZ) return 1;
   if (config.PICTICK_PS != config_backup.PICTICK_PS) return 1;

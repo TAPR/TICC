@@ -99,8 +99,9 @@ earlier timestamp first.
 - **Binary timestamp single-channel:** 1135 measurements/second sustained
   at 230400 baud.
 - **Loop speed test:** printing a single character for each calculated
-  timestamp generates throughput of about 1350 measurements/second
-  which indicates that the loop speed is a bit more than that.
+  timestamp generates throughput of about 1350 measurements/second.  Based
+  on the cost of calling Serial.println(), the throughput without any printing
+  at all is probably about 1400 measurements/second.
 
 **Impact of Baud Rate on Throughput:**
 Serial output is the bottleneck (~1.73 ms per timestamp @ 115200 baud), with USB 

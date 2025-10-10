@@ -13,7 +13,7 @@
  */
 
 // 9 October 2025 - version 20251009.1
-extern const char SW_VERSION[17] = "20251009.1";
+extern const char SW_VERSION[17] = "20251009.2";
 extern const char SW_TAG[6] = "BETA";
 
 #include <stdint.h>             // define unint16_t, uint32_t

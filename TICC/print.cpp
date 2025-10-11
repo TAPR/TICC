@@ -104,8 +104,6 @@ int print_timestamp(
   
   // Pre-calculate common values to avoid repeated calculations
   int32_t sec = t->seconds;
-  
-  // Debug code removed - issue was POW10_TABLE corruption, now fixed with PROGMEM
   char* p = out;
   
   // Handle negative sign if needed
@@ -118,21 +116,14 @@ int print_timestamp(
   // Handle seconds with wrap logic - optimized for common cases
   if (wrap > 0 && wrap <= 9) {
     // Apply wrap: show only last 'wrap' digits using lookup table
-    // FIXED: Use PROGMEM table with pgm_read_dword()
     uint32_t mod = pgm_read_dword(&POW10_TABLE[wrap]);
     uint32_t sec_u = (uint32_t)sec;  // Convert to unsigned for modulo
-    
-    // Debug code removed - POW10_TABLE corruption fixed
-    
     sec_u = sec_u % mod;
     
     // Zero-pad to wrap width - unrolled for common wrap values
     if (wrap == 2) {
       p[0] = '0' + (sec_u / 10);
       p[1] = '0' + (sec_u % 10);
-      
-      // Debug code removed - issue resolved
-      
       p += 2;
     } else if (wrap == 3) {
       p[0] = '0' + (sec_u / 100);

@@ -12,9 +12,9 @@
  * firmware works.
  */
 
-// 9 October 2025 - version 20251009.1
-extern const char SW_VERSION[17] = "20251009.2";
-extern const char SW_TAG[6] = "BETA";
+//11 October 2025 - version 20251011.1
+extern const char SW_VERSION[17] = "20251011.1";
+extern const char SW_TAG[8] = "RC";
 
 #include <stdint.h>             // define unint16_t, uint32_t
 #include <SPI.h>                // SPI support
@@ -197,16 +197,6 @@ void loop() {
       continue;
     }
 
-    /*
-    // TEMPORARY: Speed test - minimal output to measure max processing rate (ch0 only)
-    if (channels[0].new_ts_ready) {
-      Serial.println("@");  // 3 bytes: '@' '\r' '\n'
-      channels[0].new_ts_ready = 0;
-      continue; // Skip all normal print routines
-    }
-    continue; // Skip if ch1 had data but we're only testing ch0
-    */
-    
     // Timestamp mode: print each timestamp in timestamp order (earlier timestamp first)
     if ((config.MODE == Timestamp) && output_allowed) {
       if (channels[0].new_ts_ready && channels[1].new_ts_ready) {

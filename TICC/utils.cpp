@@ -138,7 +138,6 @@ bool handle_config_request() {
   // Enter config menu directly (no T/P choice needed)
   backup_config();
   show_config_menu();
-  handle_config_change_exit();
   
   // Clear any remaining characters after config menu exits
   while (Serial.available()) (void)Serial.read();

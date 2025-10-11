@@ -58,8 +58,6 @@ void calculate_timestamp(tdc7200Channel* channel, int64_t pictick_ps) {
       m -= channel->timestamp.picos;
       uint64_t borrow_sec = 1 + (m / PS_PER_SEC);
       uint64_t rem = m % PS_PER_SEC;
-      // changed below from (uint32_t) cast to see if that solves
-      // issue at around 8000 seconds
       channel->timestamp.seconds -= (int32_t)borrow_sec;
       channel->timestamp.picos = PS_PER_SEC - rem;
     }

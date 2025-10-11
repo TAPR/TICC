@@ -10,6 +10,7 @@
 
 // System-wide constants
 extern const char SW_VERSION[17];
+extern const char SW_TAG[8];
 
 // System-wide variables
 extern char SER_NUM[17];
@@ -29,6 +30,7 @@ extern void configPrintProg(const char* msg);
 extern void configPrintlnProg(const char* msg);
 extern void eeprom_write_config();
 extern void eeprom_read_config();
+extern void eeprom_clear();
 extern struct config_t defaultConfig();
 extern bool check_reference_clock();
 extern bool both_channels_ready();

@@ -110,9 +110,6 @@ void show_mode_menu();
 void show_baud_menu();
 void show_advanced_menu();
 
-// Legacy function prototypes (for backward compatibility)
-// (none currently needed)
-
 // Serial I/O helper functions (declared in config_core.cpp)
 void serialPrintImmediate(const char *s);
 void configPrint(const char* msg);

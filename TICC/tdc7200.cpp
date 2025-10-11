@@ -10,7 +10,6 @@
 #include <stdint.h>           // define unint16_t, uint32_t
 #include <SPI.h>              // SPI support
 
-// misc.h removed - no longer needed
 #include "board.h"            // Arduino pin definitions
 #include "config.h"           // config and eeprom
 #include "tdc7200.h"          // TDC registers and structures
@@ -54,13 +53,6 @@ void tdc7200Channel::tdc_setup() {
 
   config_byte2 = CALIBRATION2_PERIODS | AVG_CYCLES | NUM_STOP;
 
-  // TODO: check whether this is necessary; may be cruft from early testing
-  boolean state = true;
-  boolean last_state = true;
-  while (state || last_state) { // catch COARSE falling edge tO align phase
-    last_state = state;
-    state = digitalRead(COARSEint);
-    }
   write(CONFIG2, config_byte2);
 
   // enable interrupts:

@@ -128,12 +128,7 @@ extern void eeprom_clear();
 
 // External variables from TICC.ino
 extern volatile uint8_t request_restart;
-// config_changed and config now in TICC.h
-
-// Forward declarations for version info
-// SW_VERSION now in TICC.h
-extern const char SW_TAG[6];
-// SER_NUM now in TICC.h
+// config_changed, config, SW_VERSION, SW_TAG, and SER_NUM now in TICC.h
 
 // Single shared buffer to reduce memory usage
 char sharedBuffer[128];

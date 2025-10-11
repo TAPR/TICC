@@ -12,27 +12,12 @@
 #include <string.h>
 #include <Arduino.h>
 #include <EEPROM.h>
-// config_types.h functionality now included in config.h
 #include "config.h"
 #include "config_menu_text.h"
+#include "TICC.h"
 
 // External variables referenced by other files
 char SER_NUM[17];          // set by get_ser_num();
-
-// External variables defined in TICC.ino
-extern uint8_t config_changed;
-extern config_t config;
-extern config_t config_backup;
-
-// External variables from TICC.ino
-extern const char SW_VERSION[17];
-extern const char SW_TAG[6];
-
-// External references to existing EEPROM functions (from original config system)
-extern void eeprom_write_config();
-extern void eeprom_read_config();
-extern void eeprom_clear();
-extern struct config_t defaultConfig();
 
 // Serial I/O helper functions
 void configPrint(const char* msg) {
@@ -344,7 +329,7 @@ void handle_config_change_exit() {
   }
 }
 
-// Print current configuration (replaces old print_config function)
+// Print current configuration
 void print_config(config_t x) {
   char tmpbuf[64];
   

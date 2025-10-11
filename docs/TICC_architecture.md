@@ -103,6 +103,25 @@ earlier timestamp first.
   on the cost of calling Serial.println(), the throughput without any printing
   at all is probably about 1400 measurements/second.
 
+**Speed Test Procedure:**
+To measure maximum loop processing speed without the overhead of normal timestamp
+formatting, replace the normal timestamp printing code in the main loop with minimal
+output. Add this test code in TICC.ino after the line that checks `if (!channels[0].new_ts_ready && !channels[1].new_ts_ready)`:
+
+```cpp
+// Speed test - minimal output to measure max processing rate (ch0 only)
+if (channels[0].new_ts_ready) {
+  Serial.println("@");  // 3 bytes: '@' '\r' '\n'
+  channels[0].new_ts_ready = 0;
+  continue; // Skip all normal print routines
+}
+continue; // Skip if ch1 had data but we're only testing ch0
+```
+
+This outputs a single "@" character per timestamp on channel 0, allowing measurement
+of the calculation overhead without formatting costs. Count the "@" characters over a 
+fixed time period to determine measurements per second.
+
 **Impact of Baud Rate on Throughput:**
 Serial output is the bottleneck (~1.73 ms per timestamp @ 115200 baud), with USB 
 CDC overhead (~1.3 ms) dominating the transmission time (~304 µs). Increasing baud 

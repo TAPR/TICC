@@ -267,8 +267,6 @@ bool process_generic_command(char cmd, const char* args, bool interactive, const
   // Empty input (just Enter) means cancel and return to menu
   if (!input) return true;
   
-  // Debug code removed - batch processing working correctly
-  
   // Parse input based on type
   bool valid = false;
   int64_t value = 0, valueA = 0, valueB = 0;

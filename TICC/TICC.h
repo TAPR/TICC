@@ -18,6 +18,21 @@ extern uint8_t config_changed;
 extern config_t config;
 extern config_t config_backup;
 
+// Performance-critical variables: local copies for hot path efficiency
+// These are copied from config at startup to avoid struct access overhead in tight loops
+extern volatile int64_t PICcount;      // Coarse timer tick count (incremented by ISR)
+extern int64_t PICTICK_PS;             // Picoseconds per coarse tick (used in calculate_timestamp)
+extern int64_t CLOCK_PERIOD;           // Picoseconds per TDC clock tick (used in tdc7200 read)
+extern int16_t CAL_PERIODS;            // TDC calibration periods (used in tdc7200 read)
+extern MeasureMode MODE;               // Current measurement mode (checked in main loop)
+extern MeasureMode lastMODE;           // Previous measurement mode (for change detection)
+
+// Setup and restart control variables
+extern uint8_t skip_config_prompt_once;  // Skip config prompt on next setup (set by some commands)
+extern volatile uint8_t request_restart; // Request system restart (set by config changes)
+extern uint8_t just_restarted;           // Flag indicating system just restarted
+extern uint8_t config_requested;         // Flag indicating config menu was requested
+
 // System-wide utility tables
 static const uint32_t POW10_TABLE[10] PROGMEM = {
   1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000

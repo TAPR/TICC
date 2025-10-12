@@ -12,7 +12,6 @@
  * firmware works.
  */
 
-//11 October 2025 - version 20251011.1
 extern const char SW_VERSION[17] = "20251011.1";
 extern const char SW_TAG[8] = "RC";
 
@@ -28,34 +27,37 @@ extern const char SW_TAG[8] = "RC";
 #include "setup.h"              // initialization functions
 #include "utils.h"              // utility functions
 
-volatile int64_t PICcount;
-int64_t CLOCK_HZ;
-int64_t PICTICK_PS;
-int64_t CLOCK_PERIOD;
-int16_t CAL_PERIODS;
-int16_t WRAP;
-int64_t ticksPerSecond;        // number of coarse ticks per second
+// Performance-critical variables: local copies of config values used in hot path
+// These are copied from config at startup for faster access during timestamp processing
+volatile int64_t PICcount;      // Coarse timer tick count (incremented by ISR)
+int64_t PICTICK_PS;             // Picoseconds per coarse tick (used in calculate_timestamp)
+int64_t CLOCK_PERIOD;           // Picoseconds per TDC clock tick (used in tdc7200 read)
+int16_t CAL_PERIODS;            // TDC calibration periods (used in tdc7200 read)
+MeasureMode MODE, lastMODE;     // Current and previous measurement mode (checked in main loop)
 
-config_t config;
-MeasureMode MODE, lastMODE;
-uint8_t skip_config_prompt_once = 0;  
-volatile uint8_t request_restart = 0;
-uint8_t just_restarted = 1; 
+// Configuration and system control variables
+config_t config;                        // Main configuration structure (stored in EEPROM)
+config_t config_backup;                 // Backup of config before changes (for restart detection)
+uint8_t config_changed = 0;             // Flag indicating config was modified during menu session
+uint8_t config_requested = 0;           // Flag indicating config menu was requested
+uint8_t skip_config_prompt_once = 0;    // Skip config prompt on next setup (used by some commands)
+volatile uint8_t request_restart = 0;   // Request system restart (set when config changes require it)
+uint8_t just_restarted = 1;             // Flag indicating system just restarted (skip first ref check)
 
-// Configuration change tracking
-static config_t config_backup;  // Backup of config before changes
-uint8_t config_changed = 0;     // Flag indicating config was modified (global for config.cpp access)
-uint8_t config_requested = 0;  
+// Serial input and control
+char serial_char = 0;                   // Last character read from serial (for config and poll gating)
 
-// Serial input handling
-char serial_char = 0;  // Last character read from serial (for config and poll gating)
-
+// struct that carries information for each TDC channel
 static tdc7200Channel channels[] = {
   tdc7200Channel('0', ENABLE_0, INTB_0, CSB_0, STOP_0, LED_0),
   tdc7200Channel('1', ENABLE_1, INTB_1, CSB_1, STOP_1, LED_1),
 };
 
-void setup() {} // we don't use default setup(), but ticc_setup() in setup.cpp
+/****************************************************************
+ * Arduino IDE requires a setup() function but we don't use it.
+ * Actual setup is done in ticc_setup() in setup.cpp
+ ****************************************************************/
+void setup() {}
 
 /****************************************************************
  * Interrupt Service Routines
@@ -66,6 +68,7 @@ void coarseTimer() {
   PICcount++;
 }
 
+// ISRs to grab the coarse clock count on TDC STOP
 void catch_stop0() {
   channels[0].PICstop = PICcount;
 }

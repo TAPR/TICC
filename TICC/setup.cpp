@@ -22,12 +22,9 @@ void enableInterrupt(uint8_t interruptDesignator, void (*userFunc)(void), uint8_
 
 // External global variables from TICC.ino
 extern volatile int64_t PICcount;
-extern int64_t CLOCK_HZ;
 extern int64_t PICTICK_PS;
 extern int64_t CLOCK_PERIOD;
 extern int16_t CAL_PERIODS;
-extern int16_t WRAP;
-extern int64_t ticksPerSecond;
 extern config_t config;
 extern MeasureMode MODE, lastMODE;
 extern uint8_t skip_config_prompt_once;
@@ -117,14 +114,11 @@ void ticc_setup() {
   } else {
     skip_config_prompt_once = 0;
   }
+  // Copy performance-critical config values to local variables for hot path efficiency
   MODE = config.MODE;
-
-  CLOCK_HZ = config.CLOCK_HZ;
-  CLOCK_PERIOD = (PS_PER_SEC / CLOCK_HZ);
   PICTICK_PS = config.PICTICK_PS;
+  CLOCK_PERIOD = (PS_PER_SEC / config.CLOCK_HZ);
   CAL_PERIODS = config.CAL_PERIODS;
-  WRAP = config.WRAP;
-  ticksPerSecond = PS_PER_SEC / PICTICK_PS;
 
   for (i = 0; i < 2; ++i) {  // 2 channels: A and B
     // initialize the channels struct variables

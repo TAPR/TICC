@@ -6,6 +6,9 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+// Serial input buffer
+extern char serial_char;  // Last character read from serial (for config and poll gating)
+
 // Reference clock monitoring
 bool check_reference_clock();
 

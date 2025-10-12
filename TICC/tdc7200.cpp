@@ -15,7 +15,6 @@
 #include "tdc7200.h"          // TDC registers and structures
 
 extern config_t config;
-extern int64_t CLOCK_HZ;
 extern int64_t PICTICK_PS; 
 extern int64_t CLOCK_PERIOD;
 extern int16_t CAL_PERIODS;

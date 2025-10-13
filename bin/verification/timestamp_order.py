@@ -8,6 +8,11 @@ Reads from stdin, ignoring comment lines starting with '#'.
 Usage:
     python3 timestamp_analyzer.py --strict-order    # Test for strictly increasing timestamps
     python3 timestamp_analyzer.py --strict-pairing  # Test for strict chA/chB pairing
+    python3 timestamp_analyzer.py --strict-order --wrap 2  # Handle wrapping at 100 seconds
+
+Options:
+    --wrap N   Handle timestamp wrapping at 10^N seconds (1-8)
+               Example: --wrap 2 means timestamps wrap at 100 seconds
 
 Input format:
     1.23434455 chA
@@ -52,15 +57,53 @@ def parse_timestamp_line(line: str, line_num: int) -> Optional[TimestampEntry]:
         print(f"Warning: Invalid timestamp at line {line_num}: {line}")
         return None
 
-def test_strict_order(entries: List[TimestampEntry]) -> bool:
-    """Test if timestamps are strictly increasing regardless of channel."""
-    print("Testing for strictly increasing timestamps...")
+def test_strict_order(entries: List[TimestampEntry], wrap_value: Optional[int] = None) -> bool:
+    """Test if timestamps are strictly increasing regardless of channel.
+    
+    Args:
+        entries: List of timestamp entries to check
+        wrap_value: If set, handle wrapping at 10^wrap_value seconds
+    """
+    if wrap_value:
+        wrap_period = 10 ** wrap_value
+        print(f"Testing for strictly increasing timestamps with wrapping at {wrap_period} seconds...")
+    else:
+        print("Testing for strictly increasing timestamps...")
     
     violations = 0
+    wrap_count = 0
+    
     for i in range(1, len(entries)):
-        if entries[i].timestamp <= entries[i-1].timestamp:
-            print(f"VIOLATION: Line {entries[i].line_num}: {entries[i].timestamp} <= {entries[i-1].timestamp} (line {entries[i-1].line_num})")
+        curr_ts = entries[i].timestamp
+        prev_ts = entries[i-1].timestamp
+        
+        # Check if this is a valid sequence
+        is_violation = False
+        is_wrap = False
+        
+        if curr_ts <= prev_ts:
+            if wrap_value:
+                # Check if this looks like a legitimate wrap
+                # A wrap occurs when current timestamp is near 0 and previous was near wrap_period
+                # We use half the wrap period as the threshold
+                wrap_period = 10 ** wrap_value
+                threshold = wrap_period / 2.0
+                
+                # If the backward jump is more than half the period, assume it's a wrap
+                if (prev_ts - curr_ts) > threshold:
+                    is_wrap = True
+                    wrap_count += 1
+                else:
+                    is_violation = True
+            else:
+                is_violation = True
+        
+        if is_violation:
+            print(f"VIOLATION: Line {entries[i].line_num}: {curr_ts} <= {prev_ts} (line {entries[i-1].line_num})")
             violations += 1
+    
+    if wrap_value and wrap_count > 0:
+        print(f"Detected {wrap_count} timestamp wrap(s)")
     
     if violations == 0:
         print("✓ PASS: All timestamps are strictly increasing")
@@ -99,6 +142,10 @@ def main():
     group.add_argument('--strict-pairing', action='store_true',
                       help='Test for strict chA/chB pairing order')
     
+    parser.add_argument('--wrap', type=int, choices=range(1, 9), metavar='N',
+                       help='Handle timestamp wrapping at 10^N seconds (1-8). '
+                            'Example: --wrap 2 means timestamps wrap at 100 seconds')
+    
     args = parser.parse_args()
     
     # Read and parse all timestamp entries
@@ -128,7 +175,7 @@ def main():
     
     # Run the appropriate test
     if args.strict_order:
-        success = test_strict_order(entries)
+        success = test_strict_order(entries, wrap_value=args.wrap)
     elif args.strict_pairing:
         success = test_strict_pairing(entries)
     

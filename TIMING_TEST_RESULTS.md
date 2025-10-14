@@ -31,6 +31,9 @@
 | 8b | Auto-increment only | ~612 | - | - | - | scope | **-88 µs (-13%)** | -88 µs | 2 transactions, digitalWrite |
 | 8c | Direct CSB only | ~612 | - | - | - | scope | **-88 µs (-13%)** | -88 µs | 5 transactions, direct port |
 | 8d | Both optimizations | ~580 | - | - | - | scope | **-120 µs (-17%)** | **-32 µs more** | Combined: 2 trans + direct port |
+| **Full Cycle with Serial Output (Scope Delta, Optimized)** |
+| 9a | With output @ 115200 | 1810 | - | - | - | scope | baseline | - | Process 580 µs + print 1230 µs = 1810 µs |
+| 9b | With output @ 230400 | 1620 | - | - | - | scope | **-190 µs (-10%)** | -190 µs | Process 580 µs + print 1040 µs = 1620 µs |
 
 ---
 

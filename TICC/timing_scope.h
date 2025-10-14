@@ -79,9 +79,9 @@
 // ============================================================================
 
 // For synthetic tests (no input signal): measure every iteration
-// For real signal tests: measure every Nth measurement to avoid overload
+// For real signal tests: can also measure every measurement with scope
 #ifdef SCOPE_CH1_FULL_PROCESSING
-  #define SCOPE_SAMPLE_EVERY_N  100   // Sample every 100th measurement for live tests
+  #define SCOPE_SAMPLE_EVERY_N  1     // Measure every measurement (scope handles it fine)
 #else
   #define SCOPE_SAMPLE_EVERY_N  1     // Sample every iteration for synthetic tests
 #endif

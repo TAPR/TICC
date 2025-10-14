@@ -383,10 +383,6 @@ void print_config(config_t x) {
   sprintf(tmpbuf, "Output Decimal Places: %d", x.PLACES);
   configPrintln(tmpbuf);
   
-  // Trigger Edge
-  sprintf(tmpbuf, "Trigger Edge: %c (ch0), %c (ch1)", x.START_EDGE[0], x.START_EDGE[1]);
-  configPrintln(tmpbuf);
-  
   // SyncMode
   sprintf(tmpbuf, "SyncMode: %c", x.SYNC_MODE);
   configPrintln(tmpbuf);

@@ -283,6 +283,8 @@ void loop() {
       
     } else if (ready_chA) {
       // Only channel A ready
+      SCOPE_START_FULL_CYCLE();  // Scope: Mark start of full cycle with output
+      
       SET_LED_0; SET_EXT_LED_0;
       
       if (config.MODE == Binary) {
@@ -362,6 +364,11 @@ void loop() {
             char line[64];
             print_timestamp(line, sizeof(line), &channels[ci].timestamp, (char)channels[ci].name);
             channels[ci].new_ts_ready = 0;  // consume
+            
+            // Scope: Mark end of full cycle for channel 0 only
+            if (ci == 0) {
+              SCOPE_END_FULL_CYCLE();
+            }
           }
         }
       }

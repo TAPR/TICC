@@ -51,7 +51,7 @@
 // ============================================================================
 
 // Compare baseline vs optimized SPI (most useful initial test)
-#define SCOPE_PRESET_SPI_COMPARISON
+//#define SCOPE_PRESET_SPI_COMPARISON
 #ifdef SCOPE_PRESET_SPI_COMPARISON
   #define TIMING_USE_SCOPE_MODE
   #define SCOPE_CH1_SPI_READS          // CH1: Baseline
@@ -66,12 +66,19 @@
   #define SCOPE_CH2_TIMESTAMP_CALC     // CH2: Timestamp accumulation
 #endif
 
-// Full processing time with real signal
+// Full processing time with real signal (no output)
 //#define SCOPE_PRESET_LIVE_PROCESSING
 #ifdef SCOPE_PRESET_LIVE_PROCESSING
   #define TIMING_USE_SCOPE_MODE
   #define SCOPE_CH1_FULL_PROCESSING    // CH1: Complete processing cycle
   // CH2 unused - could add another measurement
+#endif
+
+// Full cycle time with output (includes printing)
+#define SCOPE_PRESET_LIVE_WITH_OUTPUT
+#ifdef SCOPE_PRESET_LIVE_WITH_OUTPUT
+  #define TIMING_USE_SCOPE_MODE
+  #define SCOPE_CH1_FULL_CYCLE_WITH_OUTPUT  // CH1: From INTB to after print
 #endif
 
 // ============================================================================
@@ -174,6 +181,15 @@ extern volatile uint32_t scope_counter;
 #else
   #define SCOPE_CH2_START_LED_OPS()
   #define SCOPE_CH2_END_LED_OPS()
+#endif
+
+// Full cycle with output macros
+#ifdef SCOPE_CH1_FULL_CYCLE_WITH_OUTPUT
+  #define SCOPE_START_FULL_CYCLE() TIMING_PULSE()
+  #define SCOPE_END_FULL_CYCLE()   TIMING_PULSE2()
+#else
+  #define SCOPE_START_FULL_CYCLE()
+  #define SCOPE_END_FULL_CYCLE()
 #endif
 
 #endif /* TIMING_SCOPE_H */

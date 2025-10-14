@@ -64,4 +64,9 @@ const int TIMING_PIN =  A0;  // timing test output -- PORTF,0
 #define TIMING_PIN_HIGH (PORTF|=(1<<0))
 #define TIMING_PIN_LOW (PORTF&=(~(1<<0)))
 
+// Generate a short pulse (~1-2 µs) for TICC edge detection
+// TICC measures rising edges, so we generate brief pulses at start and end of code section
+// The interval between two pulses = execution time
+#define TIMING_PULSE() do { TIMING_PIN_HIGH; delayMicroseconds(2); TIMING_PIN_LOW; } while(0)
+
 #endif	/* BOARD_H */

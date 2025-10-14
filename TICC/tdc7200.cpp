@@ -119,13 +119,13 @@ void tdc7200Channel::ready_next() {
   bool do_timing = (timing_sample_counter % TIMING_SAMPLE_INTERVAL) == 0;
   timing_sample_counter++;
   if (do_timing) {
-    TIMING_PIN_HIGH;
+    TIMING_PULSE();  // Start marker
   }
 #endif
   write(CONFIG1, config_byte1);
 #ifdef TIMING_TEST_READY_NEXT
   if (do_timing) {
-    TIMING_PIN_LOW;
+    TIMING_PULSE();  // End marker: interval = ready_next() time
   }
 #endif
   }
@@ -189,7 +189,7 @@ int64_t tdc7200Channel::read() {
   bool do_timing = (timing_sample_counter % TIMING_SAMPLE_INTERVAL) == 0;
   timing_sample_counter++;
   if (do_timing) {
-    TIMING_PIN_HIGH;
+    TIMING_PULSE();  // Start marker: brief pulse for TICC to detect
   }
 #endif
   
@@ -202,7 +202,7 @@ int64_t tdc7200Channel::read() {
   
 #ifdef TIMING_TEST_SPI_READS
   if (do_timing) {
-    TIMING_PIN_LOW;  // End timing for just SPI reads
+    TIMING_PULSE();  // End marker: interval between pulses = SPI read time
   }
 #endif
   
@@ -269,7 +269,7 @@ int64_t tdc7200Channel::read() {
   
 #ifdef TIMING_TEST_FULL_READ
   if (do_timing) {
-    TIMING_PIN_LOW;  // End timing for full read() function
+    TIMING_PULSE();  // End marker: interval = full read() time
   }
 #endif
   

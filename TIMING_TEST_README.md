@@ -8,6 +8,17 @@ Test whether implementing TDC7200 auto-increment SPI mode would provide worthwhi
 performance improvements. This branch allows precise measurement of current SPI read
 timing before implementing optimizations.
 
+## How It Works
+
+Since the TICC only measures rising edges (not pulse widths or falling edges), the
+instrumentation generates **two brief pulses** for each timing measurement:
+1. **Start pulse** (~2 µs) - marks beginning of code section
+2. **End pulse** (~2 µs) - marks end of code section
+3. **Interval between pulses** = execution time of measured code
+
+The measurement TICC timestamps both rising edges, and the difference between
+consecutive timestamps gives the execution time.
+
 ## Hardware Setup
 
 ### Two-TICC Test Configuration
@@ -19,9 +30,9 @@ timing before implementing optimizations.
 
 **Measurement TICC (running normal firmware):**
 - Run normal release firmware
-- Configure for Interval mode (measures pulse widths on Channel A)
-- OR use Timestamp mode and calculate intervals offline
+- Configure for **Timestamp mode** (single channel)
 - Channel A input connected to test TICC pin A0
+- Will capture pairs of timestamps (start pulse, end pulse)
 
 ### Test Signal
 
@@ -104,19 +115,36 @@ To measure just the timing pin toggle overhead:
 
 With `TIMING_SAMPLE_INTERVAL = 1000` and 1 kHz input:
 - Test TICC processes 1000 measurements per second
-- Timing pulse generated once per second
-- Measurement TICC outputs one timestamp per second
+- Two timing pulses generated once per second (start + end markers)
+- Measurement TICC outputs **two timestamps per second**
 - Very manageable data rate for long-term collection
 
-**Option A: Use Interval Mode on Measurement TICC**
-- Direct pulse width measurements
-- Each line = one pulse width = one execution time
-- Run for 10-60 minutes to collect hundreds/thousands of samples
+**Timestamp Format:**
+You'll see pairs of timestamps like this:
+```
+534.70612449223 chA  ← Start pulse (begin SPI reads)
+534.70623156789 chA  ← End pulse (end SPI reads)
+[~1 second gap]
+536.70612621260 chA  ← Start pulse (next sample)
+536.70623328091 chA  ← End pulse
+```
 
-**Option B: Use Timestamp Mode on Measurement TICC**
-- Calculate intervals offline: `interval[n] = timestamp[n+1] - timestamp[n]`
-- Alternate intervals are pulse widths (HIGH time) vs gaps (LOW time)
-- Gap time ≈ 1 second (determined by TIMING_SAMPLE_INTERVAL)
+**Calculate Execution Time:**
+```
+execution_time = timestamp[i+1] - timestamp[i]
+```
+For consecutive timestamps (odd-even pairs), the interval = measured execution time.
+
+Example:
+```
+534.70623156789 - 534.70612449223 = 0.00010707566 seconds = 107.07566 µs
+```
+
+**Processing the data:**
+- Extract odd-numbered timestamps (starts) and even-numbered timestamps (ends)
+- Calculate: `execution[n] = end[n] - start[n]`
+- Ignore the ~1 second gaps between pairs
+- Analyze the execution time distribution
 
 ### Statistical Analysis
 
@@ -130,11 +158,27 @@ Calculate from collected data:
 Example Python analysis:
 ```python
 import numpy as np
-data = np.loadtxt('timing_data.txt')  # Load interval measurements
-print(f"Mean: {np.mean(data)*1e6:.2f} µs")
-print(f"Min:  {np.min(data)*1e6:.2f} µs")
-print(f"Max:  {np.max(data)*1e6:.2f} µs")
-print(f"Std:  {np.std(data)*1e6:.2f} µs")
+
+# Load timestamps from file (first column only)
+timestamps = np.loadtxt('timing_data.txt', usecols=0)
+
+# Calculate intervals between consecutive timestamps
+intervals = np.diff(timestamps)
+
+# Extract execution times (every other interval - the short ones)
+# The pattern is: [execution_time, gap, execution_time, gap, ...]
+execution_times = intervals[::2]  # Take every 2nd interval starting at 0
+
+# Convert to microseconds
+execution_us = execution_times * 1e6
+
+# Statistics
+print(f"Samples: {len(execution_us)}")
+print(f"Mean:    {np.mean(execution_us):.2f} µs")
+print(f"Median:  {np.median(execution_us):.2f} µs")
+print(f"Min:     {np.min(execution_us):.2f} µs")
+print(f"Max:     {np.max(execution_us):.2f} µs")
+print(f"Std Dev: {np.std(execution_us):.2f} µs")
 ```
 
 ## Timing Pin Details

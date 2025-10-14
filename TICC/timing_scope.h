@@ -75,9 +75,9 @@
 #endif
 
 // Full cycle time with output (includes printing)
+// NOTE: This does NOT use TIMING_USE_SCOPE_MODE - it runs normal code path with markers
 #define SCOPE_PRESET_LIVE_WITH_OUTPUT
 #ifdef SCOPE_PRESET_LIVE_WITH_OUTPUT
-  #define TIMING_USE_SCOPE_MODE
   #define SCOPE_CH1_FULL_CYCLE_WITH_OUTPUT  // CH1: From INTB to after print
 #endif
 

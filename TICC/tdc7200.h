@@ -101,6 +101,7 @@ public:
   void start_measurements();  // Start TDC7200 measurements
   byte readReg8(byte address);
   uint32_t readReg24(byte address);
+  void readReg24_autoincrement(byte start_address, uint32_t* values, byte count);
   void write(byte address, byte value);
 
 private:

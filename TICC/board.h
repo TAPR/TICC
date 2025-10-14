@@ -57,4 +57,13 @@ const int LED_1 =       A15; // onboard LED -- PORTK,7
 #define CLR_EXT_LED_CLK (PORTK&=(~(1<<3)))
 #define SET_EXT_LED_CLK (PORTK|=(1<<3))
 
+// Fast CSB (chip select) macros for SPI performance optimization
+// CSB_0 = pin 6 = PH3 (Port H, bit 3)
+// CSB_1 = pin 7 = PH4 (Port H, bit 4)
+// Direct port manipulation (~125 ns) vs digitalWrite (~4 µs) = 32x faster
+#define CSB_0_LOW (PORTH&=(~(1<<3)))
+#define CSB_0_HIGH (PORTH|=(1<<3))
+#define CSB_1_LOW (PORTH&=(~(1<<4)))
+#define CSB_1_HIGH (PORTH|=(1<<4))
+
 #endif	/* BOARD_H */

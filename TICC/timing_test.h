@@ -43,7 +43,7 @@
 
 // OPTIMIZATION MODE (applies to scope tests and synthetic SPI tests)
 // Can enable multiple optimizations to test combinations:
-//#define USE_AUTOINCREMENT_SPI     // Use auto-increment mode (2 transactions instead of 5)
+#define USE_AUTOINCREMENT_SPI     // Use auto-increment mode (2 transactions instead of 5)
 #define USE_DIRECT_CSB            // Use direct port manipulation for CSB (faster than digitalWrite)
 
 // Global counter for timing sample rate control (defined in tdc7200.cpp)

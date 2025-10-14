@@ -202,11 +202,10 @@ void loop() {
 
 #ifdef TIMING_USE_SCOPE_MODE
     // OSCILLOSCOPE TIMING MODE
-    // Runs synthetic tests with pulse-width output for scope measurement
-    // Scope channels connected to A0 and A1 measure pulse widths directly
+    // Runs tests with pulse-width output for scope measurement
     
-    #if defined(SCOPE_CH1_FULL_PROCESSING) || defined(SCOPE_CH2_TIMESTAMP_CALC)
-      // Need real signal for full processing test
+    #if defined(SCOPE_CH1_FULL_PROCESSING)
+      // Full processing test - needs real signal for actual measurements
       bool ready_ch = (digitalRead(channels[0].INTB) == 0);
       
       if (ready_ch) {
@@ -231,14 +230,29 @@ void loop() {
         scope_counter++;
       }
     #else
-      // Synthetic tests - no input signal needed
-      if (SCOPE_SHOULD_SAMPLE()) {
-        // Counter incremented before test so first sample happens on iteration 0
-      }
+      // Synthetic tests - no input signal needed, runs in tight loop
       
-      // Run the appropriate test function(s)
-      channels[0].read_spi_timing_only();        // Baseline (if CH1 or CH2 enabled)
-      channels[0].read_spi_timing_autoincrement(); // Optimized (if CH1 or CH2 enabled)
+      // Run the appropriate test function(s) - these have scope instrumentation inside
+      #if defined(SCOPE_CH1_SPI_READS) || defined(SCOPE_CH2_SPI_READS)
+        channels[0].read_spi_timing_only();        // Baseline SPI reads
+      #endif
+      
+      #if defined(SCOPE_CH1_SPI_OPTIMIZED) || defined(SCOPE_CH2_SPI_OPTIMIZED)
+        channels[0].read_spi_timing_autoincrement(); // Optimized SPI reads
+      #endif
+      
+      // For tests that need calculation context, simulate it
+      #if defined(SCOPE_CH2_TIMESTAMP_CALC)
+        // Need to call calculate_timestamp to hit the CH2 instrumentation
+        // Fake that there's data ready
+        static bool fake_ready = false;
+        fake_ready = !fake_ready;
+        if (fake_ready) {
+          SET_LED_0; SET_EXT_LED_0;
+          calculate_timestamp(&channels[0], PICTICK_PS);
+          CLR_LED_0; CLR_EXT_LED_0;
+        }
+      #endif
       
       scope_counter++;
     #endif

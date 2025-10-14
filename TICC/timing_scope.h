@@ -59,7 +59,7 @@
 #endif
 
 // Measure SPI reads + other components
-//#define SCOPE_PRESET_BREAKDOWN
+#define SCOPE_PRESET_BREAKDOWN
 #ifdef SCOPE_PRESET_BREAKDOWN
   #define TIMING_USE_SCOPE_MODE
   #define SCOPE_CH1_SPI_OPTIMIZED      // CH1: Optimized SPI reads

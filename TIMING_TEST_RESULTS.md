@@ -14,13 +14,16 @@
 
 | Test | Implementation | Mean (µs) | Min (µs) | Max (µs) | Std Dev (µs) | Samples | vs Baseline | vs Previous | Notes |
 |------|----------------|-----------|----------|----------|--------------|---------|-------------|-------------|-------|
-| **SPI Read Optimization Tests** |
+| **SPI Read Optimization Tests (TICC-to-TICC Method)** |
 | 1 | Baseline | 236.33 | 235.88 | 236.94 | 0.24 | 33 | baseline | - | 5 SPI transactions, digitalWrite |
 | 2 | Auto-increment | 160.43 | 160.03 | 160.91 | 0.18 | 34 | **-75.9 µs (-32%)** | -75.9 µs | 2 SPI transactions |
 | 3 | Auto-incr + Direct CSB | 131.63 | 131.11 | 132.13 | 0.24 | 34 | **-104.7 µs (-44%)** | **-28.8 µs (-18%)** | Direct port manipulation |
-| **Loop Timing Benchmark Tests** |
+| **Loop Timing Benchmark Tests (TICC-to-TICC Method)** |
 | 4 | Idle loop (no processing) | 51.63 | 51.25 | 52.17 | 0.23 | 38 | - | - | Serial check, reference clock, loop overhead |
 | 5 | Full loop (1 ch, alternating) | 244.43 | 244.05 | 244.84 | 0.21 | 34 | - | - | Avg of idle + processing; ~437 µs per process cycle |
+| **Oscilloscope Verification Tests (Direct Pulse Width)** |
+| 6a | Baseline SPI (scope CH1) | ~230 | 218.0 | 246.0 | - | scope | baseline | - | Confirms Test 1, 12% variation |
+| 6b | Optimized SPI (scope CH2) | ~134 | 132.0 | 150.0 | - | scope | **-96 µs (-42%)** | - | Confirms Test 3, 13% variation |
 
 ---
 

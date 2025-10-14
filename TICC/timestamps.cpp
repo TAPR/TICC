@@ -20,7 +20,12 @@ void calculate_timestamp(tdc7200Channel* channel, int64_t pictick_ps) {
   if (!channel) return;
   
 #ifdef TIMING_TEST_FULL_CALC
-  TIMING_PIN_HIGH;
+  extern volatile uint32_t timing_sample_counter;
+  bool do_timing = (timing_sample_counter % TIMING_SAMPLE_INTERVAL) == 0;
+  timing_sample_counter++;
+  if (do_timing) {
+    TIMING_PIN_HIGH;
+  }
 #endif
   
   // Preserve last values
@@ -74,7 +79,9 @@ void calculate_timestamp(tdc7200Channel* channel, int64_t pictick_ps) {
   channel->totalize++;
   
 #ifdef TIMING_TEST_FULL_CALC
-  TIMING_PIN_LOW;
+  if (do_timing) {
+    TIMING_PIN_LOW;
+  }
 #endif
 }
 

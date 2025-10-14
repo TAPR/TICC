@@ -28,5 +28,13 @@
 
 // WARNING: Only define ONE test at a time! Multiple definitions will produce confusing results.
 
+// TIMING OUTPUT RATE CONTROL
+// Only generate timing pulse every N measurements (reduces data volume)
+// Recommended: 1000 for sustained testing, 100 for quick tests, 1 for max rate
+#define TIMING_SAMPLE_INTERVAL 1000  // Generate one pulse per 1000 measurements
+
+// Global counter for timing sample rate control (defined in tdc7200.cpp)
+extern volatile uint32_t timing_sample_counter;
+
 #endif /* TIMING_TEST_H */
 

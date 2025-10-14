@@ -29,7 +29,25 @@ timing before implementing optimizations.
 - **Duration:** 10-60 seconds (collect 10,000 to 60,000 samples)
 - **Amplitude:** Standard TICC input levels
 
-## Available Timing Measurements
+## Configuration
+
+### Sample Rate Control
+
+Edit `TICC/timing_test.h` to set the sample interval:
+
+```cpp
+#define TIMING_SAMPLE_INTERVAL 1000  // Generate one pulse per 1000 measurements
+```
+
+This controls how often timing pulses are generated:
+- **1000** (default): One pulse per 1000 measurements (~1 per second @ 1 kHz input)
+- **100**: More frequent sampling for quicker data collection
+- **10000**: Less frequent for very long test runs
+- **1**: Every measurement (generates maximum data rate - use with caution!)
+
+At 1 kHz input with `TIMING_SAMPLE_INTERVAL = 1000`, you'll get one timing measurement per second, which is very manageable for data collection.
+
+### Test Selection
 
 Edit `TICC/timing_test.h` and uncomment ONE test at a time:
 
@@ -84,14 +102,21 @@ To measure just the timing pin toggle overhead:
 
 ### Data Collection
 
+With `TIMING_SAMPLE_INTERVAL = 1000` and 1 kHz input:
+- Test TICC processes 1000 measurements per second
+- Timing pulse generated once per second
+- Measurement TICC outputs one timestamp per second
+- Very manageable data rate for long-term collection
+
 **Option A: Use Interval Mode on Measurement TICC**
 - Direct pulse width measurements
 - Each line = one pulse width = one execution time
-- Collect 10,000+ samples
+- Run for 10-60 minutes to collect hundreds/thousands of samples
 
 **Option B: Use Timestamp Mode on Measurement TICC**
 - Calculate intervals offline: `interval[n] = timestamp[n+1] - timestamp[n]`
 - Alternate intervals are pulse widths (HIGH time) vs gaps (LOW time)
+- Gap time ≈ 1 second (determined by TIMING_SAMPLE_INTERVAL)
 
 ### Statistical Analysis
 

@@ -20,6 +20,11 @@ extern int64_t PICTICK_PS;
 extern int64_t CLOCK_PERIOD;
 extern int16_t CAL_PERIODS;
 
+// Timing test sample rate counter
+#if defined(TIMING_TEST_SPI_READS) || defined(TIMING_TEST_FULL_READ) || defined(TIMING_TEST_READY_NEXT) || defined(TIMING_TEST_FULL_CALC)
+volatile uint32_t timing_sample_counter = 0;
+#endif
+
 // Constructor
 tdc7200Channel::tdc7200Channel(char id, int enable, int intb, int csb, int stop, int led) :
 	ID(id), ENABLE(enable), INTB(intb), CSB(csb), STOP(stop), LED(led) {
@@ -111,11 +116,17 @@ void tdc7200Channel::tdc_ack_int() {
 // Enable next measurement cycle
 void tdc7200Channel::ready_next() {
 #ifdef TIMING_TEST_READY_NEXT
-  TIMING_PIN_HIGH;
+  bool do_timing = (timing_sample_counter % TIMING_SAMPLE_INTERVAL) == 0;
+  timing_sample_counter++;
+  if (do_timing) {
+    TIMING_PIN_HIGH;
+  }
 #endif
   write(CONFIG1, config_byte1);
 #ifdef TIMING_TEST_READY_NEXT
-  TIMING_PIN_LOW;
+  if (do_timing) {
+    TIMING_PIN_LOW;
+  }
 #endif
   }
 
@@ -174,7 +185,12 @@ void tdc7200Channel::reset_channel_state() {
 // Read TDC - optimized inline calculation for maximum throughput
 int64_t tdc7200Channel::read() {
 #if defined(TIMING_TEST_SPI_READS) || defined(TIMING_TEST_FULL_READ)
-  TIMING_PIN_HIGH;
+  // Only generate timing pulse every Nth measurement
+  bool do_timing = (timing_sample_counter % TIMING_SAMPLE_INTERVAL) == 0;
+  timing_sample_counter++;
+  if (do_timing) {
+    TIMING_PIN_HIGH;
+  }
 #endif
   
   // Read all measurement data once
@@ -185,7 +201,9 @@ int64_t tdc7200Channel::read() {
   cal2Result = readReg24(CALIBRATION2);   // value of CAL_PERIODS cycle
   
 #ifdef TIMING_TEST_SPI_READS
-  TIMING_PIN_LOW;  // End timing for just SPI reads
+  if (do_timing) {
+    TIMING_PIN_LOW;  // End timing for just SPI reads
+  }
 #endif
   
   // Optimized inline TOF calculation for maximum performance
@@ -250,7 +268,9 @@ int64_t tdc7200Channel::read() {
   tdc_ack_int();
   
 #ifdef TIMING_TEST_FULL_READ
-  TIMING_PIN_LOW;  // End timing for full read() function
+  if (do_timing) {
+    TIMING_PIN_LOW;  // End timing for full read() function
+  }
 #endif
   
   return (int64_t)tof;

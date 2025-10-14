@@ -72,6 +72,7 @@ const int TIMING_PIN2 = A7;  // timing test output CH2 -- PORTF,7
 // TICC measures rising edges, so we generate brief pulses at start and end of code section
 // The interval between two pulses = execution time
 #define TIMING_PULSE() do { TIMING_PIN_HIGH; delayMicroseconds(2); TIMING_PIN_LOW; } while(0)
+#define TIMING_PULSE2() do { TIMING_PIN2_HIGH; delayMicroseconds(2); TIMING_PIN2_LOW; } while(0)
 
 // Fast CSB pin macros for SPI performance optimization
 // CSB_0 = pin 6 = PH3 (Port H, bit 3)

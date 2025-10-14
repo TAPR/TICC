@@ -26,6 +26,7 @@ extern const char SW_TAG[8] = "RC";
 #include "print.h"              // optimized 64-bit printing routines
 #include "setup.h"              // initialization functions
 #include "utils.h"              // utility functions
+#include "timing_test.h"        // performance timing test configuration
 
 // Performance-critical variables: local copies of config values used in hot path
 // These are copied from config at startup for faster access during timestamp processing
@@ -115,6 +116,23 @@ void loop() {
     if (!check_reference_clock()) {
       return; // Reference lost, restart requested
     }
+
+#ifdef TIMING_TEST_SYNTHETIC_SPI
+    // SYNTHETIC TIMING TEST MODE
+    // Bypasses normal measurement processing and runs SPI reads in tight loop
+    // This isolates SPI read time independent of input signal rate
+    static uint32_t synthetic_counter = 0;
+    
+    if ((synthetic_counter % TIMING_SAMPLE_INTERVAL) == 0) {
+      TIMING_PULSE();  // Generate timing marker
+    }
+    
+    // Just do the SPI reads - no waiting for INTB, no calculation, no output
+    channels[0].read_spi_timing_only();
+    
+    synthetic_counter++;
+    continue;  // Skip all normal processing
+#endif
 
     // Check both channels simultaneously for better timestamp ordering
     bool ready_chA = (digitalRead(channels[0].INTB) == 0);

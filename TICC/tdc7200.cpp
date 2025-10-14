@@ -176,22 +176,20 @@ void tdc7200Channel::reset_channel_state() {
   // as these should maintain continuity across config changes
 }
 
+// Timing test function: ONLY the 5 SPI reads, no calculation or overhead
+// Used to isolate SPI transaction time for performance measurement
+void tdc7200Channel::read_spi_timing_only() {
+  // Read all measurement data - no calculation, no tdc_ack_int, minimal overhead
+  time1Result = readReg24(TIME1);         // START to next 100ns tick
+  time2Result  = readReg24(TIME2);        // 100ns tick to STOP
+  clock1Result = readReg24(CLOCK_COUNT1); // number of 100ns ticks
+  cal1Result = readReg24(CALIBRATION1);   // value of 1 cal cycle
+  cal2Result = readReg24(CALIBRATION2);   // value of CAL_PERIODS cycle
+  // That's it - return immediately with no processing
+}
+
 // Read TDC - optimized inline calculation for maximum throughput
 int64_t tdc7200Channel::read() {
-#if defined(TIMING_TEST_SPI_READS)
-  // Generate one pulse every Nth measurement BEFORE the SPI reads
-  if ((timing_sample_counter % TIMING_SAMPLE_INTERVAL) == 0) {
-    TIMING_PULSE();
-  }
-  timing_sample_counter++;
-#elif defined(TIMING_TEST_FULL_READ)
-  // Generate one pulse every Nth measurement BEFORE the full read
-  if ((timing_sample_counter % TIMING_SAMPLE_INTERVAL) == 0) {
-    TIMING_PULSE();
-  }
-  timing_sample_counter++;
-#endif
-  
   // Read all measurement data once
   time1Result = readReg24(TIME1);         // START to next 100ns tick
   time2Result  = readReg24(TIME2);        // 100ns tick to STOP

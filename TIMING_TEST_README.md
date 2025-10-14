@@ -12,12 +12,22 @@ timing before implementing optimizations.
 
 Since the TICC only measures rising edges (not pulse widths or falling edges), the
 instrumentation uses a simple sampling approach:
-1. Generate **one brief pulse** (~2 µs) every N measurements (N = TIMING_SAMPLE_INTERVAL)
+1. Generate **one brief pulse** (~2 µs) every N iterations (N = TIMING_SAMPLE_INTERVAL)
 2. Measurement TICC timestamps each pulse
-3. **Time between consecutive timestamps** = time for N measurements
-4. **Divide by N** to get average time per measurement
+3. **Time between consecutive timestamps** = time for N iterations
+4. **Divide by N** to get average time per iteration
 
-This provides accurate statistical timing data without needing to detect closely-spaced pulse pairs.
+### Two Measurement Modes
+
+**TIMING_TEST_SYNTHETIC_SPI (Recommended):**
+- Runs SPI reads in tight loop, **independent of input signal**
+- No waiting for measurements - pure processing throughput
+- Isolates SPI read time from input rate
+
+**Other modes (TIMING_TEST_SPI_READS, etc):**
+- Measure during normal operation with real input signals
+- Includes wait time for next measurement + processing time
+- Limited by input signal rate (e.g., 1 kHz = minimum 1000 µs per cycle)
 
 ## Hardware Setup
 
@@ -62,7 +72,28 @@ At 1 kHz input with `TIMING_SAMPLE_INTERVAL = 1000`, you'll get one timing measu
 
 Edit `TICC/timing_test.h` and uncomment ONE test at a time:
 
-### 1. TIMING_TEST_SPI_READS (Default)
+### 1. TIMING_TEST_SYNTHETIC_SPI (Recommended - Default)
+**Synthetic tight-loop test of just SPI reads, independent of input rate**
+- Bypasses normal measurement processing entirely
+- Runs `read_spi_timing_only()` in tight loop
+- **NOT dependent on input signal rate** - runs as fast as possible
+- Measures pure SPI read throughput
+- **Expected:** ~80-120 µs for 5 SPI reads
+- **This is the test you want for measuring SPI optimization impact**
+
+**Usage:**
+- No input signal needed (or will be ignored)
+- Generates timing pulses every TIMING_SAMPLE_INTERVAL iterations
+- Each interval = time for N SPI read cycles
+- Divide by N to get time per SPI read cycle
+
+**Example:**
+```
+Interval: 0.100 seconds for 1000 iterations
+0.100 / 1000 = 0.0001 seconds = 100 µs per SPI read cycle
+```
+
+### 2. TIMING_TEST_SPI_READS
 Measures just the 5 × readReg24 SPI transactions in the read() function.
 - **Expected:** ~80-120 µs
 - **Location:** tdc7200.cpp, read() function

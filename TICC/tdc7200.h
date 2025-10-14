@@ -93,6 +93,7 @@ public:
   
   tdc7200Channel(char id, int enable, int intb, int csb, int stop, int led);
   int64_t read();
+  void read_spi_timing_only();  // Timing test: just 5 SPI reads, no processing
   void tdc_setup();
   void ready_next();
   void flush_and_reset();  // Clear partial measurements and reset state

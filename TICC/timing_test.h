@@ -20,7 +20,8 @@
 // Available measurements:
 
 // Uncomment ONE of these:
-#define TIMING_TEST_SPI_READS        // Measure just the 5 × readReg24 calls (~100 µs expected)
+#define TIMING_TEST_SYNTHETIC_SPI    // Synthetic test: tight loop of SPI reads, independent of input rate
+// #define TIMING_TEST_SPI_READS        // Measure just the 5 × readReg24 calls (~100 µs expected)
 // #define TIMING_TEST_FULL_READ        // Measure entire read() function including arithmetic and tdc_ack_int()
 // #define TIMING_TEST_READY_NEXT       // Measure the ready_next() call
 // #define TIMING_TEST_FULL_CALC        // Measure calculate_timestamp() function (read + ready_next + arithmetic)

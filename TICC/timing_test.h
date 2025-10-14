@@ -37,7 +37,7 @@
 
 // OPTIMIZATION MODE (for TIMING_TEST_SYNTHETIC_SPI only)
 // Uncomment ONE optimization to test:
-//#define USE_AUTOINCREMENT_SPI     // Use auto-increment mode (2 transactions instead of 5)
+#define USE_AUTOINCREMENT_SPI     // Use auto-increment mode (2 transactions instead of 5)
 //#define USE_DIRECT_CSB            // Use direct port manipulation for CSB (faster than digitalWrite)
 
 // Global counter for timing sample rate control (defined in tdc7200.cpp)

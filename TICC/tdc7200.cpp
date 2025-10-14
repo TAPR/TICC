@@ -230,12 +230,28 @@ void tdc7200Channel::read_spi_timing_autoincrement() {
 
 // Read TDC - optimized inline calculation for maximum throughput
 int64_t tdc7200Channel::read() {
-  // Read all measurement data once
+#ifdef USE_AUTOINCREMENT_SPI
+  // Use optimized auto-increment mode for reads
+  uint32_t values[3];
+  
+  // Read TIME1, CLOCK_COUNT1, TIME2 in one auto-increment transaction (9 bytes)
+  readReg24_autoincrement(TIME1, values, 3);
+  time1Result = values[0];
+  clock1Result = values[1];
+  time2Result = values[2];
+  
+  // Read CALIBRATION1, CALIBRATION2 in one auto-increment transaction (6 bytes)
+  readReg24_autoincrement(CALIBRATION1, values, 2);
+  cal1Result = values[0];
+  cal2Result = values[1];
+#else
+  // Read all measurement data once (baseline - 5 separate transactions)
   time1Result = readReg24(TIME1);         // START to next 100ns tick
   time2Result  = readReg24(TIME2);        // 100ns tick to STOP
   clock1Result = readReg24(CLOCK_COUNT1); // number of 100ns ticks
   cal1Result = readReg24(CALIBRATION1);   // value of 1 cal cycle
   cal2Result = readReg24(CALIBRATION2);   // value of CAL_PERIODS cycle
+#endif
   
   SCOPE_CH1_START_TOF_CALC();  // Scope CH1: Mark start of TOF calculation
   
@@ -338,7 +354,17 @@ uint32_t tdc7200Channel::readReg24(byte address) {
 
   // CSB needs to be toggled between 24-bit register reads
   SPI.beginTransaction(SPISettings(SPI_SPEED, MSBFIRST, SPI_MODE0));
+  
+#ifdef USE_DIRECT_CSB
+  // Fast version using direct port manipulation for CSB
+  if (ID == '0') {
+    CSB_0_LOW;
+  } else {
+    CSB_1_LOW;
+  }
+#else
   digitalWrite(CSB, LOW);
+#endif
 
   SPI.transfer(address & 0x1f);
 
@@ -348,7 +374,16 @@ uint32_t tdc7200Channel::readReg24(byte address) {
 
   value = ((uint32_t)msb << 16) + (mid << 8) + lsb;
 
+#ifdef USE_DIRECT_CSB
+  if (ID == '0') {
+    CSB_0_HIGH;
+  } else {
+    CSB_1_HIGH;
+  }
+#else
   digitalWrite(CSB, HIGH);
+#endif
+  
   SPI.endTransaction();
   delayMicroseconds(5);
   return value;

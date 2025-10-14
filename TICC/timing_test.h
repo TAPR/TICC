@@ -41,9 +41,9 @@
 //   REAL_SIGNAL: 1000 (1 kHz input = 1 pulse/sec, manageable for measurement TICC)
 //#define TIMING_SAMPLE_INTERVAL 1000  // Generate one pulse per N iterations
 
-// OPTIMIZATION MODE (for TIMING_TEST_SYNTHETIC_SPI only)
+// OPTIMIZATION MODE (applies to scope tests and synthetic SPI tests)
 // Can enable multiple optimizations to test combinations:
-//#define USE_AUTOINCREMENT_SPI     // Use auto-increment mode (2 transactions instead of 5)
+#define USE_AUTOINCREMENT_SPI     // Use auto-increment mode (2 transactions instead of 5)
 //#define USE_DIRECT_CSB            // Use direct port manipulation for CSB (faster than digitalWrite)
 
 // Global counter for timing sample rate control (defined in tdc7200.cpp)

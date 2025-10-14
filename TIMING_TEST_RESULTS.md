@@ -26,7 +26,11 @@
 | 6b | Optimized SPI (scope CH2) | ~134 | 132.0 | 150.0 | - | scope | **-96 µs (-42%)** | - | Confirms Test 3, 13% variation |
 | 7a | Optimized SPI (breakdown) | 136 | 132 | 148 | - | scope | - | - | BREAKDOWN preset CH1 |
 | 7b | Timestamp calc (breakdown) | 56 | 50 | 66 | - | scope | - | - | BREAKDOWN preset CH2 |
-| 8 | Full processing (live signal) | - | - | - | - | - | - | - | Not yet tested |
+| **Live Processing with 1 kHz Input (Scope Delta Method)** |
+| 8a | Baseline (no optimizations) | ~700 | - | - | - | scope | baseline | - | 5 transactions, digitalWrite, 1 kHz real signal |
+| 8b | Auto-increment only | - | - | - | - | - | - | - | Not yet tested |
+| 8c | Direct CSB only | - | - | - | - | - | - | - | Not yet tested |
+| 8d | Both optimizations | - | - | - | - | - | - | - | Not yet tested |
 
 ---
 

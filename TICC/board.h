@@ -69,4 +69,13 @@ const int TIMING_PIN =  A0;  // timing test output -- PORTF,0
 // The interval between two pulses = execution time
 #define TIMING_PULSE() do { TIMING_PIN_HIGH; delayMicroseconds(2); TIMING_PIN_LOW; } while(0)
 
+// Fast CSB pin macros for SPI performance optimization
+// CSB_0 = pin 6 = PH3 (Port H, bit 3)
+// CSB_1 = pin 7 = PH4 (Port H, bit 4)
+// Direct port manipulation is ~125 ns vs ~4 µs for digitalWrite()
+#define CSB_0_LOW (PORTH&=(~(1<<3)))
+#define CSB_0_HIGH (PORTH|=(1<<3))
+#define CSB_1_LOW (PORTH&=(~(1<<4)))
+#define CSB_1_HIGH (PORTH|=(1<<4))
+
 #endif	/* BOARD_H */

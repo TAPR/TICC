@@ -330,6 +330,35 @@ uint32_t tdc7200Channel::readReg24(byte address) {
 // Read multiple 24-bit registers using auto-increment mode
 // Auto-increment bit (A7) allows reading sequential registers in one transaction
 void tdc7200Channel::readReg24_autoincrement(byte start_address, uint32_t* values, byte count) {
+#ifdef USE_DIRECT_CSB
+  // Fast version using direct port manipulation for CSB
+  SPI.beginTransaction(SPISettings(SPI_SPEED, MSBFIRST, SPI_MODE0));
+  if (ID == '0') {
+    CSB_0_LOW;
+  } else {
+    CSB_1_LOW;
+  }
+  
+  // Send address with auto-increment bit set (bit 7)
+  SPI.transfer((start_address & 0x1f) | 0x80);
+  
+  // Read count × 3 bytes (each register is 24-bit)
+  for (byte i = 0; i < count; i++) {
+    uint16_t msb = SPI.transfer(0x00);
+    uint16_t mid = SPI.transfer(0x00);
+    uint16_t lsb = SPI.transfer(0x00);
+    values[i] = ((uint32_t)msb << 16) + (mid << 8) + lsb;
+  }
+  
+  if (ID == '0') {
+    CSB_0_HIGH;
+  } else {
+    CSB_1_HIGH;
+  }
+  SPI.endTransaction();
+  delayMicroseconds(5);
+#else
+  // Standard version using digitalWrite()
   SPI.beginTransaction(SPISettings(SPI_SPEED, MSBFIRST, SPI_MODE0));
   digitalWrite(CSB, LOW);
   
@@ -347,6 +376,7 @@ void tdc7200Channel::readReg24_autoincrement(byte start_address, uint32_t* value
   digitalWrite(CSB, HIGH);
   SPI.endTransaction();
   delayMicroseconds(5);
+#endif
 }
 
 void tdc7200Channel::write(byte address, byte value) {

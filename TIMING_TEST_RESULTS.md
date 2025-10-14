@@ -20,7 +20,7 @@
 | 3 | Auto-incr + Direct CSB | 131.63 | 131.11 | 132.13 | 0.24 | 34 | **-104.7 µs (-44%)** | **-28.8 µs (-18%)** | Direct port manipulation |
 | **Loop Timing Benchmark Tests** |
 | 4 | Idle loop (no processing) | 51.63 | 51.25 | 52.17 | 0.23 | 38 | - | - | Serial check, reference clock, loop overhead |
-| 5 | Full loop (1 channel active) | - | - | - | - | - | - | - | Not yet tested |
+| 5 | Full loop (1 ch, alternating) | 244.43 | 244.05 | 244.84 | 0.21 | 34 | - | - | Avg of idle + processing; ~437 µs per process cycle |
 
 ---
 

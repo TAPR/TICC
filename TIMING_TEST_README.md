@@ -11,13 +11,13 @@ timing before implementing optimizations.
 ## How It Works
 
 Since the TICC only measures rising edges (not pulse widths or falling edges), the
-instrumentation generates **two brief pulses** for each timing measurement:
-1. **Start pulse** (~2 µs) - marks beginning of code section
-2. **End pulse** (~2 µs) - marks end of code section
-3. **Interval between pulses** = execution time of measured code
+instrumentation uses a simple sampling approach:
+1. Generate **one brief pulse** (~2 µs) every N measurements (N = TIMING_SAMPLE_INTERVAL)
+2. Measurement TICC timestamps each pulse
+3. **Time between consecutive timestamps** = time for N measurements
+4. **Divide by N** to get average time per measurement
 
-The measurement TICC timestamps both rising edges, and the difference between
-consecutive timestamps gives the execution time.
+This provides accurate statistical timing data without needing to detect closely-spaced pulse pairs.
 
 ## Hardware Setup
 
@@ -115,36 +115,34 @@ To measure just the timing pin toggle overhead:
 
 With `TIMING_SAMPLE_INTERVAL = 1000` and 1 kHz input:
 - Test TICC processes 1000 measurements per second
-- Two timing pulses generated once per second (start + end markers)
-- Measurement TICC outputs **two timestamps per second**
+- One timing pulse generated every 1000 measurements (~once per second)
+- Measurement TICC outputs **one timestamp per second**
 - Very manageable data rate for long-term collection
 
 **Timestamp Format:**
-You'll see pairs of timestamps like this:
+You'll see regularly-spaced timestamps like this:
 ```
-534.70612449223 chA  ← Start pulse (begin SPI reads)
-534.70623156789 chA  ← End pulse (end SPI reads)
-[~1 second gap]
-536.70612621260 chA  ← Start pulse (next sample)
-536.70623328091 chA  ← End pulse
+534.70612449223 chA  ← Pulse after 1000 measurements
+536.71234567890 chA  ← Pulse after next 1000 measurements
+538.71856789012 chA  ← Pulse after next 1000 measurements
+540.72478901234 chA  ← Pulse after next 1000 measurements
 ```
 
 **Calculate Execution Time:**
 ```
-execution_time = timestamp[i+1] - timestamp[i]
-```
-For consecutive timestamps (odd-even pairs), the interval = measured execution time.
-
-Example:
-```
-534.70623156789 - 534.70612449223 = 0.00010707566 seconds = 107.07566 µs
+time_for_N_measurements = timestamp[i+1] - timestamp[i]
+average_time_per_measurement = time_for_N_measurements / TIMING_SAMPLE_INTERVAL
 ```
 
-**Processing the data:**
-- Extract odd-numbered timestamps (starts) and even-numbered timestamps (ends)
-- Calculate: `execution[n] = end[n] - start[n]`
-- Ignore the ~1 second gaps between pairs
-- Analyze the execution time distribution
+Example with your data:
+```
+959.71672889707 - 957.71673443291 = 1.99999446416 seconds
+1.99999446416 / 1000 = 0.001999994 seconds = 1999.99 µs per measurement
+```
+
+This includes ALL processing time (SPI reads, arithmetic, overhead), not just the
+instrumented section. For `TIMING_TEST_SPI_READS`, the pulse is generated just before
+the SPI reads, so the interval represents the time from one set of SPI reads to the next.
 
 ### Statistical Analysis
 
@@ -159,26 +157,32 @@ Example Python analysis:
 ```python
 import numpy as np
 
+# Configuration
+TIMING_SAMPLE_INTERVAL = 1000  # Must match value in timing_test.h
+
 # Load timestamps from file (first column only)
 timestamps = np.loadtxt('timing_data.txt', usecols=0)
 
 # Calculate intervals between consecutive timestamps
 intervals = np.diff(timestamps)
 
-# Extract execution times (every other interval - the short ones)
-# The pattern is: [execution_time, gap, execution_time, gap, ...]
-execution_times = intervals[::2]  # Take every 2nd interval starting at 0
+# Convert to average time per measurement
+# Each interval represents TIMING_SAMPLE_INTERVAL measurements
+time_per_measurement = intervals / TIMING_SAMPLE_INTERVAL
 
 # Convert to microseconds
-execution_us = execution_times * 1e6
+time_per_measurement_us = time_per_measurement * 1e6
 
 # Statistics
-print(f"Samples: {len(execution_us)}")
-print(f"Mean:    {np.mean(execution_us):.2f} µs")
-print(f"Median:  {np.median(execution_us):.2f} µs")
-print(f"Min:     {np.min(execution_us):.2f} µs")
-print(f"Max:     {np.max(execution_us):.2f} µs")
-print(f"Std Dev: {np.std(execution_us):.2f} µs")
+print(f"Samples: {len(time_per_measurement_us)}")
+print(f"Mean:    {np.mean(time_per_measurement_us):.2f} µs per measurement")
+print(f"Median:  {np.median(time_per_measurement_us):.2f} µs")
+print(f"Min:     {np.min(time_per_measurement_us):.2f} µs")
+print(f"Max:     {np.max(time_per_measurement_us):.2f} µs")
+print(f"Std Dev: {np.std(time_per_measurement_us):.2f} µs")
+
+# If measuring just SPI reads (TIMING_TEST_SPI_READS), this is the overhead per measurement
+# Note: This includes time from one SPI read cycle to the next, not just the SPI time itself
 ```
 
 ## Timing Pin Details

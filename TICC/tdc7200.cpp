@@ -116,18 +116,12 @@ void tdc7200Channel::tdc_ack_int() {
 // Enable next measurement cycle
 void tdc7200Channel::ready_next() {
 #ifdef TIMING_TEST_READY_NEXT
-  bool do_timing = (timing_sample_counter % TIMING_SAMPLE_INTERVAL) == 0;
-  timing_sample_counter++;
-  if (do_timing) {
-    TIMING_PULSE();  // Start marker
+  if ((timing_sample_counter % TIMING_SAMPLE_INTERVAL) == 0) {
+    TIMING_PULSE();
   }
+  timing_sample_counter++;
 #endif
   write(CONFIG1, config_byte1);
-#ifdef TIMING_TEST_READY_NEXT
-  if (do_timing) {
-    TIMING_PULSE();  // End marker: interval = ready_next() time
-  }
-#endif
   }
 
 // Flush partial measurements and reset TDC7200 state
@@ -184,13 +178,18 @@ void tdc7200Channel::reset_channel_state() {
 
 // Read TDC - optimized inline calculation for maximum throughput
 int64_t tdc7200Channel::read() {
-#if defined(TIMING_TEST_SPI_READS) || defined(TIMING_TEST_FULL_READ)
-  // Only generate timing pulse every Nth measurement
-  bool do_timing = (timing_sample_counter % TIMING_SAMPLE_INTERVAL) == 0;
-  timing_sample_counter++;
-  if (do_timing) {
-    TIMING_PULSE();  // Start marker: brief pulse for TICC to detect
+#if defined(TIMING_TEST_SPI_READS)
+  // Generate one pulse every Nth measurement BEFORE the SPI reads
+  if ((timing_sample_counter % TIMING_SAMPLE_INTERVAL) == 0) {
+    TIMING_PULSE();
   }
+  timing_sample_counter++;
+#elif defined(TIMING_TEST_FULL_READ)
+  // Generate one pulse every Nth measurement BEFORE the full read
+  if ((timing_sample_counter % TIMING_SAMPLE_INTERVAL) == 0) {
+    TIMING_PULSE();
+  }
+  timing_sample_counter++;
 #endif
   
   // Read all measurement data once
@@ -199,12 +198,6 @@ int64_t tdc7200Channel::read() {
   clock1Result = readReg24(CLOCK_COUNT1); // number of 100ns ticks
   cal1Result = readReg24(CALIBRATION1);   // value of 1 cal cycle
   cal2Result = readReg24(CALIBRATION2);   // value of CAL_PERIODS cycle
-  
-#ifdef TIMING_TEST_SPI_READS
-  if (do_timing) {
-    TIMING_PULSE();  // End marker: interval between pulses = SPI read time
-  }
-#endif
   
   // Optimized inline TOF calculation for maximum performance
   // Convert to signed for calculations
@@ -266,12 +259,6 @@ int64_t tdc7200Channel::read() {
   
   // Ack all interrupts
   tdc_ack_int();
-  
-#ifdef TIMING_TEST_FULL_READ
-  if (do_timing) {
-    TIMING_PULSE();  // End marker: interval = full read() time
-  }
-#endif
   
   return (int64_t)tof;
 }

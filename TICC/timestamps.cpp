@@ -13,6 +13,7 @@
 #include "timestamps.h"
 #include "config.h"  // For PS_PER_SEC constant
 #include "timing_test.h"      // Performance timing configuration
+#include "timing_scope.h"     // Oscilloscope timing configuration
 
 // Calculate timestamp from channel data (pure calculation, no I/O)
 // Updates channel.last_picstop, channel.timestamp, channel.new_ts_ready, channel.totalize
@@ -26,6 +27,8 @@ void calculate_timestamp(tdc7200Channel* channel, int64_t pictick_ps) {
   }
   timing_sample_counter++;
 #endif
+
+  SCOPE_CH1_START_FULL_PROCESSING();  // Scope CH1: Mark start of full processing
   
   // Preserve last values
   channel->last_tof = channel->tof;
@@ -36,6 +39,8 @@ void calculate_timestamp(tdc7200Channel* channel, int64_t pictick_ps) {
   
   // Clear TDC INTB immediately to prevent duplicate processing
   channel->ready_next();
+  
+  SCOPE_CH2_START_TIMESTAMP_CALC();  // Scope CH2: Mark start of timestamp calc
   
   // Calculate delta ticks since previous event on this channel
   // Protect PICstop reads from ISR trips
@@ -73,9 +78,13 @@ void calculate_timestamp(tdc7200Channel* channel, int64_t pictick_ps) {
     }
   }
 
+  SCOPE_CH2_END_TIMESTAMP_CALC();  // Scope CH2: Mark end of timestamp calc
+  
   // Mark timestamp as ready and increment counter
   channel->new_ts_ready = 1;
   channel->totalize++;
+  
+  SCOPE_CH1_END_FULL_PROCESSING();  // Scope CH1: Mark end of full processing
 }
 
 // Process binary mode: read TDC data and output binary format

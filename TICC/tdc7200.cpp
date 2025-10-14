@@ -14,6 +14,7 @@
 #include "config.h"           // config and eeprom
 #include "tdc7200.h"          // TDC registers and structures
 #include "timing_test.h"      // Performance timing configuration
+#include "timing_scope.h"     // Oscilloscope timing configuration
 
 extern config_t config;
 extern int64_t PICTICK_PS; 
@@ -23,6 +24,11 @@ extern int16_t CAL_PERIODS;
 // Timing test sample rate counter
 #if defined(TIMING_TEST_SPI_READS) || defined(TIMING_TEST_FULL_READ) || defined(TIMING_TEST_READY_NEXT) || defined(TIMING_TEST_FULL_CALC)
 volatile uint32_t timing_sample_counter = 0;
+#endif
+
+// Oscilloscope timing counter
+#ifdef TIMING_USE_SCOPE_MODE
+volatile uint32_t scope_counter = 0;
 #endif
 
 // Constructor
@@ -121,7 +127,12 @@ void tdc7200Channel::ready_next() {
   }
   timing_sample_counter++;
 #endif
+  
+  SCOPE_CH1_START_READY_NEXT();  // Scope CH1: Mark start of ready_next
+  
   write(CONFIG1, config_byte1);
+  
+  SCOPE_CH1_END_READY_NEXT();    // Scope CH1: Mark end of ready_next
   }
 
 // Flush partial measurements and reset TDC7200 state
@@ -179,12 +190,18 @@ void tdc7200Channel::reset_channel_state() {
 // Timing test function: ONLY the 5 SPI reads, no calculation or overhead
 // Used to isolate SPI transaction time for performance measurement
 void tdc7200Channel::read_spi_timing_only() {
+  SCOPE_CH1_START_SPI_BASELINE();  // Scope CH1: Mark start of baseline SPI reads
+  SCOPE_CH2_START_SPI_BASELINE();  // Scope CH2: Mark start (if enabled)
+  
   // Read all measurement data - no calculation, no tdc_ack_int, minimal overhead
   time1Result = readReg24(TIME1);         // START to next 100ns tick
   time2Result  = readReg24(TIME2);        // 100ns tick to STOP
   clock1Result = readReg24(CLOCK_COUNT1); // number of 100ns ticks
   cal1Result = readReg24(CALIBRATION1);   // value of 1 cal cycle
   cal2Result = readReg24(CALIBRATION2);   // value of CAL_PERIODS cycle
+  
+  SCOPE_CH1_END_SPI_BASELINE();    // Scope CH1: Mark end of baseline SPI reads
+  SCOPE_CH2_END_SPI_BASELINE();    // Scope CH2: Mark end (if enabled)
   // That's it - return immediately with no processing
 }
 
@@ -192,6 +209,9 @@ void tdc7200Channel::read_spi_timing_only() {
 // Uses 2 transactions instead of 5 for better performance
 void tdc7200Channel::read_spi_timing_autoincrement() {
   uint32_t values[3];
+  
+  SCOPE_CH1_START_SPI_OPTIMIZED();  // Scope CH1: Mark start of optimized SPI reads
+  SCOPE_CH2_START_SPI_OPTIMIZED();  // Scope CH2: Mark start (if enabled)
   
   // Read TIME1, CLOCK_COUNT1, TIME2 in one auto-increment transaction (9 bytes)
   readReg24_autoincrement(TIME1, values, 3);
@@ -203,6 +223,9 @@ void tdc7200Channel::read_spi_timing_autoincrement() {
   readReg24_autoincrement(CALIBRATION1, values, 2);
   cal1Result = values[0];
   cal2Result = values[1];
+  
+  SCOPE_CH1_END_SPI_OPTIMIZED();    // Scope CH1: Mark end of optimized SPI reads
+  SCOPE_CH2_END_SPI_OPTIMIZED();    // Scope CH2: Mark end (if enabled)
 }
 
 // Read TDC - optimized inline calculation for maximum throughput
@@ -213,6 +236,8 @@ int64_t tdc7200Channel::read() {
   clock1Result = readReg24(CLOCK_COUNT1); // number of 100ns ticks
   cal1Result = readReg24(CALIBRATION1);   // value of 1 cal cycle
   cal2Result = readReg24(CALIBRATION2);   // value of CAL_PERIODS cycle
+  
+  SCOPE_CH1_START_TOF_CALC();  // Scope CH1: Mark start of TOF calculation
   
   // Optimized inline TOF calculation for maximum performance
   // Convert to signed for calculations
@@ -271,6 +296,8 @@ int64_t tdc7200Channel::read() {
   // Store result
   tof = (int32_t)tof64;
   optimized_tof = (int32_t)tof64;  // Keep for compatibility if needed
+  
+  SCOPE_CH1_END_TOF_CALC();  // Scope CH1: Mark end of TOF calculation
   
   // Ack all interrupts
   tdc_ack_int();

@@ -41,8 +41,10 @@ void ticc_setup() {
   pinMode(EXT_LED_0, OUTPUT);  // need to set these here; on-board LEDs are set up in TDC7200::setup
   pinMode(EXT_LED_1, OUTPUT);
   pinMode(EXT_LED_CLK, OUTPUT);
-  pinMode(TIMING_PIN, OUTPUT);  // Timing test pin (A0) for performance measurement
-  TIMING_PIN_LOW;  // Initialize to LOW
+  pinMode(TIMING_PIN, OUTPUT);   // Timing test pin CH1 (A0) for performance measurement
+  pinMode(TIMING_PIN2, OUTPUT);  // Timing test pin CH2 (A1) for dual-channel scope
+  TIMING_PIN_LOW;   // Initialize to LOW
+  TIMING_PIN2_LOW;  // Initialize to LOW
 
   // turn on the LEDs to show we're alive -- use macros from board.h
   SET_LED_0;

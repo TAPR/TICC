@@ -22,7 +22,8 @@
 // Uncomment ONE of these:
 // #define TIMING_TEST_SYNTHETIC_SPI    // Synthetic test: tight loop of SPI reads, independent of input rate
 // #define TIMING_TEST_IDLE_LOOP        // Measure idle loop speed (no INTB activity)
-#define TIMING_TEST_FULL_LOOP        // Measure full loop with one channel active (all calculations)
+// #define TIMING_TEST_FULL_LOOP        // Measure full loop with one channel active (all calculations)
+#define TIMING_TEST_REAL_SIGNAL       // Measure with real input signal (requires 1 kHz input)
 // #define TIMING_TEST_SPI_READS        // Measure just the 5 × readReg24 calls (~100 µs expected)
 // #define TIMING_TEST_FULL_READ        // Measure entire read() function including arithmetic and tdc_ack_int()
 // #define TIMING_TEST_READY_NEXT       // Measure the ready_next() call
@@ -37,8 +38,8 @@
 //   IDLE_LOOP: 100000+ (very fast, ~52 µs per iteration)
 //   FULL_LOOP: 10000 (moderate, ~150 µs avg per iteration - alternates idle/process)
 //   SYNTHETIC_SPI: 10000 (fast, ~130-240 µs per iteration)
-//   Signal-based tests: 1000 (depends on input rate)
-#define TIMING_SAMPLE_INTERVAL 10000  // Generate one pulse per N iterations
+//   REAL_SIGNAL: 1000 (1 kHz input = 1 pulse/sec, manageable for measurement TICC)
+#define TIMING_SAMPLE_INTERVAL 1000  // Generate one pulse per N iterations
 
 // OPTIMIZATION MODE (for TIMING_TEST_SYNTHETIC_SPI only)
 // Can enable multiple optimizations to test combinations:

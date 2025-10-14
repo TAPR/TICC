@@ -27,6 +27,7 @@ extern const char SW_TAG[8] = "RC";
 #include "setup.h"              // initialization functions
 #include "utils.h"              // utility functions
 #include "timing_test.h"        // performance timing test configuration
+#include "timing_scope.h"       // oscilloscope timing configuration
 
 // Performance-critical variables: local copies of config values used in hot path
 // These are copied from config at startup for faster access during timestamp processing
@@ -173,6 +174,76 @@ void loop() {
     
     full_counter++;
     continue;  // Skip normal measurement checking
+#endif
+
+#ifdef TIMING_TEST_REAL_SIGNAL
+    // REAL SIGNAL TIMING TEST
+    // Measures actual processing time with real input signal
+    // Requires 1 kHz input signal on test channel
+    static uint32_t real_counter = 0;
+    
+    // Check for actual measurement ready
+    bool ready_ch = (digitalRead(channels[0].INTB) == 0);
+    
+    if (ready_ch) {
+      // Generate timing pulse before processing every Nth measurement
+      if ((real_counter % TIMING_SAMPLE_INTERVAL) == 0) {
+        TIMING_PULSE();
+      }
+      real_counter++;
+      
+      // Process real measurement
+      SET_LED_0; SET_EXT_LED_0;
+      calculate_timestamp(&channels[0], PICTICK_PS);
+      CLR_LED_0; CLR_EXT_LED_0;
+    }
+    continue;  // Skip normal output processing
+#endif
+
+#ifdef TIMING_USE_SCOPE_MODE
+    // OSCILLOSCOPE TIMING MODE
+    // Runs synthetic tests with pulse-width output for scope measurement
+    // Scope channels connected to A0 and A1 measure pulse widths directly
+    
+    #if defined(SCOPE_CH1_FULL_PROCESSING) || defined(SCOPE_CH2_TIMESTAMP_CALC)
+      // Need real signal for full processing test
+      bool ready_ch = (digitalRead(channels[0].INTB) == 0);
+      
+      if (ready_ch) {
+        if (SCOPE_SHOULD_SAMPLE()) {
+          SCOPE_CH2_START_LED_OPS();  // CH2: Measure LED operations
+        }
+        SET_LED_0; SET_EXT_LED_0;
+        if (SCOPE_SHOULD_SAMPLE()) {
+          SCOPE_CH2_END_LED_OPS();
+        }
+        
+        calculate_timestamp(&channels[0], PICTICK_PS);
+        
+        if (SCOPE_SHOULD_SAMPLE()) {
+          SCOPE_CH2_START_LED_OPS();
+        }
+        CLR_LED_0; CLR_EXT_LED_0;
+        if (SCOPE_SHOULD_SAMPLE()) {
+          SCOPE_CH2_END_LED_OPS();
+        }
+        
+        scope_counter++;
+      }
+    #else
+      // Synthetic tests - no input signal needed
+      if (SCOPE_SHOULD_SAMPLE()) {
+        // Counter incremented before test so first sample happens on iteration 0
+      }
+      
+      // Run the appropriate test function(s)
+      channels[0].read_spi_timing_only();        // Baseline (if CH1 or CH2 enabled)
+      channels[0].read_spi_timing_autoincrement(); // Optimized (if CH1 or CH2 enabled)
+      
+      scope_counter++;
+    #endif
+    
+    continue;  // Skip normal processing
 #endif
 
     // Check both channels simultaneously for better timestamp ordering

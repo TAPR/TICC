@@ -42,7 +42,8 @@ const int EXT_LED_0 =   A12; // external LED tandem with LED_0 -- PORTK,4
 const int EXT_LED_1 =   A13; // external LED tandem with LED_1 -- PORTK,5
 const int LED_0 =       A14; // onboard LED -- PORTK,6
 const int LED_1 =       A15; // onboard LED -- PORTK,7
-const int TIMING_PIN =  A0;  // timing test output -- PORTF,0
+const int TIMING_PIN =  A0;  // timing test output CH1 -- PORTF,0
+const int TIMING_PIN2 = A1;  // timing test output CH2 -- PORTF,1
 
 // These are macros to turn LEDs on and off really fast.
 // We trade flexibility for speed.
@@ -61,8 +62,11 @@ const int TIMING_PIN =  A0;  // timing test output -- PORTF,0
 
 // Fast timing pin macros for performance measurement
 // Pin A0 = PF0 (Port F, bit 0) on Arduino Mega 2560
+// Pin A1 = PF1 (Port F, bit 1) on Arduino Mega 2560
 #define TIMING_PIN_HIGH (PORTF|=(1<<0))
 #define TIMING_PIN_LOW (PORTF&=(~(1<<0)))
+#define TIMING_PIN2_HIGH (PORTF|=(1<<1))
+#define TIMING_PIN2_LOW (PORTF&=(~(1<<1)))
 
 // Generate a short pulse (~1-2 µs) for TICC edge detection
 // TICC measures rising edges, so we generate brief pulses at start and end of code section

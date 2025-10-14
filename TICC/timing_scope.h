@@ -9,7 +9,7 @@
 //
 // PINS USED:
 //   Pin A0 (PF0) - Primary timing channel (Scope CH1)
-//   Pin A1 (PF1) - Secondary timing channel (Scope CH2) - for simultaneous measurements
+//   Pin A7 (PF7) - Secondary timing channel (Scope CH2) - for simultaneous measurements
 //
 // USAGE WITH 2-CHANNEL SCOPE:
 //   Connect both pins to scope channels for simultaneous measurements

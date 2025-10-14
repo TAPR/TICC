@@ -6,7 +6,7 @@
 
 **Hardware:**
 - Scope CH1 → Pin A0
-- Scope CH2 → Pin A1  
+- Scope CH2 → Pin A7  
 - No input signal needed
 
 **Configuration** in `TICC/timing_scope.h`:

@@ -14,7 +14,7 @@ This guide describes how to use oscilloscope pulse-width measurements to accurat
 ### Connections
 ```
 Scope CH1 → Test TICC Pin A0 (Primary timing channel)
-Scope CH2 → Test TICC Pin A1 (Secondary timing channel - optional)
+Scope CH2 → Test TICC Pin A7 (Secondary timing channel - optional)
 Scope GND → Test TICC GND
 
 For live signal tests:

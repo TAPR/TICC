@@ -28,12 +28,8 @@ void calculate_timestamp(tdc7200Channel* channel, int64_t pictick_ps) {
   timing_sample_counter++;
 #endif
 
-#ifdef SCOPE_CH1_FULL_PROCESSING
-  // Start marker: brief pulse on CH1 (A0)
-  TIMING_PULSE();  // Rising edge marks start of processing
-#endif
-  
   // Preserve last values
+  // Note: For SCOPE_CH1_FULL_PROCESSING, timing markers are in main loop (TICC.ino)
   channel->last_tof = channel->tof;
   channel->last_timestamp = channel->timestamp;
   
@@ -84,13 +80,9 @@ void calculate_timestamp(tdc7200Channel* channel, int64_t pictick_ps) {
   SCOPE_CH2_END_TIMESTAMP_CALC();  // Scope CH2: Mark end of timestamp calc
   
   // Mark timestamp as ready and increment counter
+  // Note: For SCOPE_CH1_FULL_PROCESSING, end timing marker is in main loop (TICC.ino)
   channel->new_ts_ready = 1;
   channel->totalize++;
-  
-#ifdef SCOPE_CH1_FULL_PROCESSING
-  // End marker: brief pulse on CH2 (A7)
-  TIMING_PULSE2();  // Rising edge marks end of processing
-#endif
 }
 
 // Process binary mode: read TDC data and output binary format

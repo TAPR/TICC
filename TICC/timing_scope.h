@@ -51,7 +51,7 @@
 // ============================================================================
 
 // Compare baseline vs optimized SPI (most useful initial test)
-//#define SCOPE_PRESET_SPI_COMPARISON
+#define SCOPE_PRESET_SPI_COMPARISON
 #ifdef SCOPE_PRESET_SPI_COMPARISON
   #define TIMING_USE_SCOPE_MODE
   #define SCOPE_CH1_SPI_READS          // CH1: Baseline
@@ -67,7 +67,7 @@
 #endif
 
 // Full processing time with real signal
-#define SCOPE_PRESET_LIVE_PROCESSING
+//#define SCOPE_PRESET_LIVE_PROCESSING
 #ifdef SCOPE_PRESET_LIVE_PROCESSING
   #define TIMING_USE_SCOPE_MODE
   #define SCOPE_CH1_FULL_PROCESSING    // CH1: Complete processing cycle

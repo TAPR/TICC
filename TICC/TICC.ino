@@ -209,23 +209,15 @@ void loop() {
       bool ready_ch = (digitalRead(channels[0].INTB) == 0);
       
       if (ready_ch) {
-        if (SCOPE_SHOULD_SAMPLE()) {
-          SCOPE_CH2_START_LED_OPS();  // CH2: Measure LED operations
-        }
+        // Start marker: Beginning of measurement processing in main loop
+        TIMING_PULSE();  // CH1: Rising edge marks start
+        
         SET_LED_0; SET_EXT_LED_0;
-        if (SCOPE_SHOULD_SAMPLE()) {
-          SCOPE_CH2_END_LED_OPS();
-        }
-        
         calculate_timestamp(&channels[0], PICTICK_PS);
-        
-        if (SCOPE_SHOULD_SAMPLE()) {
-          SCOPE_CH2_START_LED_OPS();
-        }
         CLR_LED_0; CLR_EXT_LED_0;
-        if (SCOPE_SHOULD_SAMPLE()) {
-          SCOPE_CH2_END_LED_OPS();
-        }
+        
+        // End marker: End of measurement processing in main loop
+        TIMING_PULSE2();  // CH2: Rising edge marks end
         
         scope_counter++;
       }

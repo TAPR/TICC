@@ -28,7 +28,7 @@
 | 7b | Timestamp calc (breakdown) | 56 | 50 | 66 | - | scope | - | - | BREAKDOWN preset CH2 |
 | **Live Processing with 1 kHz Input (Scope Delta Method)** |
 | 8a | Baseline (no optimizations) | ~700 | - | - | - | scope | baseline | - | 5 transactions, digitalWrite, 1 kHz real signal |
-| 8b | Auto-increment only | - | - | - | - | - | - | - | Not yet tested |
+| 8b | Auto-increment only | ~614 | - | - | - | scope | **-86 µs (-12%)** | -86 µs | 2 transactions, digitalWrite |
 | 8c | Direct CSB only | - | - | - | - | - | - | - | Not yet tested |
 | 8d | Both optimizations | - | - | - | - | - | - | - | Not yet tested |
 

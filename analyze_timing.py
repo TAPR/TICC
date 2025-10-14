@@ -4,7 +4,7 @@
 import numpy as np
 
 # Configuration - must match value in timing_test.h
-TIMING_SAMPLE_INTERVAL = 1000
+TIMING_SAMPLE_INTERVAL = 10000
 
 # Your timing data
 timestamps = np.array([

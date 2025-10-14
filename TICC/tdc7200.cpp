@@ -13,6 +13,7 @@
 #include "board.h"            // Arduino pin definitions
 #include "config.h"           // config and eeprom
 #include "tdc7200.h"          // TDC registers and structures
+#include "timing_test.h"      // Performance timing configuration
 
 extern config_t config;
 extern int64_t PICTICK_PS; 
@@ -109,7 +110,13 @@ void tdc7200Channel::tdc_ack_int() {
 
 // Enable next measurement cycle
 void tdc7200Channel::ready_next() {
+#ifdef TIMING_TEST_READY_NEXT
+  TIMING_PIN_HIGH;
+#endif
   write(CONFIG1, config_byte1);
+#ifdef TIMING_TEST_READY_NEXT
+  TIMING_PIN_LOW;
+#endif
   }
 
 // Flush partial measurements and reset TDC7200 state
@@ -166,12 +173,20 @@ void tdc7200Channel::reset_channel_state() {
 
 // Read TDC - optimized inline calculation for maximum throughput
 int64_t tdc7200Channel::read() {
+#if defined(TIMING_TEST_SPI_READS) || defined(TIMING_TEST_FULL_READ)
+  TIMING_PIN_HIGH;
+#endif
+  
   // Read all measurement data once
   time1Result = readReg24(TIME1);         // START to next 100ns tick
   time2Result  = readReg24(TIME2);        // 100ns tick to STOP
   clock1Result = readReg24(CLOCK_COUNT1); // number of 100ns ticks
   cal1Result = readReg24(CALIBRATION1);   // value of 1 cal cycle
   cal2Result = readReg24(CALIBRATION2);   // value of CAL_PERIODS cycle
+  
+#ifdef TIMING_TEST_SPI_READS
+  TIMING_PIN_LOW;  // End timing for just SPI reads
+#endif
   
   // Optimized inline TOF calculation for maximum performance
   // Convert to signed for calculations
@@ -233,6 +248,10 @@ int64_t tdc7200Channel::read() {
   
   // Ack all interrupts
   tdc_ack_int();
+  
+#ifdef TIMING_TEST_FULL_READ
+  TIMING_PIN_LOW;  // End timing for full read() function
+#endif
   
   return (int64_t)tof;
 }

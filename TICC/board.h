@@ -42,9 +42,11 @@ const int EXT_LED_0 =   A12; // external LED tandem with LED_0 -- PORTK,4
 const int EXT_LED_1 =   A13; // external LED tandem with LED_1 -- PORTK,5
 const int LED_0 =       A14; // onboard LED -- PORTK,6
 const int LED_1 =       A15; // onboard LED -- PORTK,7
+const int TIMING_PIN =  A0;  // timing test output -- PORTF,0
 
 // These are macros to turn LEDs on and off really fast.
 // We trade flexibility for speed.
+// Same for timing pin - direct port manipulation for minimal overhead (~125ns)
 
 #define CLR_LED_0 (PORTK&=(~(1<<6)))
 #define SET_LED_0 (PORTK|=(1<<6))
@@ -56,5 +58,10 @@ const int LED_1 =       A15; // onboard LED -- PORTK,7
 #define SET_EXT_LED_1 (PORTK|=(1<<5))
 #define CLR_EXT_LED_CLK (PORTK&=(~(1<<3)))
 #define SET_EXT_LED_CLK (PORTK|=(1<<3))
+
+// Fast timing pin macros for performance measurement
+// Pin A0 = PF0 (Port F, bit 0) on Arduino Mega 2560
+#define TIMING_PIN_HIGH (PORTF|=(1<<0))
+#define TIMING_PIN_LOW (PORTF&=(~(1<<0)))
 
 #endif	/* BOARD_H */

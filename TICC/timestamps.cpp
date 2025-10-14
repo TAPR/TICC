@@ -8,14 +8,20 @@
 // Licensed under BSD 2-clause license
 
 #include <Arduino.h>
+#include "board.h"            // For timing pin macros
 #include "tdc7200.h"
 #include "timestamps.h"
 #include "config.h"  // For PS_PER_SEC constant
+#include "timing_test.h"      // Performance timing configuration
 
 // Calculate timestamp from channel data (pure calculation, no I/O)
 // Updates channel.last_picstop, channel.timestamp, channel.new_ts_ready, channel.totalize
 void calculate_timestamp(tdc7200Channel* channel, int64_t pictick_ps) {
   if (!channel) return;
+  
+#ifdef TIMING_TEST_FULL_CALC
+  TIMING_PIN_HIGH;
+#endif
   
   // Preserve last values
   channel->last_tof = channel->tof;
@@ -66,6 +72,10 @@ void calculate_timestamp(tdc7200Channel* channel, int64_t pictick_ps) {
   // Mark timestamp as ready and increment counter
   channel->new_ts_ready = 1;
   channel->totalize++;
+  
+#ifdef TIMING_TEST_FULL_CALC
+  TIMING_PIN_LOW;
+#endif
 }
 
 // Process binary mode: read TDC data and output binary format

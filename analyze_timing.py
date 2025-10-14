@@ -4,9 +4,9 @@
 import numpy as np
 
 # Configuration - must match value in timing_test.h
-TIMING_SAMPLE_INTERVAL = 100000  # Adjust based on test mode
+TIMING_SAMPLE_INTERVAL = 10000  # Adjust based on test mode
 
-# Your timing data - REPLACE WITH NEW TEST DATA
+# Your timing data - FULL LOOP TEST (Test 5)
 timestamps = np.array([
     # Paste timestamp data here
 ])

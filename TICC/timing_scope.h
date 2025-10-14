@@ -59,7 +59,7 @@
 #endif
 
 // Measure SPI reads + other components
-#define SCOPE_PRESET_BREAKDOWN
+//#define SCOPE_PRESET_BREAKDOWN
 #ifdef SCOPE_PRESET_BREAKDOWN
   #define TIMING_USE_SCOPE_MODE
   #define SCOPE_CH1_SPI_OPTIMIZED      // CH1: Optimized SPI reads
@@ -67,7 +67,7 @@
 #endif
 
 // Full processing time with real signal
-//#define SCOPE_PRESET_LIVE_PROCESSING
+#define SCOPE_PRESET_LIVE_PROCESSING
 #ifdef SCOPE_PRESET_LIVE_PROCESSING
   #define TIMING_USE_SCOPE_MODE
   #define SCOPE_CH1_FULL_PROCESSING    // CH1: Complete processing cycle

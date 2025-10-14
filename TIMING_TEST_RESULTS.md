@@ -24,6 +24,9 @@
 | **Oscilloscope Verification Tests (Direct Pulse Width)** |
 | 6a | Baseline SPI (scope CH1) | ~230 | 218.0 | 246.0 | - | scope | baseline | - | Confirms Test 1, 12% variation |
 | 6b | Optimized SPI (scope CH2) | ~134 | 132.0 | 150.0 | - | scope | **-96 µs (-42%)** | - | Confirms Test 3, 13% variation |
+| 7a | Optimized SPI (breakdown) | 136 | 132 | 148 | - | scope | - | - | BREAKDOWN preset CH1 |
+| 7b | Timestamp calc (breakdown) | 56 | 50 | 66 | - | scope | - | - | BREAKDOWN preset CH2 |
+| 8 | Full processing (live signal) | - | - | - | - | - | - | - | Not yet tested |
 
 ---
 

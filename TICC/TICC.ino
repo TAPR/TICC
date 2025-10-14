@@ -127,8 +127,12 @@ void loop() {
       TIMING_PULSE();  // Generate timing marker
     }
     
-    // Just do the SPI reads - no waiting for INTB, no calculation, no output
-    channels[0].read_spi_timing_only();
+    // Call appropriate SPI read function based on optimization flags
+    #ifdef USE_AUTOINCREMENT_SPI
+      channels[0].read_spi_timing_autoincrement();  // 2 transactions (auto-increment mode)
+    #else
+      channels[0].read_spi_timing_only();  // 5 transactions (baseline)
+    #endif
     
     synthetic_counter++;
     continue;  // Skip all normal processing

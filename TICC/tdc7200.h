@@ -94,6 +94,7 @@ public:
   tdc7200Channel(char id, int enable, int intb, int csb, int stop, int led);
   int64_t read();
   void read_spi_timing_only();  // Timing test: just 5 SPI reads, no processing
+  void read_spi_timing_autoincrement();  // Timing test: auto-increment mode
   void tdc_setup();
   void ready_next();
   void flush_and_reset();  // Clear partial measurements and reset state
@@ -102,6 +103,7 @@ public:
   void start_measurements();  // Start TDC7200 measurements
   byte readReg8(byte address);
   uint32_t readReg24(byte address);
+  void readReg24_autoincrement(byte start_address, uint32_t* values, byte count);
   void write(byte address, byte value);
 
 private:

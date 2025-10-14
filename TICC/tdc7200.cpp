@@ -188,6 +188,23 @@ void tdc7200Channel::read_spi_timing_only() {
   // That's it - return immediately with no processing
 }
 
+// Timing test function: auto-increment mode
+// Uses 2 transactions instead of 5 for better performance
+void tdc7200Channel::read_spi_timing_autoincrement() {
+  uint32_t values[3];
+  
+  // Read TIME1, CLOCK_COUNT1, TIME2 in one auto-increment transaction (9 bytes)
+  readReg24_autoincrement(TIME1, values, 3);
+  time1Result = values[0];
+  clock1Result = values[1];
+  time2Result = values[2];
+  
+  // Read CALIBRATION1, CALIBRATION2 in one auto-increment transaction (6 bytes)
+  readReg24_autoincrement(CALIBRATION1, values, 2);
+  cal1Result = values[0];
+  cal2Result = values[1];
+}
+
 // Read TDC - optimized inline calculation for maximum throughput
 int64_t tdc7200Channel::read() {
   // Read all measurement data once
@@ -308,6 +325,28 @@ uint32_t tdc7200Channel::readReg24(byte address) {
   SPI.endTransaction();
   delayMicroseconds(5);
   return value;
+}
+
+// Read multiple 24-bit registers using auto-increment mode
+// Auto-increment bit (A7) allows reading sequential registers in one transaction
+void tdc7200Channel::readReg24_autoincrement(byte start_address, uint32_t* values, byte count) {
+  SPI.beginTransaction(SPISettings(SPI_SPEED, MSBFIRST, SPI_MODE0));
+  digitalWrite(CSB, LOW);
+  
+  // Send address with auto-increment bit set (bit 7)
+  SPI.transfer((start_address & 0x1f) | 0x80);
+  
+  // Read count × 3 bytes (each register is 24-bit)
+  for (byte i = 0; i < count; i++) {
+    uint16_t msb = SPI.transfer(0x00);
+    uint16_t mid = SPI.transfer(0x00);
+    uint16_t lsb = SPI.transfer(0x00);
+    values[i] = ((uint32_t)msb << 16) + (mid << 8) + lsb;
+  }
+  
+  digitalWrite(CSB, HIGH);
+  SPI.endTransaction();
+  delayMicroseconds(5);
 }
 
 void tdc7200Channel::write(byte address, byte value) {

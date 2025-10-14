@@ -35,6 +35,11 @@
 // Recommended: 10000 for synthetic tests (~1 sample/second), 1000 for signal-based tests
 #define TIMING_SAMPLE_INTERVAL 10000  // Generate one pulse per 10000 iterations
 
+// OPTIMIZATION MODE (for TIMING_TEST_SYNTHETIC_SPI only)
+// Uncomment ONE optimization to test:
+//#define USE_AUTOINCREMENT_SPI     // Use auto-increment mode (2 transactions instead of 5)
+//#define USE_DIRECT_CSB            // Use direct port manipulation for CSB (faster than digitalWrite)
+
 // Global counter for timing sample rate control (defined in tdc7200.cpp)
 extern volatile uint32_t timing_sample_counter;
 

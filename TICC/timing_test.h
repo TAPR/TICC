@@ -20,7 +20,9 @@
 // Available measurements:
 
 // Uncomment ONE of these:
-#define TIMING_TEST_SYNTHETIC_SPI    // Synthetic test: tight loop of SPI reads, independent of input rate
+// #define TIMING_TEST_SYNTHETIC_SPI    // Synthetic test: tight loop of SPI reads, independent of input rate
+#define TIMING_TEST_IDLE_LOOP        // Measure idle loop speed (no INTB activity)
+// #define TIMING_TEST_FULL_LOOP        // Measure full loop with one channel active (all calculations)
 // #define TIMING_TEST_SPI_READS        // Measure just the 5 × readReg24 calls (~100 µs expected)
 // #define TIMING_TEST_FULL_READ        // Measure entire read() function including arithmetic and tdc_ack_int()
 // #define TIMING_TEST_READY_NEXT       // Measure the ready_next() call
@@ -31,14 +33,17 @@
 
 // TIMING OUTPUT RATE CONTROL
 // Only generate timing pulse every N iterations (reduces data volume)
-// For SYNTHETIC_SPI mode: higher values needed since iterations are fast (~100 µs each)
-// Recommended: 10000 for synthetic tests (~1 sample/second), 1000 for signal-based tests
-#define TIMING_SAMPLE_INTERVAL 10000  // Generate one pulse per 10000 iterations
+// Recommended values by test type:
+//   IDLE_LOOP: 100000+ (very fast, ~1-2 µs per iteration)
+//   FULL_LOOP: 10000 (moderate, ~200-300 µs per iteration with calc)
+//   SYNTHETIC_SPI: 10000 (fast, ~100-200 µs per iteration)
+//   Signal-based tests: 1000 (depends on input rate)
+#define TIMING_SAMPLE_INTERVAL 100000  // Generate one pulse per N iterations
 
 // OPTIMIZATION MODE (for TIMING_TEST_SYNTHETIC_SPI only)
 // Can enable multiple optimizations to test combinations:
-#define USE_AUTOINCREMENT_SPI     // Use auto-increment mode (2 transactions instead of 5)
-#define USE_DIRECT_CSB            // Use direct port manipulation for CSB (faster than digitalWrite)
+//#define USE_AUTOINCREMENT_SPI     // Use auto-increment mode (2 transactions instead of 5)
+//#define USE_DIRECT_CSB            // Use direct port manipulation for CSB (faster than digitalWrite)
 
 // Global counter for timing sample rate control (defined in tdc7200.cpp)
 extern volatile uint32_t timing_sample_counter;

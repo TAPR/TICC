@@ -138,6 +138,43 @@ void loop() {
     continue;  // Skip all normal processing
 #endif
 
+#ifdef TIMING_TEST_IDLE_LOOP
+    // IDLE LOOP TIMING TEST
+    // Measures minimum loop overhead with no measurement processing
+    static uint32_t idle_counter = 0;
+    
+    if ((idle_counter % TIMING_SAMPLE_INTERVAL) == 0) {
+      TIMING_PULSE();
+    }
+    
+    idle_counter++;
+    continue;  // Just loop, no processing
+#endif
+
+#ifdef TIMING_TEST_FULL_LOOP
+    // FULL LOOP TIMING TEST
+    // Simulates complete measurement processing for one channel
+    static uint32_t full_counter = 0;
+    static bool simulated_intb = false;
+    
+    if ((full_counter % TIMING_SAMPLE_INTERVAL) == 0) {
+      TIMING_PULSE();
+    }
+    
+    // Toggle simulated INTB every iteration to process measurements
+    simulated_intb = !simulated_intb;
+    
+    if (simulated_intb) {
+      // Simulate channel A having data ready
+      SET_LED_0; SET_EXT_LED_0;
+      calculate_timestamp(&channels[0], PICTICK_PS);
+      CLR_LED_0; CLR_EXT_LED_0;
+    }
+    
+    full_counter++;
+    continue;  // Skip normal measurement checking
+#endif
+
     // Check both channels simultaneously for better timestamp ordering
     bool ready_chA = (digitalRead(channels[0].INTB) == 0);
     bool ready_chB = (digitalRead(channels[1].INTB) == 0);

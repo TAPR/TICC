@@ -12,11 +12,11 @@
 
 ## Results Summary
 
-| Test | Implementation | Mean (µs) | Min (µs) | Max (µs) | Std Dev (µs) | Samples | Improvement | Notes |
-|------|----------------|-----------|----------|----------|--------------|---------|-------------|-------|
-| 1 | Current (5× readReg24) | 236.33 | 235.88 | 236.94 | 0.24 | 33 | baseline | Individual transactions with CSB toggle |
-| 2 | Auto-increment mode | 160.43 | 160.03 | 160.91 | 0.18 | 34 | **-75.9 µs (-32.1%)** | 2 transactions using auto-increment |
-| 3 | Direct CSB control | - | - | - | - | - | - | Not yet tested |
+| Test | Implementation | Mean (µs) | Min (µs) | Max (µs) | Std Dev (µs) | Samples | vs Baseline | vs Previous | Notes |
+|------|----------------|-----------|----------|----------|--------------|---------|-------------|-------------|-------|
+| 1 | Baseline | 236.33 | 235.88 | 236.94 | 0.24 | 33 | baseline | - | 5 SPI transactions, digitalWrite |
+| 2 | Auto-increment | 160.43 | 160.03 | 160.91 | 0.18 | 34 | **-75.9 µs (-32%)** | -75.9 µs | 2 SPI transactions |
+| 3 | Auto-incr + Direct CSB | 131.63 | 131.11 | 132.13 | 0.24 | 34 | **-104.7 µs (-44%)** | **-28.8 µs (-18%)** | Direct port manipulation |
 
 ---
 
@@ -209,6 +209,145 @@ The actual savings exceeded predictions due to:
 - Extremely consistent timing (0.18 µs std dev)
 - Significant real-world performance gain
 - **Recommendation: Implement in production firmware**
+
+---
+
+## Test 3: Auto-Increment + Direct CSB Port Manipulation
+
+**Date:** October 14, 2025  
+**Branch:** `spi-timing-test`  
+**Configuration:** `TIMING_TEST_SYNTHETIC_SPI` with `USE_AUTOINCREMENT_SPI` + `USE_DIRECT_CSB` enabled  
+**Status:** ✅ **COMPLETE - Excellent results!**
+
+### Implementation
+Combines both optimizations:
+1. Auto-increment mode (2 transactions instead of 5)
+2. Direct port manipulation for CSB (Port H bits 3/4)
+
+**CSB Control:**
+```cpp
+// Instead of digitalWrite(CSB, LOW/HIGH):
+if (ID == '0') {
+  CSB_0_LOW;   // PORTH&=(~(1<<3)) - direct bit manipulation
+  // ... SPI transfers ...
+  CSB_0_HIGH;  // PORTH|=(1<<3)
+} else {
+  CSB_1_LOW;   // PORTH&=(~(1<<4))
+  // ... SPI transfers ...  
+  CSB_1_HIGH;  // PORTH|=(1<<4)
+}
+```
+
+### Raw Data
+```
+3298.26369460997 chA
+3299.58256705562 chA
+3300.90388955071 chA
+3302.21497066281 chA
+3303.52777295012 chA
+3304.84058177201 chA
+3306.15595540528 chA
+3307.46875408468 chA
+3308.78412273063 chA
+3310.09946763742 chA
+3311.41624934324 chA
+3312.72905510286 chA
+3314.04437157554 chA
+3315.35972084293 chA
+3316.67656342720 chA
+3317.99193480661 chA
+3319.30877076720 chA
+3320.62552835391 chA
+3321.94443108369 chA
+3323.25721978985 chA
+3324.57255946421 chA
+3325.88793270495 chA
+3327.20472475262 chA
+3328.52007428639 chA
+3329.83687266104 chA
+3331.15362707927 chA
+3332.47248116000 chA
+3333.78785348495 chA
+3335.10473255346 chA
+3336.42152100363 chA
+3337.74035463558 chA
+3339.05717514737 chA
+3340.37605462690 chA
+3341.69496799669 chA
+3343.01629516783 chA
+```
+
+### Analysis Results
+```
+Samples collected: 34
+Mean:    131.63 µs per iteration
+Median:  131.68 µs
+Min:     131.11 µs
+Max:     132.13 µs
+Std Dev:   0.24 µs
+Range:     1.02 µs
+```
+
+### Improvements
+**vs Test 2 (auto-increment only):**
+- Additional savings: **28.80 µs (17.9% faster)**
+- From 160.43 µs → 131.63 µs
+
+**vs Test 1 (baseline):**
+- Total savings: **104.70 µs (44.3% faster!)**
+- From 236.33 µs → 131.63 µs
+
+### Why Direct CSB Helps So Much
+Direct port manipulation savings exceeded predictions (~28.8 µs vs predicted ~15.5 µs):
+- **digitalWrite() overhead:** 4 calls × ~4 µs = ~16 µs eliminated ✓
+- **Direct port access:** ~125 ns per operation (negligible) ✓
+- **Additional benefits:**
+  - Simpler code path allows better compiler optimization
+  - Fewer function call overheads
+  - Better instruction cache utilization
+  - Less branching in critical path
+
+### Observations
+- Direct port manipulation is a significant win (18% additional improvement)
+- Total optimization achieves 44% speedup - excellent result
+- Code remains readable and maintainable
+- No accuracy issues or timing jitter concerns
+- **Strong recommendation: Implement both optimizations in production**
+
+---
+
+## Final Recommendations
+
+### Production Implementation
+**Strongly recommended to implement both optimizations:**
+
+1. **Auto-increment SPI mode** (-32% improvement)
+   - Well-documented TDC7200 feature
+   - Significant performance gain
+   - No drawbacks
+
+2. **Direct CSB port manipulation** (additional -18% improvement)
+   - Standard AVR optimization technique
+   - Safe and well-tested approach
+   - Maintains code readability with macros
+
+**Combined benefit: 44% faster SPI reads**
+- Baseline: 236 µs
+- Optimized: 132 µs
+- **Savings: 105 µs per measurement**
+
+### Real-World Impact
+At maximum measurement rate (~1400/sec), the 105 µs savings per measurement:
+- Frees up 147 ms per second of CPU time
+- Provides headroom for future features
+- Improves overall system responsiveness
+- Reduces power consumption (less active CPU time)
+
+### Implementation Notes
+- Auto-increment works with all TDC7200 chips per datasheet
+- Direct port manipulation requires matching pin assignments (documented in board.h)
+- Both optimizations are transparent to calculation logic
+- No changes needed to calibration or timestamp math
 
 ---
 

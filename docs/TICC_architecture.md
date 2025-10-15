@@ -52,6 +52,14 @@ is ready.
   - The STOP signal latches high until the TDC asserts INTB, so that STOP
     and the ISR never see more than one rising edge per measurement.
   - INTB assertion delay after STOP: 2330 ns to 2472 ns.
+  - Earlier firmware versions supported the option to change the trigger
+    edge from rising to falling.  It turns out that this doesn't work
+    because the stop gate triggers only on rising edge regardless of the
+    TDC trigger edge.  This means that if the TDC triggers on the falling
+    edge of the pulse, the stop gate will trigger *before* the TDC, with
+    the result that the STOP signal timing is off; it's even possible that
+    STOP could arrive *before* START.  Consequently, **the trigger edge
+    configuration option has been removed from the 2025 firmware release.**
 
 ### TOF Range Constraints
 The result of this is that the time interval (called time of flight, or

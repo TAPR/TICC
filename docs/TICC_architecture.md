@@ -4,13 +4,14 @@
 
 ## Overview
 
-This document describes the architecture and implementation details of the
-TAPR TICC timestamping counter hardware and firmware. The TICC uses a TDC7200 chip to
-provide precise timestamp measurements with picosecond accuracy.
+This document describes the architecture and implementation details of 
+the TAPR TICC timestamping counter hardware and firmware. The TICC uses 
+a Texas Instruments TDC7200 chip to provide precise timestamp measurements 
+with picosecond accuracy.
 
 ## Hardware
-There are two TDC7200 chips, one for each input channel.  We use only
-a few of the TDC signal lines:
+There are two TDC7200 chips on the board, one for each input channel.  We 
+use only a few of the TDC signal lines:
 - START (event begins)
 - STOP  (on 100 us boundary)
 - INTB  (measurement complete)
@@ -26,20 +27,31 @@ from the external 10 MHz source.  COARSE_CLOCK provides timing in
 100 us increments and the TDC provides precise timing within those 
 increments.
 
-The TDC7200 in measurement mode 2 (which we use) has a minimum time 
-interval constraint of 2 clock cycles, or 200 ns in our case.  To ensure
-that the STOP signal (derived from COARSE_CLOCK) meets this, a set of
-logic gates ensure that the STOP signal comes from a COARSE_CLOCK tick
-occurring at least 300 ns after the START signal.  That STOP signal is
-fed to the TDC STOP pin to stop the measurement.  Its leading edge also
-fires ISR on the Arduino that copies the value at that instant of the
-100 us granularity timescale accumulator variable (PICcount) into the
-channel's PICstop variable.  
+COARSE_CLOCK fires an interrupt service routine (ISR) on every tick
+that increments a variable called PICcount.  PICcount represents the
+time in 100 us increments since system start, and provides the long-
+term time scale used to construct timestamps
+
+The TDC7200 has two measurement modes.  Mode 1 provides measurement of
+time intervals from 12 to 500 nanoseconds, which is not a wide enough
+range for our requirements.  Mode 2 covers the range from 200 ns to 
+about 6 ms and is the mode the TICC uses.  To ensure that the STOP signal 
+(derived from COARSE_CLOCK) meets the 200 ns minimum period, a set of
+logic gates blocks the COARSE_CLOCK tick from reaching the STOP pin until 
+at least 300 ns after the START signal.  The leading edge of the gated
+pulse also fires an ISR on the Arduino that copies the PICcount value at 
+that instant into the channel's PICstop variable.  PICstop is combined 
+with the computed time-of-flight (interval from TDC START to STOP signals) 
+as described below.
+
+When the TDC chip sees the STOP pulse, it finishes its counting, performs
+a calibration routine, and asserts its INTB pin to signal that a measurement
+is ready.
 
 ### Notes: 
   - The STOP signal latches high until the TDC asserts INTB, so that STOP
     and the ISR never see more than one rising edge per measurement.
-  - INTB assertion delay: 2330 ns to 2472 ns after PICstop latching.
+  - INTB assertion delay after STOP: 2330 ns to 2472 ns.
 
 ### TOF Range Constraints
 The result of this is that the time interval (called time of flight, or
@@ -58,10 +70,10 @@ part with 1 picosecond resolution (12 decimal places).
 ## Main Loop Processing
 On each iteration, the main loop checks whether either or both TDC chips
 have their INTB signals asserted to indicate they have completed a
-measurement.  Because of the variable delay from the STOP signal until INTB 
-assertion, there is no guarantee if both channels are active which one will 
-be processed first, and thus timestamps could be printed out of order or out 
-of channel sequence.
+measurement.  Because of the variable delay from the STOP signal until 
+INTB assertion, there is no guarantee if both channels are active which 
+one will be processed first, and thus timestamps could be printed out 
+of order or out of channel sequence.
 
 The processing loop is designed to correct this by checking INTB status
 multiple times for both channels, and when both are present outputting the
@@ -71,7 +83,6 @@ earlier timestamp first.
 
 **Loop Timing:**
 - **Idle loop:** ~1.2 µs (no INTB asserted, no serial data)
-  - Was ~2.5 to 3.0 µs before optimization
   - Breakdown: Serial check (52 cycles), reference clock watchdog (20 cycles),
     two digitalRead() calls (100 cycles), early exit checks (15 cycles)
 

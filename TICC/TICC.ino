@@ -168,8 +168,8 @@ void loop() {
     } else if (ready_chB) {
       // Only channel B ready
       SET_LED_1; SET_EXT_LED_1;
-          
-        if (config.MODE == Binary) {
+      
+      if (config.MODE == Binary) {
         if (process_binary_mode(&channels[1])) {
           CLR_LED_1; CLR_EXT_LED_1;
         }
@@ -241,7 +241,7 @@ void loop() {
           // Calculate period: current timestamp - previous timestamp from buffer
           Timestamp64 period = timestamp_difference(&channels[ci].timestamp, 
               &prev_timestamp[ci]);
-                char line[64];
+          char line[64];
           print_timestamp(line, sizeof(line), &period, (char)channels[ci].name, false);  // No wrap
           
           channels[ci].new_ts_ready = 0;  // consume
@@ -284,7 +284,7 @@ void loop() {
             // Mixed channels: find A then B
             const PairSlot *A = (ts_pair[0].ch == 0) ? &ts_pair[0] : &ts_pair[1];
             const PairSlot *B = (ts_pair[0].ch == 1) ? &ts_pair[0] : &ts_pair[1];
-          // Print chA timestamp
+            // Print chA timestamp
             {
               char line[64];
               print_timestamp(line, sizeof(line), &A->t, (char)channels[0].name);
@@ -314,9 +314,9 @@ void loop() {
             {
               // Calculate time interval A->B
               Timestamp64 interval = timestamp_difference(&channels[1].timestamp, &channels[0].timestamp);
-                char line[64];
-                print_timestamp(line, sizeof(line), &interval, '\0', false);  // No wrap, no channel name
-            consume_both_flags();
+              char line[64];
+              print_timestamp(line, sizeof(line), &interval, '\0', false);  // No wrap, no channel name
+              consume_both_flags();
               break;
             }
           case Hat:
@@ -324,10 +324,10 @@ void loop() {
               // 3-Cornered Hat mode: chA, chB, and chC (synthesized)
               // chC = int(chB) + (chB - chA) - properly handle negative differences
               
-            // Print chA and chB timestamps
-                char line[64];
-                print_timestamp(line, sizeof(line), &channels[0].timestamp, (char)channels[0].name);
-                print_timestamp(line, sizeof(line), &channels[1].timestamp, (char)channels[1].name);
+              // Print chA and chB timestamps
+              char line[64];
+              print_timestamp(line, sizeof(line), &channels[0].timestamp, (char)channels[0].name);
+              print_timestamp(line, sizeof(line), &channels[1].timestamp, (char)channels[1].name);
               
               // Calculate chC = int(chB) + (chB - chA)
               Timestamp64 interval = timestamp_difference(&channels[1].timestamp, &channels[0].timestamp);
@@ -348,9 +348,9 @@ void loop() {
               }
               
               // Print chC (synthesized)
-                print_timestamp(line, sizeof(line), &chC, 'C');
+              print_timestamp(line, sizeof(line), &chC, 'C');
               
-            consume_both_flags();
+              consume_both_flags();
               break;
             }
           default: break;

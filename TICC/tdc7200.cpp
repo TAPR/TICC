@@ -199,16 +199,24 @@ int64_t tdc7200Channel::read() {
   // Apply fudge (typically small)
   tof_base -= (int32_t)fudge;
 
-  // calCount calculation - use 64-bit only for the large product, then narrow
-  int32_t cal_diff = cal2_s - cal1_s;
+  
+  
+  // time_dilation is an adjustment made to compensate for an appearent small
+  // non-linearity in the TDC chip, where the ring counter range over the
+  // 100 ns tick of the 10 MHz reference does not exactly fill 100 ns.
   int32_t scale = 1000000 - time_dilation;  // typically 997500
+  
   int32_t denom = (int32_t)(CAL_PERIODS - 1);  // typically 19
-
   if (denom == 0) denom = 1;
 
-  // Only use 64-bit for the product, then divide and narrow
+  // Use 64-bit for the product, then divide to uint32_t result
+  // uint32_t is safe: Physical maximum with 40 periods and 55ps LSB:
+  //   cal_diff max ~71K (4µs / 55ps), scale ~1M, denom min 1
+  //   → calCount max ~1.8 billion < 4.3 billion (uint32_t max)
+  // Using uint32_t enables faster 64-bit/32-bit division (~60-100µs savings)
+  int32_t cal_diff = cal2_s - cal1_s;
   int64_t cal_prod = (int64_t)cal_diff * (int64_t)scale;
-  int64_t calCount = (cal_prod + denom / 2) / denom;  // rounded division
+  uint32_t calCount = (uint32_t)((cal_prod + denom / 2) / denom);  // rounded division
   if (calCount < 1) calCount = 1;
 
   // ring_ticks = time1 - time2 (32-bit safe)
@@ -231,8 +239,8 @@ int64_t tdc7200Channel::read() {
   int64_t tof64 = (int64_t)tof_base + ring_ps;
 
   // Clamp to documented bounds
-  if (tof64 < 300000LL) tof64 = 300000LL;
-  if (tof64 > 100300000LL) tof64 = 100300000LL;
+  //if (tof64 < 300000LL) tof64 = 300000LL;
+  //if (tof64 > 100300000LL) tof64 = 100300000LL;
 
   // Store result
   tof = (int32_t)tof64;

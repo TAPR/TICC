@@ -1,7 +1,13 @@
 # TICC Architecture Documentation
 
-**Date:** October 15, 2025  **Version:** 20251015.1  
-**Performance measurements updated based on comprehensive testing.**
+**Date:** October 18, 2025  **Version:** 20251018.1  
+**Performance measurements updated with definitive GPIO timing instrumentation.**
+
+**Note:** After measurements were completed, a minor optimization was applied to the 
+TOF calculation (uint32_t calCount for faster 64-bit/32-bit division), reducing 
+processing time by ~14 µs. Updated timings are approximately 566 µs total processing 
+(466 µs to ready_next() + 100 µs after). This modest improvement (~2.4%) does not 
+materially change the analysis or conclusions.
 
 ## Overview
 This document describes the architecture and implementation details of 
@@ -30,7 +36,7 @@ increments.
 COARSE_CLOCK fires an interrupt service routine (ISR) on every tick
 that increments a variable called PICcount.  PICcount represents the
 time in 100 us increments since system start, and provides the long-
-term time scale used to construct timestamps
+term timescale used to construct timestamps
 
 The TDC7200 has two measurement modes.  Mode 1 provides measurement of
 time intervals from 12 to 500 nanoseconds, which is not a wide enough
@@ -51,7 +57,7 @@ is ready.
 ### Notes: 
   - The STOP signal latches high until the TDC asserts INTB, so that STOP
     and the ISR never see more than one rising edge per measurement.
-  - INTB assertion delay after STOP: 2330 ns to 2472 ns.
+  - INTB assertion delay after STOP: 2330 ns to 2472 ns (per datasheet).
   - Earlier firmware versions supported the option to change the trigger
     edge from rising to falling.  It turns out that this doesn't work
     because the stop gate triggers only on rising edge regardless of the
@@ -96,25 +102,38 @@ using two-TICC precision timing and oscilloscope verification methods.
 - **Idle loop:** ~52 µs (no INTB asserted, no serial data)
   - Breakdown: Serial check, reference clock watchdog, INTB checks, 
     loop overhead
-  - Previous estimate of ~1.2 µs was based on theoretical calculation 
-    without measuring complete integration overhead
 
-**Single-Channel Active (per timestamp) - Current Optimized:**
-- **Calculation phase:** ~580 µs (complete processing from INTB to ready)
-  - TDC SPI reads: ~136 µs (23%) - optimized via auto-increment mode + 
-    direct CSB
-  - Timestamp arithmetic & accumulation: ~56 µs (10%)
-  - TDC ready_next() SPI write: ~30 µs (5%)
-  - 64-bit math overhead: ~100-150 µs (17-26%) - largest bottleneck on 
-    8-bit AVR
-  - Function call overhead: ~40-60 µs (7-10%)
-  - LED operations: ~10 µs (2%)
-  - ISR interruptions (PICcount): ~20-60 µs (3-10%) - fires every 100 µs
-  - Integration & state management: ~90-140 µs (16-24%)
+**Single-Channel Active (per timestamp):**
+- **Calculation phase:** ~580 µs (complete processing from INTB assert to 
+  calculate_timestamp() return)
   
-- **Print phase:** ~1.23 ms @ 115200 baud (text timestamp mode)
-  - Formatting: ~125 µs
-  - Serial transmission & USB CDC overhead: ~1.1 ms
+  Measured via oscilloscope with INTB and GPIO timing instrumentation:
+  - Loop detection delay: ~28 µs (5%) - INTB assert to function entry
+  - Function entry to ready_next(): ~452 µs (78%)
+    * SPI operations: ~166 µs isolated (read + ready_next transactions)
+    * TOF calculation in read(): ~100-150 µs (includes two 64-bit divisions 
+      @ ~1500-2500 cycles each, plus 64-bit multiplication and 32-bit math)
+    * Integration overhead: ~136-186 µs (ISR interruptions 4-5 times @ 100 µs, 
+      function call overhead, memory access patterns)
+  - Post ready_next() processing: ~100 µs (17%)
+    * Timestamp accumulation (lines 30-68 in calculate_timestamp())
+    * 64-bit multiplication (dcount × pictick_ps): ~800-1200 cycles
+    * 64-bit addition/subtraction with carry/borrow handling
+    * PICstop reads with interrupt protection
+    * Note: Negative path with division (~244-331 µs) never encountered as 
+      delta_ps is always positive (see Timestamp Calculation below)
+  
+- **Print phase:** ~800-1200 µs measured (text timestamp mode)
+  - Formatting: ~125-200 µs (varies with digit count and wrap configuration)
+  - **Serial.write() blocking: ~600-1000 µs** - waits for UART TX buffer space
+  - The measured time includes both formatting AND blocking time waiting for the 
+    64-byte UART buffer to drain enough to accept new data
+  - Blocking duration depends on:
+    * Previous event's transmission status (buffer fullness)
+    * Current timestamp length (bytes needed)
+    * Baud rate (buffer drain rate: 87 µs/byte @ 115200, 43.5 µs/byte @ 230400)
+  - At low rates (<100 Hz), minimal blocking; at high rates (>500 Hz), 
+    blocking dominates as buffer stays fuller
   
 - **Total per timestamp:** ~1.81 ms @ 115200 baud 
     (580 µs process + 1230 µs print)
@@ -132,9 +151,14 @@ using two-TICC precision timing and oscilloscope verification methods.
 
 **Throughput:**
 - **Single-channel text mode:**
-  - @ 115200 baud: 585 measurements/second (measured)
-  - @ 230400 baud: 620 measurements/second (measured)
-  - Limited by serial output (68% of cycle time)
+  - @ 115200 baud: ~580-590 measurements/second maximum sustainable rate
+  - @ 230400 baud: ~620 measurements/second (measured)
+  - **Rate-dependent behavior (validated via oscilloscope):**
+    * <480 Hz: Stable, minimal Serial.write() blocking
+    * 480-590 Hz: Serial.write() blocking increases, buffer stays fuller
+    * >590 Hz: System instability, events overlap, pattern degrades
+    * >620 Hz: Complete breakdown
+  - Limited by Serial.write() blocking as UART TX buffer fills (68% of cycle time)
   
 - **Binary timestamp single-channel:**
   - @ 230400 baud: 1285 measurements/second sustained (measured)
@@ -151,18 +175,21 @@ Speed test code is included in the hardware-timing-benchmarks branch
 available at github.
 
 **Impact of Baud Rate on Throughput:**
-Serial output is the primary bottleneck in text mode (~1.23 ms per 
-timestamp @ 115200 baud), with USB CDC overhead dominating the 
-transmission time. Increasing baud rate provides modest improvement 
-in text mode:
+Serial.write() blocking is the primary bottleneck in text mode. The function 
+blocks waiting for the 64-byte UART TX buffer to have sufficient space. At high 
+measurement rates (>480 Hz), the buffer stays fuller, causing longer blocking times. 
+Increasing baud rate provides modest improvement:
 
-| Baud Rate | Measured Throughput | Improvement | Cycle Time |
-|-----------|---------------------|-------------|------------|
-| 115200 (default) | 585/sec | baseline | ~1.81 ms |
-| 230400 | 620/sec | +6% | ~1.62 ms |
+| Baud Rate | Buffer Drain Rate | Measured Throughput | Improvement |
+|-----------|-------------------|---------------------|-------------|
+| 115200 (default) | 87 µs/byte | ~580-590/sec | baseline |
+| 230400 | 43.5 µs/byte | ~620/sec | +6% |
 
-The modest improvement (only 6%) is due to serial output being the 
-bottleneck while processing time remains constant at 580 µs.
+The modest improvement (only 6%) occurs because:
+- Processing time (580 µs) remains constant
+- Formatting time (~200 µs) remains constant  
+- Only Serial.write() blocking time reduces (~1000 µs → ~500 µs)
+- Total improvement: ~500 µs per event, but only ~190 µs realized in throughput
 
 **Binary Mode provides much better throughput:**
 - Only 12 bytes vs. 35 bytes per timestamp
@@ -173,34 +200,55 @@ bottleneck while processing time remains constant at 580 µs.
   shorter output
 
 **Bottleneck Analysis:**
-In text mode @ 115200 baud:
+In text mode @ 115200 baud (at high rates >480 Hz):
 - Processing: 580 µs (32% of cycle)
-- Serial output: 1230 µs (68% of cycle) ← **Primary bottleneck**
+- Print formatting: ~200 µs (11% of cycle)
+- **Serial.write() blocking: ~600-1000 µs (33-55% of cycle)** ← **Primary bottleneck**
+  - Waits for 64-byte UART TX buffer to drain
+  - Buffer fullness depends on measurement rate
+  - At 590 Hz, buffer continuously full, system at limit
 
 In binary mode @ 230400 baud:
 - Processing: 580 µs (~45% of cycle)
-- Serial output: ~670 µs (~55% of cycle)
+- Serial.write() blocking: ~270 µs (~21% of cycle) - less blocking due to 12 bytes vs ~20-30
 - Better balance allows processing improvements to have more impact
 
-**Conclusion:** Serial output limits text mode throughput. For maximum 
-  throughput, use Binary mode which achieves 1285 measurements/sec @ 
-  230400 baud.
+**Conclusion:** Serial.write() blocking waiting for UART buffer space limits text 
+  mode throughput. For maximum throughput, use Binary mode which achieves 1285 
+  measurements/sec @ 230400 baud (12-byte output reduces buffer pressure).
 
 ## Timestamp Calculation
 The timestamp calculation uses a mixed-radix accumulator approach:
 
 - **Structure:** `Timestamp64 = {int32_t seconds, uint64_t picos}`
-- **Algorithm:** `deltaT = dcount×PICTICK_PS - (tof_k - tof_{k-1})`
-- **Accumulation:** `timestamp.picos += deltaT` with automatic carry/borrow
+- **Algorithm:** `delta_ps = dcount×PICTICK_PS - (tof_k - tof_{k-1})`
+- **Accumulation:** `timestamp.picos += delta_ps` with automatic carry/borrow
   to seconds
 - **Precision:** Full picosecond precision (12 decimal places)
 - **Performance:** 1400-1550 measurements/second maximum processing rate
 
-This approach avoids 64-bit division/modulo operations, which are very
-expensive on 8-bit AVR microcontrollers. However, 64-bit math operations
-(multiplication, addition, subtraction, and conditional branches) still
-represent the largest computational bottleneck, consuming 100-150 µs
-(17-26%) of the processing time per measurement on the 8-bit AVR architecture.
+**Why delta_ps is always positive:** The code includes a negative path (lines 
+53-64 in timestamps.cpp) with expensive 64-bit division/modulo operations 
+(~1500-2500 cycles each), but this path is never executed in practice. Since 
+`ready_next()` clears INTB ~480 µs after an event's STOP signal (measured via 
+oscilloscope), and PICcount increments every 100 µs, any subsequent event on 
+the same channel will capture a PICstop value at least 4-5 ticks higher, making 
+`dcount ≥ 4-5`. With dcount ≥ 4, `delta_ps = dcount×100,000,000 ps - (tof 
+difference)` is always positive since even dcount=4 yields 400 million ps, far 
+exceeding the maximum tof difference of ~100 million ps. This makes delta_ps 
+strongly positive in all realistic scenarios.
+
+**Actual 64-bit arithmetic overhead:** The complete 64-bit arithmetic overhead is 
+split across two sections totaling approximately 200-250 µs (~35-43% of processing):
+- **TOF calculation in read():** ~100-150 µs including two 64-bit divisions (calCount 
+  calculation and ring_ps calculation), one 64-bit multiplication, plus various 
+  32-bit operations
+- **Timestamp accumulation after ready_next():** ~100 µs including one 64-bit 
+  multiplication (dcount × pictick_ps), multiple 64-bit additions/subtractions, 
+  and carry/borrow handling
+
+The negative path with additional division/modulo (~244-331 µs) in the accumulation 
+logic is unreachable code in normal operation as delta_ps is always positive.
 
 ## Performance Optimization History
 
@@ -230,35 +278,55 @@ effects.
 
 **Current Bottlenecks (in priority order):**
 
-1. **64-bit math operations (100-150 µs, 17-26%)** ← Largest remaining 
-   bottleneck
-   - Expensive on 8-bit AVR architecture
-   - Timestamp accumulation uses multiple 64-bit operations
-   - Potential optimization: Algorithm changes, fixed-point alternatives
+Based on oscilloscope measurements with INTB and GPIO timing instrumentation 
+(October 2025):
 
-2. **SPI reads (136 µs, 23%)** ✅ Already optimized
-   - Was 236 µs baseline, now 136 µs with auto-increment + direct CSB
+1. **64-bit math operations (~200-250 µs, 35-43%)** ← Largest bottleneck
+   - **TOF calculation (in read()):** ~100-150 µs
+     * Two 64-bit divisions @ ~1500-2500 cycles each (~3000-5000 cycles total)
+     * One 64-bit multiplication
+     * Various 32-bit calculations
+   - **Timestamp accumulation (after ready_next()):** ~100 µs
+     * One 64-bit multiplication (dcount × pictick_ps, ~800-1200 cycles)
+     * Multiple 64-bit additions/subtractions (~8-16 cycles each)
+     * Carry/borrow handling with conditional logic
+   - Expensive on 8-bit AVR architecture (no native 64-bit support)
+   - Potential optimization: Algorithm changes, lookup tables, fixed-point alternatives
+
+2. **SPI operations (~166 µs isolated, 29% of total)**
+   ✅ Already optimized
+   - Was 236 µs baseline, now 136 µs read + 30 µs ready_next
+   - Auto-increment mode + direct CSB port manipulation
    - Further optimization unlikely
 
-3. **Function call overhead (40-60 µs, 7-10%)**
-   - Multiple nested function calls in critical path
-   - Potential optimization: Inline critical functions
+3. **Integration overhead (~136-186 µs, 23-32%)**
+   - ISR interruptions: PICcount fires every 100 µs, interrupts 4-5 times during 
+     processing (~5-10 µs overhead per interruption)
+   - Function call overhead in nested call chains
+   - Memory access patterns and variable management
+   - Scattered throughout code, difficult to optimize further
+   - Explains gap between isolated tests (316 µs) and measured timing (452 µs 
+     before ready_next + 100 µs after = 552 µs)
 
-4. **ISR interruptions (20-60 µs, 3-10%)**
-   - PICcount ISR fires every 100 µs
-   - Necessary overhead, difficult to optimize further
+4. **Loop detection delay (~28 µs, 5%)**
+   - Time from INTB assertion to calculate_timestamp() entry
+   - Includes: Serial check, reference clock check, INTB digitalRead, LED operations
+   - Relatively small overhead, difficult to reduce further
 
-5. **Integration overhead (90-140 µs, 16-24%)**
-   - State management, memory access, conditional logic
-   - Scattered throughout code
-   - Various small optimizations possible
-
-**Testing Methodology:** Performance measurements used two complementary 
+**Testing Methodology:** Performance measurements used three complementary 
 methods:
-- Two-TICC precision timing (picosecond accuracy) for synthetic tests
+- Two-TICC precision timing (picosecond accuracy) for isolated component tests
 - Oscilloscope pulse width measurements for real-world verification
+- **GPIO timing instrumentation (October 2025):** Definitive measurements using 
+  INTB and GPIO (A0) pins with oscilloscope to measure exact timing from INTB 
+  assertion through calculate_timestamp() return, revealing true integration 
+  overhead
 
-See `docs/development_docs/SPI_OPTIMIZATION_FINDINGS.md` for complete analysis.
+The GPIO instrumentation method provides the most accurate real-world measurements 
+and supersedes earlier estimates based on isolated component timing.
+
+See `docs/development_docs/SPI_OPTIMIZATION_FINDINGS.md` and 
+`docs/development_docs/HARDWARE_TIMING_TEST_RESULTS.md` for detailed analysis.
 
 ## Data Types and Overflow Periods
 

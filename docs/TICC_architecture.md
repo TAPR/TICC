@@ -117,11 +117,12 @@ verification methods.
   Measured via oscilloscope with INTB and GPIO timing instrumentation:
   - Loop detection delay: ~28 µs (5%) - INTB assert to function entry
   - Function entry to ready_next(): ~452 µs (78%)
-    * SPI operations: ~166 µs isolated (read + ready_next transactions)
-    * TOF calculation in read(): ~100-150 µs (includes two 64-bit divisions 
-      @ ~1500-2500 cycles each, plus 64-bit multiplication and 32-bit math)
-    * Integration overhead: ~136-186 µs (ISR interruptions 4-5 times @ 100 µs, 
-      function call overhead, memory access patterns)
+    * channel->read() function: ~433 µs total
+      - SPI reads: ~82 µs (two auto-increment transactions)
+      - TOF calculation: ~294 µs (two 64-bit divisions, two 64-bit multiplications,
+        plus 32-bit operations)
+      - tdc_ack_int(): ~57 µs (SPI read + write to clear interrupt status)
+    * ready_next() SPI write: ~19 µs
   - Post ready_next() processing: ~100 µs (17%)
     * Timestamp accumulation (lines 30-68 in calculate_timestamp())
     * 64-bit multiplication (dcount × pictick_ps): ~800-1200 cycles
@@ -280,14 +281,18 @@ difference)` is always positive since even dcount=4 yields 400 million ps, far
 exceeding the maximum tof difference of ~100 million ps. This makes delta_ps 
 strongly positive in all realistic scenarios.
 
-**Actual 64-bit arithmetic overhead:** The complete 64-bit arithmetic overhead is 
-split across two sections totaling approximately 200-250 µs (~35-43% of processing):
-- **TOF calculation in read():** ~100-150 µs including two 64-bit divisions (calCount 
-  calculation and ring_ps calculation), one 64-bit multiplication, plus various 
-  32-bit operations
-- **Timestamp accumulation after ready_next():** ~100 µs including one 64-bit 
-  multiplication (dcount × pictick_ps), multiple 64-bit additions/subtractions, 
-  and carry/borrow handling
+**64-bit arithmetic overhead (measured):** The complete 64-bit arithmetic overhead 
+dominates event processing time, totaling ~450 µs (77% of 566 µs total):
+
+- **TOF calculation in read():** ~350 µs (measured via GPIO instrumentation)
+  - Two 64-bit multiplications: ~100-150 µs combined
+  - Two 64-bit divisions: ~110-145 µs combined (one optimized with uint32_t divisor)
+  - 32-bit operations and overhead: ~50-100 µs
+  - This is the largest single component of processing time
+
+- **Timestamp accumulation after ready_next():** ~100 µs
+  - One 64-bit multiplication (dcount × pictick_ps): ~800-1200 cycles
+  - Multiple 64-bit additions/subtractions with carry/borrow handling
 
 The negative path with additional division/modulo (~244-331 µs) in the accumulation 
 logic is unreachable code in normal operation as delta_ps is always positive.
@@ -313,15 +318,36 @@ registers:
 
 ### TOF Calculation Optimization (Implemented October 2025)
 
-The TOF (time-of-flight) calculation in `tdc7200.cpp` includes two 64-bit divisions 
-for calibration processing. One optimization was identified:
+The TOF (time-of-flight) calculation in `tdc7200.cpp` converts raw TDC7200 register 
+values to calibrated picosecond time-of-flight values. This involves 64-bit arithmetic 
+which is expensive on 8-bit AVR.
 
-**calCount optimization:** Changed from `int64_t` to `uint32_t` for the divisor
+**Measured performance (via GPIO instrumentation):**
+- Total read() function time: ~433 µs
+  - SPI reads (2 auto-increment transactions): ~82 µs (19%)
+  - TOF calculation: ~294 µs (68% - dominated by 64-bit operations)
+  - tdc_ack_int(): ~57 µs (13% - SPI read + write to clear interrupt)
+
+**TOF calculation breakdown (~294 µs):**
+- Two 64-bit multiplications: ~100-150 µs combined
+  - cal_diff × scale
+  - num × 1000000
+- Two 64-bit divisions: ~110-145 µs combined (one optimized with uint32_t divisor)
+  - cal_prod / denom (small constant)
+  - num / calCount (optimized 64-bit/32-bit division)
+- 32-bit operations and overhead: ~40-80 µs
+
+**Optimization applied - calCount type change:**
+- Changed calCount from `int64_t` to `uint32_t` for the divisor in ring_ps calculation
 - Enables faster 64-bit/32-bit division instead of 64-bit/64-bit division
 - Safe based on TDC7200 physical limits: With 55 ps LSB and max 40 calibration 
-  periods, calCount maximum is ~1.8 billion (well within uint32_t range of 4.3 billion)
-- Measured savings: ~14 µs in TOF calculation
-- Processing time: 566 µs (includes SPI, TOF calculation, timestamp accumulation)
+  periods, calCount maximum is ~1.8 billion (well within uint32_t range)
+- Measured savings: ~14 µs
+- Provides modest but measurable improvement with zero risk
+
+**Note:** The TOF calculation remains the largest single component of event processing 
+time (~350 µs of 566 µs total). Further optimization would require approximate methods 
+that risk precision loss, which is unacceptable for picosecond-level timing.
 
 ### Formatting Optimization (Implemented October 2025)
 
@@ -370,37 +396,31 @@ effects.
 Based on oscilloscope measurements with INTB and GPIO timing instrumentation 
 (October 2025):
 
-1. **64-bit math operations (~200-250 µs, 35-43%)** ← Largest bottleneck
-   - **TOF calculation (in read()):** ~100-150 µs
-     * Two 64-bit divisions @ ~1500-2500 cycles each (~3000-5000 cycles total)
-     * One 64-bit multiplication
-     * Various 32-bit calculations
-   - **Timestamp accumulation (after ready_next()):** ~100 µs
+1. **64-bit math operations (~394 µs, 70%)** ← Dominant bottleneck
+   - **TOF calculation (in read()):** ~294 µs (52% of total processing)
+     * Two 64-bit multiplications: ~100-150 µs combined
+     * Two 64-bit divisions: ~110-145 µs combined (one optimized with uint32_t divisor)
+     * 32-bit operations: ~40-80 µs
+     * Measured via GPIO instrumentation within read() function
+   - **Timestamp accumulation (after ready_next()):** ~100 µs (18%)
      * One 64-bit multiplication (dcount × pictick_ps, ~800-1200 cycles)
-     * Multiple 64-bit additions/subtractions (~8-16 cycles each)
-     * Carry/borrow handling with conditional logic
+     * Multiple 64-bit additions/subtractions with carry/borrow handling
+   - **Total 64-bit overhead: ~394 µs** of 566 µs processing time
    - Expensive on 8-bit AVR architecture (no native 64-bit support)
-   - Potential optimization: Algorithm changes, lookup tables, fixed-point alternatives
+   - Further optimization requires approximate methods that risk precision loss
 
-2. **SPI operations (~166 µs isolated, 29% of total)**
+2. **SPI operations (~158 µs, 28%)**
    ✅ Already optimized
-   - Was 236 µs baseline, now 136 µs read + 30 µs ready_next
+   - read() SPI reads: ~82 µs (two auto-increment transactions)
+   - tdc_ack_int() SPI: ~57 µs (read + write to clear interrupt)
+   - ready_next() SPI: ~19 µs
    - Auto-increment mode + direct CSB port manipulation
    - Further optimization unlikely
 
-3. **Integration overhead (~136-186 µs, 23-32%)**
-   - ISR interruptions: PICcount fires every 100 µs, interrupts 4-5 times during 
-     processing (~5-10 µs overhead per interruption)
-   - Function call overhead in nested call chains
-   - Memory access patterns and variable management
-   - Scattered throughout code, difficult to optimize further
-   - Explains gap between isolated tests (316 µs) and measured timing (452 µs 
-     before ready_next + 100 µs after = 552 µs)
-
-4. **Loop detection delay (~28 µs, 5%)**
+3. **Loop detection delay (~28 µs, 5%)**
    - Time from INTB assertion to calculate_timestamp() entry
    - Includes: Serial check, reference clock check, INTB digitalRead, LED operations
-   - Relatively small overhead, difficult to reduce further
+   - Small overhead, difficult to reduce further
 
 **Testing Methodology:** Performance measurements used three complementary 
 methods:

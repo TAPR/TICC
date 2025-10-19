@@ -1,13 +1,15 @@
 # TICC Architecture Documentation
 
-**Date:** October 18, 2025  **Version:** 20251018.1  
+**Date:** October 18, 2025  **Version:** 20251018.2  
 **Performance measurements updated with definitive GPIO timing instrumentation.**
 
-**Note:** After measurements were completed, a minor optimization was applied to the 
-TOF calculation (uint32_t calCount for faster 64-bit/32-bit division), reducing 
-processing time by ~14 µs. Updated timings are approximately 566 µs total processing 
-(466 µs to ready_next() + 100 µs after). This modest improvement (~2.4%) does not 
-materially change the analysis or conclusions.
+This version includes comprehensive performance optimizations applied after detailed 
+oscilloscope-based performance analysis. Current measured performance:
+- **Event processing:** 566 µs (from INTB assertion to calculate_timestamp return)
+- **Timestamp formatting:** 395 µs (ASCII conversion for text output)
+- **Maximum sustainable throughput (text mode):** 
+  - 587 Hz @ 115200 baud (transmission-limited)
+  - 765 Hz @ 230400 baud
 
 ## Overview
 This document describes the architecture and implementation details of 
@@ -58,14 +60,18 @@ is ready.
   - The STOP signal latches high until the TDC asserts INTB, so that STOP
     and the ISR never see more than one rising edge per measurement.
   - INTB assertion delay after STOP: 2330 ns to 2472 ns (per datasheet).
-  - Earlier firmware versions supported the option to change the trigger
-    edge from rising to falling.  It turns out that this doesn't work
-    because the stop gate triggers only on rising edge regardless of the
-    TDC trigger edge.  This means that if the TDC triggers on the falling
-    edge of the pulse, the stop gate will trigger *before* the TDC, with
-    the result that the STOP signal timing is off; it's even possible that
-    STOP could arrive *before* START.  Consequently, **the trigger edge
-    configuration option has been removed from the 2025 firmware release.**
+  
+### Falling Edge Trigger Option Removed
+Earlier firmware versions supported the option to change the trigger
+edge from rising to falling.  It turns out that this doesn't work
+because the stop gate triggers only on rising edge regardless of the
+TDC trigger edge.  This means that if the TDC triggers on the falling
+edge of the pulse, the stop gate will trigger *before* the TDC, with
+the result that the STOP signal timing is off; it's even possible that
+STOP could arrive *before* START.
+
+Consequently, **the trigger edge configuration option has been removed
+from the 2025 firmware release.**
 
 ### TOF Range Constraints
 The result of this is that the time interval (called time of flight, or
@@ -95,8 +101,9 @@ multiple times for both channels, and when both are present outputting the
 earlier timestamp first.
 
 ### Performance Characteristics
-Performance measurements updated October 2025 based on comprehensive testing 
-using two-TICC precision timing and oscilloscope verification methods.
+Performance measurements updated October 2025 based on testing 
+using both measurments using another TICC and oscilloscope
+verification methods.
 
 **Loop Timing:**
 - **Idle loop:** ~52 µs (no INTB asserted, no serial data)
@@ -123,20 +130,23 @@ using two-TICC precision timing and oscilloscope verification methods.
     * Note: Negative path with division (~244-331 µs) never encountered as 
       delta_ps is always positive (see Timestamp Calculation below)
   
-- **Print phase:** ~800-1200 µs measured (text timestamp mode)
-  - Formatting: ~125-200 µs (varies with digit count and wrap configuration)
-  - **Serial.write() blocking: ~600-1000 µs** - waits for UART TX buffer space
-  - The measured time includes both formatting AND blocking time waiting for the 
-    64-byte UART buffer to drain enough to accept new data
-  - Blocking duration depends on:
-    * Previous event's transmission status (buffer fullness)
-    * Current timestamp length (bytes needed)
-    * Baud rate (buffer drain rate: 87 µs/byte @ 115200, 43.5 µs/byte @ 230400)
-  - At low rates (<100 Hz), minimal blocking; at high rates (>500 Hz), 
-    blocking dominates as buffer stays fuller
+- **Print phase:** ~571 µs measured (text timestamp mode, typical configuration)
+  - Formatting: ~395 µs (ASCII conversion using optimized reciprocal division)
+  - Serial.write() blocking: ~167 µs at low rates (<480 Hz)
   
-- **Total per timestamp:** ~1.81 ms @ 115200 baud 
-    (580 µs process + 1230 µs print)
+  **Rate-dependent blocking behavior:**
+  - At low rates (<480 Hz): Minimal blocking (~167 µs), UART buffer drains faster 
+    than data arrives
+  - At medium rates (480-585 Hz): Blocking increases as buffer stays fuller
+  - At high rates (>585 Hz): System cannot sustain, buffer fills, events overlap
+  - Blocking time depends on buffer fullness, which varies with measurement rate
+  
+  **Transmission happens asynchronously:** The 64-byte UART TX buffer transmits in 
+  hardware after Serial.write() returns. Actual transmission time (~1.7 ms for ~20 
+  bytes @ 115200 baud) overlaps with next event's processing.
+  
+- **Total per timestamp:** ~1137 µs (566 µs process + 571 µs print) at low rates
+  - At high rates (>480 Hz), print time increases due to Serial.write() blocking
 
 **Performance Note - Pre-Optimization Baseline:**
 - Before SPI optimizations: ~700 µs processing time
@@ -145,20 +155,24 @@ using two-TICC precision timing and oscilloscope verification methods.
   manipulation for CSB
 
 **Both-Channels Active (per pair):**
-- **Calculation phase:** ~1160 µs (both channels)
-- **Print phase:** ~2.46 ms (two timestamps @ 115200 baud)
-- **Total per pair:** ~3.62 ms
+- **Calculation phase:** ~1132 µs (both channels, 566 µs each)
+- **Print phase:** ~1142 µs (two timestamps, 571 µs each @ low rates)
+- **Total per pair:** ~2274 µs (at low rates where Serial.write() blocking is minimal)
 
 **Throughput:**
 - **Single-channel text mode:**
-  - @ 115200 baud: ~580-590 measurements/second maximum sustainable rate
-  - @ 230400 baud: ~620 measurements/second (measured)
+  - @ 115200 baud: **587 Hz maximum** (transmission-limited)
+    * Formatting optimization doesn't improve throughput here
+    * Limited by UART transmission time (~1740 µs for ~20 bytes)
+    * Serial.write() blocking absorbs time saved in formatting
+  - @ 230400 baud: **765 Hz maximum**
+    * Formatting optimization provides real benefit at higher baud rates
+    * Better balance between processing, formatting, and transmission
   - **Rate-dependent behavior (validated via oscilloscope):**
-    * <480 Hz: Stable, minimal Serial.write() blocking
-    * 480-590 Hz: Serial.write() blocking increases, buffer stays fuller
-    * >590 Hz: System instability, events overlap, pattern degrades
-    * >620 Hz: Complete breakdown
-  - Limited by Serial.write() blocking as UART TX buffer fills (68% of cycle time)
+    * <480 Hz: Stable, minimal Serial.write() blocking (~167 µs)
+    * 480-587 Hz: Serial.write() blocking increases as buffer stays fuller
+    * >587 Hz @ 115200: System cannot sustain, buffer continuously full
+    * >765 Hz @ 230400: System cannot sustain
   
 - **Binary timestamp single-channel:**
   - @ 230400 baud: 1285 measurements/second sustained (measured)
@@ -175,47 +189,75 @@ Speed test code is included in the hardware-timing-benchmarks branch
 available at github.
 
 **Impact of Baud Rate on Throughput:**
-Serial.write() blocking is the primary bottleneck in text mode. The function 
-blocks waiting for the 64-byte UART TX buffer to have sufficient space. At high 
-measurement rates (>480 Hz), the buffer stays fuller, causing longer blocking times. 
-Increasing baud rate provides modest improvement:
+
+At maximum sustainable rates, throughput is limited by UART transmission capacity. 
+The 64-byte UART TX buffer must drain fast enough to accept new data.
 
 | Baud Rate | Buffer Drain Rate | Measured Throughput | Improvement |
 |-----------|-------------------|---------------------|-------------|
-| 115200 (default) | 87 µs/byte | ~580-590/sec | baseline |
-| 230400 | 43.5 µs/byte | ~620/sec | +6% |
+| 115200 (default) | 87 µs/byte | **587 Hz** | baseline |
+| 230400 | 43.5 µs/byte | **765 Hz** | **+30%** |
 
-The modest improvement (only 6%) occurs because:
-- Processing time (580 µs) remains constant
-- Formatting time (~200 µs) remains constant  
-- Only Serial.write() blocking time reduces (~1000 µs → ~500 µs)
-- Total improvement: ~500 µs per event, but only ~190 µs realized in throughput
+**Analysis:**
+
+**@ 115200 baud (587 Hz):**
+- Transmission time: ~1740 µs for ~20 bytes (dominates)
+- Processing + formatting: 961 µs (566 + 395)
+- **Transmission-limited:** UART cannot drain fast enough
+- Formatting optimization saved 285 µs, but Serial.write() blocking increased by 
+  285 µs to compensate - no net throughput gain
+
+**@ 230400 baud (765 Hz):**
+- Transmission time: ~870 µs for ~20 bytes (faster)
+- Processing + formatting: 961 µs (same)
+- **Better balance:** Processing and transmission more evenly matched
+- Period = 1307 µs = 566 (process) + 395 (format) + 346 (blocking)
+- 30% higher throughput than 115200 baud due to faster transmission
 
 **Binary Mode provides much better throughput:**
-- Only 12 bytes vs. 35 bytes per timestamp
-- No formatting overhead (~125 µs saved)
+- Only 12 bytes vs ~20-30 bytes per timestamp
+- **No formatting overhead** (~395 µs saved) - binary mode skips ASCII conversion entirely
 - Measured: 1285 measurements/second @ 230400 baud
-- **~2× faster than text mode** due to reduced data size and no formatting
-- Processing speedup (580 µs vs 700 µs baseline) has more impact with 
-  shorter output
+- **~2× faster than text mode** primarily due to eliminating formatting overhead
 
 **Bottleneck Analysis:**
-In text mode @ 115200 baud (at high rates >480 Hz):
-- Processing: 580 µs (32% of cycle)
-- Print formatting: ~200 µs (11% of cycle)
-- **Serial.write() blocking: ~600-1000 µs (33-55% of cycle)** ← **Primary bottleneck**
-  - Waits for 64-byte UART TX buffer to drain
-  - Buffer fullness depends on measurement rate
-  - At 590 Hz, buffer continuously full, system at limit
+
+In text mode @ 115200 baud (at low rates <480 Hz):
+- Event processing: 566 µs (50%)
+- Timestamp formatting: 395 µs (35%)
+- Serial.write() buffer copy: 167 µs (15%)
+- Total: ~1128 µs per event
+
+In text mode @ 115200 baud (at maximum sustainable rate, 587 Hz):
+- Event processing: 566 µs
+- Timestamp formatting: 395 µs
+- **Serial.write() blocking: ~743 µs** (waits for UART buffer to drain)
+- Total cycle: ~1704 µs (limited by transmission time ~1740 µs for ~20 bytes)
+- System is transmission-limited; formatting optimization doesn't improve throughput
 
 In binary mode @ 230400 baud:
-- Processing: 580 µs (~45% of cycle)
-- Serial.write() blocking: ~270 µs (~21% of cycle) - less blocking due to 12 bytes vs ~20-30
-- Better balance allows processing improvements to have more impact
+- Event processing: ~580 µs (read TDC + pack binary)
+- **No formatting:** 0 µs (just copy raw binary values)
+- Serial.write(): Minimal blocking (12 bytes drains quickly)
+- Total: ~600-700 µs per event
+- Maximum sustainable rate: ~1285 Hz
 
-**Conclusion:** Serial.write() blocking waiting for UART buffer space limits text 
-  mode throughput. For maximum throughput, use Binary mode which achieves 1285 
-  measurements/sec @ 230400 baud (12-byte output reduces buffer pressure).
+**Key Findings:**
+
+1. **@ 115200 baud:** Transmission-limited at 587 Hz
+   - Formatting optimization doesn't improve throughput
+   - UART transmission time (~1740 µs) exceeds processing+formatting (961 µs)
+   - Serial.write() blocking absorbs any CPU time savings
+
+2. **@ 230400 baud:** Better balance at 765 Hz (+23% vs pre-optimization)
+   - Transmission time (~870 µs) closer to processing+formatting (961 µs)
+   - Formatting optimization provides real throughput benefit
+   - System approaching CPU-limited region
+
+3. **Binary mode (1285 Hz):** Eliminates formatting overhead entirely
+   - Processing only: ~580 µs
+   - Minimal serial overhead (12 bytes)
+   - ~2× text mode throughput by skipping 395 µs formatting
 
 ## Timestamp Calculation
 The timestamp calculation uses a mixed-radix accumulator approach:
@@ -268,6 +310,53 @@ registers:
 - Real-world processing: 17% faster (700 µs → 580 µs with live signals)
 - Savings: 120 µs per measurement
 - At maximum rate (1400/sec): Frees 168 ms/sec of CPU time
+
+### TOF Calculation Optimization (Implemented October 2025)
+
+The TOF (time-of-flight) calculation in `tdc7200.cpp` includes two 64-bit divisions 
+for calibration processing. One optimization was identified:
+
+**calCount optimization:** Changed from `int64_t` to `uint32_t` for the divisor
+- Enables faster 64-bit/32-bit division instead of 64-bit/64-bit division
+- Safe based on TDC7200 physical limits: With 55 ps LSB and max 40 calibration 
+  periods, calCount maximum is ~1.8 billion (well within uint32_t range of 4.3 billion)
+- Measured savings: ~14 µs in TOF calculation
+- Processing time: 566 µs (includes SPI, TOF calculation, timestamp accumulation)
+
+### Formatting Optimization (Implemented October 2025)
+
+The `print_timestamp()` function in `print.cpp` formats picosecond timestamps to ASCII. 
+On 8-bit AVR, software division is expensive (~500 cycles per operation), making digit 
+extraction the primary bottleneck.
+
+**Optimization approach:** Reciprocal multiplication + lookup table
+
+1. **Reciprocal multiplication for division:**
+   - Replace `x / 10` with `(x * 0xCCCCCCCD) >> 35` (~50 cycles vs ~500 cycles)
+   - Replace `x / 1000` with `(x * 0x10624DD3) >> 38`
+   - Mathematically exact for all 32-bit values - no precision loss
+   - Magic constants: `ceil(2^shift / divisor)`
+
+2. **Two-digit lookup table:**
+   - Pre-computed PROGMEM table for pairs "00"-"99" (200 bytes)
+   - Converts 2 digits via lookup instead of 2 divisions
+
+3. **Optimized to6digits() function:**
+   - Splits 6-digit number into two 3-digit groups via fast division by 1000
+   - Each group: 2-digit lookup + 1 single digit conversion
+   - Uses 4 fast divisions + 2 lookups (called twice per timestamp)
+
+**Performance (measured via GPIO instrumentation):**
+- Formatting time: ~395 µs (down from 680 µs unoptimized)
+- Serial.write() blocking: ~167 µs (at low rates <480 Hz)
+- Total print time: ~571 µs
+- Memory cost: 200 bytes PROGMEM (negligible)
+- No precision loss: mathematically exact output
+
+**Throughput impact:**
+- @ 115200 baud: 587 Hz (transmission-limited - no improvement from formatting optimization)
+- @ 230400 baud: 765 Hz (30% higher than 115200 due to faster transmission)
+- Higher baud rates show greater benefit as transmission time becomes less dominant
 
 ### Performance Bottleneck Analysis
 
@@ -380,17 +469,66 @@ physical channels:
   three-corner-hat compatibility
 
 ## Printing Implementation (print.cpp)
-The printing system is optimized for performance on 8-bit AVR:
 
-- **Avoids Arduino printf:** Lacks 64-bit and floating point support
-- **Uses optimized 32-bit division:** With reciprocal multiplication
-- **Splits 12-digit picosecond fraction:** Into two 6-digit chunks
-- **Single Serial.write() call per line:** For minimum overhead
-- **Configurable options:** Decimal places (0-12) and wraparound digits
-- **Performance:** 
-  - Formatting: ~125 µs per timestamp
-  - Text mode throughput: 585/sec @ 115200 baud, 620/sec @ 230400 baud
-  - Binary mode throughput: 1285/sec @ 230400 baud
+The printing system converts picosecond-precision timestamps to ASCII text efficiently 
+on the 8-bit AVR architecture. Performance is critical as formatting can dominate the 
+total event processing time.
+
+### Implementation Approach
+
+**Core technique:** Avoid Arduino's printf (lacks 64-bit support) and use custom 
+optimized routines:
+
+1. **Split 64-bit picosecond fraction** into two 32-bit 6-digit chunks using reciprocal 
+   multiplication to avoid 64-bit division
+2. **Convert each 6-digit chunk** to ASCII using optimized digit extraction
+3. **Format seconds** with configurable wraparound support
+4. **Single Serial.write() call** per line for minimum overhead
+
+### Key Optimizations (Implemented October 2025)
+
+**1. Reciprocal multiplication for division:**
+- Software division on AVR takes ~500 cycles per operation
+- Replace `x / 10` with `(x * 0xCCCCCCCD) >> 35` (~50 cycles)
+- Replace `x / 1000` with `(x * 0x10624DD3) >> 38` 
+- Mathematically exact for all 32-bit values - no precision loss
+- 10× faster than software division
+
+**2. Two-digit lookup table:**
+- Pre-computed PROGMEM table for digit pairs "00"-"99" (200 bytes)
+- Converts 2 digits with single lookup instead of 2 divisions
+- Used in optimized 6-digit conversion routine
+
+**3. Optimized 6-digit conversion (to6digits):**
+- Splits number into two 3-digit groups via fast division by 1000
+- Each group: 2-digit lookup + 1 single digit
+- Total: 4 fast divisions + 2 lookups vs 6 slow divisions (original)
+- Called twice per timestamp for 12-digit fractional part
+
+### Performance Characteristics
+
+**Measured via GPIO timing instrumentation (wrap=2, 11 places):**
+- Formatting time: ~395 µs
+- Serial.write() blocking: ~167 µs (at low rates <480 Hz)
+- Total print time: ~571 µs per timestamp
+
+**Configurable options:**
+- Decimal places: 0-12 (affects formatting time slightly)
+- Wraparound digits: 0-9 (seconds field width)
+- Channel name display
+
+**Maximum sustainable throughput (text mode, measured):**
+- **587 Hz @ 115200 baud** - transmission-limited (UART drain rate: 87 µs/byte)
+- **765 Hz @ 230400 baud** - better balance between processing and transmission
+
+**Rate-dependent Serial.write() blocking:**
+- At low rates (<480 Hz): Minimal blocking (~167 µs), buffer stays mostly empty
+- At medium rates (480-587 Hz): Blocking increases as buffer fills
+- Above maximum rate: System cannot sustain, buffer continuously full
+
+At high rates, Serial.write() blocks waiting for the 64-byte UART TX buffer to have 
+sufficient space. Buffer drain rate (baud-dependent) determines maximum sustainable 
+throughput when processing + formatting time is less than transmission time.
 
 ## Why Signed for Timestamp64.seconds
 The seconds field uses signed integers for several important reasons:

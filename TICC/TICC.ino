@@ -12,8 +12,8 @@
  * firmware works.
  */
 
-extern const char SW_VERSION[17] = "20251018.";
-extern const char SW_TAG[8] = "RC3";
+extern const char SW_VERSION[17] = "20251020.";
+extern const char SW_TAG[8] = "RC4";
 
 #include <stdint.h>             // define unint16_t, uint32_t
 #include <SPI.h>                // SPI support
@@ -248,6 +248,39 @@ void loop() {
           
           // Update buffer with current timestamp for next calculation
           prev_timestamp[ci] = channels[ci].timestamp;
+        }
+      }
+    }
+
+    // Debug mode: output raw TDC7200 register values plus calculated timestamp
+    if ((config.MODE == Debug) && output_allowed) {
+      for (int ci = 0; ci < 2; ++ci) {
+        if (channels[ci].new_ts_ready && (channels[ci].totalize > 2)) {
+          char line[128];
+          size_t n = 0;
+          
+          // Raw TDC7200 values (6 digits each)
+          n += sprintf(line + n, "%06lu ", (unsigned long)channels[ci].time1Result);
+          n += sprintf(line + n, "%06lu ", (unsigned long)channels[ci].time2Result);
+          n += sprintf(line + n, "%06lu ", (unsigned long)channels[ci].clock1Result);
+          n += sprintf(line + n, "%06lu ", (unsigned long)channels[ci].cal1Result);
+          n += sprintf(line + n, "%06lu ", (unsigned long)channels[ci].cal2Result);
+          
+          // Write the line so far
+          Serial.write((const uint8_t*)line, n);
+          
+          // PICstop (int64_t - use new print_int64 function)
+          print_int64(channels[ci].PICstop, false);
+          Serial.write(' ');
+          
+          // tof (int64_t - use new print_int64 function) 
+          print_int64(channels[ci].tof, false);
+          Serial.write(' ');
+          
+          // timestamp (no WRAP, PLACES=12) with channel name
+          print_timestamp(line, sizeof(line), &channels[ci].timestamp, (char)channels[ci].name, false);
+          
+          channels[ci].new_ts_ready = 0;  // consume
         }
       }
     }

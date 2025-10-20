@@ -185,6 +185,9 @@ void ticc_setup() {
 
   while (!digitalRead(CLIENT_SYNC)) {}               // spin until CLIENT_SYNC asserts
   PICcount = 0;                                      // initialize counter
+  // trigger coarseTimer on falling edge to avoid possible
+  // race condition since catch_stop needs to trigger on rising
+  // edge.  This buys time.
   enableInterrupt(COARSEint, coarseTimer, FALLING);  // enable counter interrupt
   enableInterrupt(STOP_0, catch_stop0, RISING);      // enable interrupt to catch channel A
   enableInterrupt(STOP_1, catch_stop1, RISING);      // enable interrupt to catch channel B

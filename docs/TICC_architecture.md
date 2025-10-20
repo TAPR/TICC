@@ -13,10 +13,10 @@ This firmware version includes performance optimizations applied after
 detailed oscilloscope-based performance analysis. Current measured performance:
 - **Event processing:** 566 µs (from INTB assertion to calculate_timestamp return)
 - **Timestamp formatting:** 395 µs (ASCII conversion for text output)
-- **Measured sustainable throughput (text mode):** 
+- **Measured sustainable throughput:** 
   - 587 measurements/second @ 115200 baud (transmission-limited)
   - 765 measurements/second @ 230400 baud
-  - 1285 measurements/second@ 230400 baud (binary mode
+  - New binary mode: 1285 measurements/second @ 230400 baud 
 
 ## Hardware
 There are two TDC7200 chips on the board, one for each input channel.  
@@ -36,10 +36,10 @@ from the external 10 MHz source.  COARSE_CLOCK provides timing in
 100 us increments and the TDC provides precise timing within those 
 increments.
 
-COARSE_CLOCK fires an interrupt service routine (ISR) on every tick
-that increments a variable called PICcount.  PICcount represents the
-time in 100 us increments since system start, and provides the long-
-term timescale used to construct timestamps
+The falling edge of COARSE_CLOCK fires an interrupt service routine 
+(ISR) on every tick that increments a variable called PICcount.  
+PICcount represents the time in 100 us increments since system start, 
+and provides the long-term timescale used to construct timestamps
 
 The TDC7200 has two measurement modes.  Mode 1 provides measurement of
 time intervals from 12 to 500 nanoseconds, which is not a wide enough
@@ -47,15 +47,21 @@ range for our requirements.  Mode 2 covers the range from 200 ns to
 about 6 ms and is the mode the TICC uses.  To ensure that the STOP signal 
 (derived from COARSE_CLOCK) meets the 200 ns minimum period, a set of
 logic gates blocks the COARSE_CLOCK tick from reaching the STOP pin until 
-at least 300 ns after the START signal.  The leading edge of the gated
-pulse also fires an ISR on the Arduino that copies the PICcount value at 
-that instant into the channel's PICstop variable.  PICstop is combined 
-with the computed time-of-flight (interval from TDC START to STOP signals) 
-as described below.
+at least 300 ns after the START signal.
 
 When the TDC chip sees the STOP pulse, it finishes its counting, performs
 a calibration routine, and asserts its INTB pin to signal that a measurement
-is ready.
+is ready.  The gated COARSE_CLOCK rising edge also fires an ISR on the Arduino 
+that copies the PICcount value at that instant into the channel's PICstop 
+variable.
+
+Note that PICcount increments on the falling edge of COARSE_CLOCK rather
+than the rising edge.  This avoids a possible race condition were PICcount
+to increment at the same instant one of the PICstop ISRs is firing.
+
+The captured PICstop variable is combined with the computed time-of-flight 
+(interval from TDC START to STOP signals) as described below.
+
 
 ### Notes: 
   - The STOP signal latches high until the TDC asserts INTB, so that STOP

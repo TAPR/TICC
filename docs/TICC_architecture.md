@@ -1,7 +1,8 @@
 # TICC Architecture Documentation
 
-**Date:** October 18, 2025  **Version:** 20251018.2  
-**Performance measurements updated with GPIO timing instrumentation.**
+**Date:** October 21, 2025  **Version:** 20251020.RC4  
+**Performance measurements updated with GPIO timing instrumentation.**  
+**Added TDC7200 time dilation correction analysis.**
 
 ## Overview
 This document describes the architecture and implementation details of 
@@ -70,10 +71,112 @@ The captured PICstop variable is combined with the computed time-of-flight
 
 ### TOF Range Constraints
 The result of this is that the time interval (called time of flight, or
-"tof") measured by the TDC chip is always within the range 300 ns to
+"tof") measured by the TDC chip is nominally within the range 300 ns to
 100.3 us (300,000 to 100,300,000 picoseconds) and will fit within a 32
 bit variable.
+
+**Note on observed TOF range:** In practice, the observed tof minimum can be 
+lower than 300 ns (typically ~246 ns). This is not an error but reflects the 
+asynchronous relationship between START and the 100 ns reference clock. The 
+gating logic enforces "3 clock ticks" after START (not "300 ns"), so when 
+START arrives just before a clock edge, the third tick occurs at ~200 ns 
+plus propagation delays, resulting in the observed ~246 ns minimum. The 
+maximum is similarly affected by phase relationships, typically reaching 
+~100.2 µs rather than the theoretical 100.3 µs maximum.
   
+## System Configuration Tweaks
+
+### Propagation Delay and FUDGE0
+These options allow setting two delays (specified in picoseconds)
+on a per-channel basis.  They are primarily intended to allow equalizing
+the delay between the channels.  The two values are added together to
+create a single per-channel correction.  The default is 0 for both values.
+
+### fixed_TIME2
+This is an experimental option that *might* allow lower jitter levels.  The
+TDC7200 generates its time-of-flight from the START to STOP pulse by combining
+three measurements: (a) the period from the START signal until the next tick of
+the 100 ns clocki (TIME1); (b) the number of 100 ns clock periodsi (CLOCK1); and 
+(c) the period from the STOP signal until the next 100 ns tick (TIME2).  The
+TIME1 and TIME2 values are based on the free-running ring oscillator.i
+
+The TICC hardware creates a fixed phase relationship between the 100 ns clock 
+and the STOP signal that is based on the 100 us COARSE clocki -- the delay from
+STOP to the next 100 ns tick is fixed, at least for a given power cycle and
+in practice tends to remain very constant.  However, because the ring oscillator
+is free-running and calibrated after the fact, TIME2 tends to vary over a small
+range.  However, that variation is noise and not a "real" component of the
+timestamp calculation.
+
+The theory is that instead of measuring TIME2 for each measurement, we could
+simply substitute a fixed, reasonable value.  That should reduce the jitter
+in the time-of-flight and consequently the timestamp results.
+
+Setting fixed_TIME2 to a non-zero value will plug that value into the
+calculation in place of the measured TIME2 value.  Tests show that this does
+result in a slightly lower noise floor, but this feature has not been tested
+over a wide range of conditions.  *USE AT YOUR OWN RISK!*
+
+### Time Dilation Correction
+**Background:** The TDC7200 uses an internal ring oscillator (63 inverters in 
+a feedback loop) to measure fractional time within 100 ns clock periods. Each 
+measurement cycle includes calibration to determine the ring oscillator's 
+effective LSB (least significant bit) value. In theory, this calibration should 
+perfectly normalize measurements regardless of environmental variations.
+
+**Observed behavior:** Empirical testing reveals a systematic "sawtooth" pattern 
+in timestamps that correlates with the measurement phase within the 100 µs coarse 
+clock cycle. This sawtooth has a period of ~2 seconds (when measuring drifting 
+sources) and an amplitude of ~100-250 picoseconds.
+
+**Hypothesis - Time-Dependent Ring Oscillator Characteristics:**
+
+The TDC7200 datasheet (Mode 1 specifications) shows that ring oscillator standard 
+deviation increases super-linearly with measurement duration:
+- 200 ns measurement: ~40 ps std dev
+- 1 µs measurement: ~120 ps std dev (3× worse for 5× longer duration)
+
+In Mode 2, TIME1 measurements range from ~6 ns to ~106 ns as the START signal 
+phase sweeps relative to the 100 ns reference clock. The varying TIME1 duration 
+may introduce systematic measurement errors due to:
+
+1. **Non-linear noise characteristics:** Ring oscillator accuracy degrades 
+   non-linearly with measurement duration
+2. **Calibration limitations:** Calibration measures a fixed 2 µs span 
+   (20 periods × 100 ns), while actual TIME1 measurements vary from 6-106 ns. 
+   The ring oscillator may behave differently at these timescales.
+3. **Startup transients:** Short measurements may be affected by ring oscillator 
+   startup effects not captured in the longer calibration cycles
+
+**The time_dilation correction (default: 2500):**
+
+The firmware applies an empirical correction factor called `time_dilation` that 
+adjusts the calibration calculation:
+```cpp
+scale = 1,000,000 - time_dilation;  // 997,500 for default
+calCount = (cal_diff × scale) / denom;
+```
+
+This 0.25% scaling adjustment effectively modifies the computed normLSB and has 
+been empirically determined (across dozens of TDC7200 units) to flatten the 
+sawtooth pattern.
+
+**Testing results (October 2025):**
+- With time_dilation = 0: Strong correlation (-0.53) showing significant sawtooth
+- With time_dilation = 2500: Weak correlation (-0.17) with sawtooth largely eliminated
+- Residual standard deviation improved by 45% with correction enabled
+
+**Note:** While the physical mechanism is not fully understood, the time_dilation 
+correction is consistently effective across all tested hardware and reference 
+sources (including cesium and hydrogen maser references). The value of 2500 
+appears to be optimal for the TDC7200 chips in production TICC units.
+
+**Observed normLSB:** Testing consistently shows effective normLSB ≈ 57 picoseconds 
+across all units, compared to the datasheet typical value of 55 picoseconds. This 
+3.6% difference is uniform across dozens of chips and multiple reference sources, 
+suggesting either batch characteristics or systematic measurement conditions 
+rather than chip-to-chip variation.
+
 ### Falling Edge Trigger Option Removed
 Earlier firmware versions supported the option to change the trigger
 edge from rising to falling.  It turns out that this doesn't work
@@ -449,7 +552,7 @@ See `docs/development_docs/SPI_OPTIMIZATION_FINDINGS.md` and
 |----------|------|----------------------|
 | **PICcount** | int64_t | Coarse counter, 100 µs per tick<br>Overflow: ~2.9×10¹¹ years (effectively never) |
 | **PICstop** | int64_t | Captured PICcount value per event<br>Same range as PICcount |
-| **tof** | int32_t | TDC7200 time-of-flight in picoseconds<br>Hardware range: ~300,000 to 100,300,000 ps<br>Can hold ~2.15 ms of picos |
+| **tof** | int32_t | TDC7200 time-of-flight in picoseconds<br>Observed range: ~246,000 to 100,200,000 ps (see TOF Range Constraints)<br>Can hold ±2.15 billion ps (~2.15 seconds) |
 | **timestamp.seconds** | int32_t | Accumulated integer seconds<br>Overflow: ±68 years from epoch |
 | **timestamp.picos** | uint64_t | Fractional part, 0..(10¹²-1) picoseconds<br>Automatically normalized to stay within one second |
 | **dcount** | int64_t | Delta ticks between events (in `calculate_timestamp`)<br>Theoretical max: 9.22×10¹⁸ ticks (~29 million years)<br>Practical limit: 9.22×10¹³ ticks (~292 years) due to multiplication overflow |

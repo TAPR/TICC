@@ -12,7 +12,7 @@
  * firmware works.
  */
 
-extern const char SW_VERSION[17] = "20251020.";
+extern const char SW_VERSION[17] = "20251023.1";
 extern const char SW_TAG[8] = "RC4";
 
 #include <stdint.h>             // define unint16_t, uint32_t

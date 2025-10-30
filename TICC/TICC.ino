@@ -12,8 +12,8 @@
  * firmware works.
  */
 
-extern const char SW_VERSION[17] = "20251023.1";
-extern const char SW_TAG[8] = "RC4";
+extern const char SW_VERSION[17] = "20251030.1";
+extern const char SW_TAG[8] = "RELEASE";
 
 #include <stdint.h>             // define unint16_t, uint32_t
 #include <SPI.h>                // SPI support

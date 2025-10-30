@@ -59,10 +59,28 @@ def parse_line(line):
     except (ValueError, IndexError):
         return None
 
+def extract_cal_periods(filename):
+    """Extract CAL_PERIODS from startup banner"""
+    cal_periods = 20  # default
+    
+    with open(filename, 'r') as f:
+        for line in f:
+            if 'Cal Periods:' in line:
+                try:
+                    # Extract number after "Cal Periods: "
+                    parts = line.split('Cal Periods:')
+                    if len(parts) > 1:
+                        cal_periods = int(parts[1].strip())
+                        break
+                except (ValueError, IndexError):
+                    pass
+    
+    return cal_periods
+
 def extract_time_dilation_values(filename):
     """Extract time_dilation values from startup banner"""
-    chA_dilation = "?"
-    chB_dilation = "?"
+    chA_dilation = 0  # default
+    chB_dilation = 0  # default
     
     with open(filename, 'r') as f:
         for line in f:
@@ -74,12 +92,13 @@ def extract_time_dilation_values(filename):
                     if ',' in parts:
                         ch0_part = parts.split(',')[0].strip()
                         ch1_part = parts.split(',')[1].strip()
-                        chA_dilation = ch0_part.split('(')[0].strip()
-                        chB_dilation = ch1_part.split('(')[0].strip()
+                        chA_dilation = int(ch0_part.split('(')[0].strip())
+                        chB_dilation = int(ch1_part.split('(')[0].strip())
                     else:
                         # Single value format
-                        chA_dilation = parts.split('(')[0].strip()
-                        chB_dilation = chA_dilation
+                        dilation = int(parts.split('(')[0].strip())
+                        chA_dilation = dilation
+                        chB_dilation = dilation
                 except:
                     pass
                 break
@@ -223,7 +242,7 @@ def calculate_phase_records(data, nominal_rate_hz, detrend_method='linear'):
     
     return data_sorted, phase_diffs, frequency_offset
 
-def detect_sawtooth_pattern(data, phase_diffs):
+def detect_sawtooth_pattern(data, phase_diffs, cal_periods=20):
     """Detect sawtooth pattern by looking for correlation between CLOCK1 and phase jumps"""
     
     # Find CLOCK1 increment points (where clock1 changes)
@@ -266,16 +285,33 @@ def detect_sawtooth_pattern(data, phase_diffs):
     if not phase_jumps_near_clock1 or not phase_jumps_elsewhere:
         return None, None, None, None
     
-    # Calculate correlation as the difference in jump magnitudes
-    # If sawtooth exists, jumps near CLOCK1 should be larger
+    # Calculate sawtooth correlation as the relative difference in phase jump magnitudes
+    # If sawtooth exists, phase jumps near CLOCK1 increments should be larger
     mean_near = np.mean(np.abs(phase_jumps_near_clock1))
     mean_elsewhere = np.mean(np.abs(phase_jumps_elsewhere))
     
-    # Correlation is the relative difference (0 = no difference, 1 = all jumps near CLOCK1)
+    # Correlation is the relative difference (0 = no difference, positive = larger jumps near CLOCK1)
     if mean_elsewhere > 0:
         correlation = (mean_near - mean_elsewhere) / mean_elsewhere
     else:
         correlation = 0.0
+    
+    # Debug: Print some statistics about the sawtooth detection
+    print(f"DEBUG: Phase jumps near CLOCK1 - count: {len(phase_jumps_near_clock1)}, mean abs: {mean_near:.2e}")
+    print(f"DEBUG: Phase jumps elsewhere - count: {len(phase_jumps_elsewhere)}, mean abs: {mean_elsewhere:.2e}")
+    print(f"DEBUG: Correlation: {correlation:.6f}")
+    
+    # Debug: Print CAL1/CAL2 values for normLSB calculation
+    if len(data) > 0:
+        CLOCK_PERIOD_SEC = 1e-7  # 100ns in seconds
+        cal1_vals = [d['cal1'] for d in data]
+        cal2_vals = [d['cal2'] for d in data]
+        cal1_mean = sum(cal1_vals) / len(cal1_vals)
+        cal2_mean = sum(cal2_vals) / len(cal2_vals)
+        cal_diff_mean = cal2_mean - cal1_mean
+        print(f"DEBUG CAL: CAL1_mean={cal1_mean:.1f}, CAL2_mean={cal2_mean:.1f}, CAL_diff={cal_diff_mean:.1f}")
+        print(f"DEBUG CAL: cal_periods={cal_periods}, calCount={cal_diff_mean/(cal_periods-1):.1f}")
+        print(f"DEBUG CAL: normLSB_base={CLOCK_PERIOD_SEC/(cal_diff_mean/(cal_periods-1))*1e12:.6f} ps")
     
     # Calculate sawtooth amplitude (std dev of phase jumps near CLOCK1 in picoseconds)
     # Filter out extreme outliers that might skew the calculation
@@ -345,6 +381,209 @@ def analyze_time1_distribution(data):
                 pct = 100.0 * remaining_count / len(time1_vals)
                 print(f"  {start_val:>4}-{end_val:<4}: {bar:<50} {remaining_count:>5} ({pct:>4.1f}%)")
 
+def analyze_time1_range_analysis_silent(data_sorted, cal_periods=20, time_dilation=0):
+    """Analyze TIME1 range and normLSB silently (no output)"""
+    
+    if not data_sorted:
+        return None
+    
+    # Extract TIME1, CAL1, CAL2 values
+    time1_vals = [d['time1'] for d in data_sorted]
+    cal1_vals = [d['cal1'] for d in data_sorted]
+    cal2_vals = [d['cal2'] for d in data_sorted]
+    
+    # Calculate normLSB for each measurement using TDC7200 datasheet formula
+    # normLSB = CLOCKperiod / calCount
+    # where calCount = (CALIBRATION2 - CALIBRATION1) / (CALIBRATION2_PERIODS - 1)
+    # Then apply time_dilation scaling: normLSB_effective = normLSB_base * scale / 1000000
+    
+    CLOCK_PERIOD_SEC = 1e-7  # 100ns in seconds
+    denom = cal_periods - 1
+    scale = 1000000 - time_dilation  # Apply time_dilation correction
+    
+    normLSB_vals = []
+    normLSB_base_vals = []  # Store unscaled values too
+    
+    for i in range(len(data_sorted)):
+        cal_diff = cal2_vals[i] - cal1_vals[i]
+        calCount = cal_diff / denom  # Simple division as per datasheet
+        if calCount < 1:
+            calCount = 1
+        
+        # normLSB = CLOCK_PERIOD / calCount (from TDC7200 datasheet)
+        normLSB_base = CLOCK_PERIOD_SEC / calCount
+        normLSB_base_vals.append(normLSB_base)
+        
+        # Apply time_dilation scaling (same as TDC7200 code)
+        normLSB_effective = normLSB_base * scale / 1000000
+        
+        normLSB_vals.append(normLSB_effective)
+        
+    
+    # Calculate TIME1 statistics
+    time1_min = min(time1_vals)
+    time1_max = max(time1_vals)
+    time1_range = time1_max - time1_min
+    
+    # Calculate normLSB statistics
+    normLSB_min = min(normLSB_vals)
+    normLSB_max = max(normLSB_vals)
+    normLSB_mean = sum(normLSB_vals) / len(normLSB_vals)
+    normLSB_std = (sum((x - normLSB_mean)**2 for x in normLSB_vals) / len(normLSB_vals))**0.5
+    
+    normLSB_base_min = min(normLSB_base_vals)
+    normLSB_base_max = max(normLSB_base_vals)
+    normLSB_base_mean = sum(normLSB_base_vals) / len(normLSB_base_vals)
+    normLSB_base_std = (sum((x - normLSB_base_mean)**2 for x in normLSB_base_vals) / len(normLSB_base_vals))**0.5
+    
+    # Convert normLSB from seconds to picoseconds for display
+    normLSB_mean_ps = normLSB_mean * 1e12
+    normLSB_min_ps = normLSB_min * 1e12
+    normLSB_max_ps = normLSB_max * 1e12
+    normLSB_std_ps = normLSB_std * 1e12
+    
+    normLSB_base_mean_ps = normLSB_base_mean * 1e12
+    normLSB_base_min_ps = normLSB_base_min * 1e12
+    normLSB_base_max_ps = normLSB_base_max * 1e12
+    normLSB_base_std_ps = normLSB_base_std * 1e12
+    
+    # Convert TIME1 range to time using mean normLSB (in seconds)
+    time1_range_sec = time1_range * normLSB_mean
+    time1_range_ns = time1_range_sec * 1e9
+    
+    # Calculate coverage of 100ns range
+    coverage_percent = (time1_range_ns / 100.0) * 100.0
+    gap_ns = 100.0 - time1_range_ns
+    
+    # Convert TIME1 min/max to time using mean normLSB (in seconds)
+    time1_min_sec = time1_min * normLSB_mean
+    time1_max_sec = time1_max * normLSB_mean
+    time1_min_ns = time1_min_sec * 1e9
+    time1_max_ns = time1_max_sec * 1e9
+    
+    # Return data for combined analysis
+    return {
+        'time1_min': time1_min,
+        'time1_max': time1_max,
+        'time1_min_ns': time1_min_ns,
+        'time1_max_ns': time1_max_ns,
+        'coverage_percent': coverage_percent,
+        'gap_ns': gap_ns,
+        'normLSB_mean': normLSB_mean_ps,
+        'normLSB_std': normLSB_std_ps,
+        'normLSB_min': normLSB_min_ps,
+        'normLSB_max': normLSB_max_ps,
+        'normLSB_base_mean': normLSB_base_mean_ps,
+        'normLSB_base_std': normLSB_base_std_ps,
+        'normLSB_base_min': normLSB_base_min_ps,
+        'normLSB_base_max': normLSB_base_max_ps
+    }
+
+def analyze_time1_range_analysis(data_sorted, cal_periods=20, time_dilation=0):
+    """Analyze TIME1 range and normLSB to see how well it covers 100ns"""
+    
+    if not data_sorted:
+        return None
+    
+    print(f"\nTIME1 Range Analysis:")
+    print(f"-" * 60)
+    
+    # Extract TIME1, CAL1, CAL2 values
+    time1_vals = [d['time1'] for d in data_sorted]
+    cal1_vals = [d['cal1'] for d in data_sorted]
+    cal2_vals = [d['cal2'] for d in data_sorted]
+    
+    # Calculate normLSB for each measurement
+    # normLSB = (CLOCK_PERIOD * 10^12) / calCount
+    # where calCount = ((cal2 - cal1) * scale) / (CAL_PERIODS - 1)
+    # and scale = 1000000 - time_dilation
+    
+    CLOCK_PERIOD = 100000  # 100ns in picoseconds
+    scale = 1000000 - time_dilation  # Apply time_dilation correction
+    denom = cal_periods - 1
+    
+    normLSB_vals = []
+    for i in range(len(data_sorted)):
+        cal_diff = cal2_vals[i] - cal1_vals[i]
+        cal_prod = cal_diff * scale
+        calCount = int((cal_prod + denom / 2) / denom)  # rounded division
+        if calCount < 1:
+            calCount = 1
+        
+        # normLSB = CLOCK_PERIOD / calCount (from TDC7200 datasheet)
+        # CLOCK_PERIOD is 100ns = 1e-7 seconds
+        CLOCK_PERIOD_SEC = 1e-7  # 100ns in seconds
+        normLSB = CLOCK_PERIOD_SEC / calCount
+        normLSB_vals.append(normLSB)
+    
+    # Calculate TIME1 statistics
+    time1_min = min(time1_vals)
+    time1_max = max(time1_vals)
+    time1_range = time1_max - time1_min
+    
+    # Calculate normLSB statistics
+    normLSB_min = min(normLSB_vals)
+    normLSB_max = max(normLSB_vals)
+    normLSB_mean = sum(normLSB_vals) / len(normLSB_vals)
+    normLSB_std = (sum((x - normLSB_mean)**2 for x in normLSB_vals) / len(normLSB_vals))**0.5
+    
+    normLSB_base_min = min(normLSB_base_vals)
+    normLSB_base_max = max(normLSB_base_vals)
+    normLSB_base_mean = sum(normLSB_base_vals) / len(normLSB_base_vals)
+    normLSB_base_std = (sum((x - normLSB_base_mean)**2 for x in normLSB_base_vals) / len(normLSB_base_vals))**0.5
+    
+    # Convert normLSB from seconds to picoseconds for display
+    normLSB_mean_ps = normLSB_mean * 1e12
+    normLSB_min_ps = normLSB_min * 1e12
+    normLSB_max_ps = normLSB_max * 1e12
+    normLSB_std_ps = normLSB_std * 1e12
+    
+    normLSB_base_mean_ps = normLSB_base_mean * 1e12
+    normLSB_base_min_ps = normLSB_base_min * 1e12
+    normLSB_base_max_ps = normLSB_base_max * 1e12
+    normLSB_base_std_ps = normLSB_base_std * 1e12
+    
+    # Convert TIME1 range to time using mean normLSB (in seconds)
+    time1_range_sec = time1_range * normLSB_mean
+    time1_range_ns = time1_range_sec * 1e9
+    
+    # Calculate coverage of 100ns range
+    coverage_percent = (time1_range_ns / 100.0) * 100.0
+    gap_ns = 100.0 - time1_range_ns
+    
+    # Convert TIME1 min/max to time using mean normLSB (in seconds)
+    time1_min_sec = time1_min * normLSB_mean
+    time1_max_sec = time1_max * normLSB_mean
+    time1_min_ns = time1_min_sec * 1e9
+    time1_max_ns = time1_max_sec * 1e9
+    
+    print(f"TIME1 Statistics:")
+    print(f"  Min TIME1: {time1_min} counts ({time1_min_ns:.3f} ns)")
+    print(f"  Max TIME1: {time1_max} counts ({time1_max_ns:.3f} ns)")
+    print(f"  TIME1 Range: {time1_range} counts")
+    print(f"  TIME1 Range: {time1_range_ns:.3f} ns")
+    print(f"  Coverage: {coverage_percent:.1f}% of 100ns range")
+    print(f"  Gap: {gap_ns:.3f} ns")
+    
+    print(f"\nnormLSB Statistics:")
+    print(f"  Min normLSB: {normLSB_min_ps:.3f} ps")
+    print(f"  Max normLSB: {normLSB_max_ps:.3f} ps")
+    print(f"  Mean normLSB: {normLSB_mean_ps:.3f} ps")
+    print(f"  Std normLSB: {normLSB_std_ps:.3f} ps")
+    print(f"  Range: {normLSB_max_ps - normLSB_min_ps:.3f} ps")
+    
+    # Return data for combined analysis
+    return {
+        'time1_min': time1_min,
+        'time1_max': time1_max,
+        'time1_min_ns': time1_min_ns,
+        'time1_max_ns': time1_max_ns,
+        'coverage_percent': coverage_percent,
+        'gap_ns': gap_ns,
+        'normLSB_mean': normLSB_mean_ps,
+        'normLSB_std': normLSB_std_ps
+    }
+
 def analyze_time2_distribution(data):
     """Analyze TIME2 distribution with detailed analysis of narrow range"""
     
@@ -372,7 +611,40 @@ def analyze_time2_distribution(data):
                 pct = 100.0 * hist[i] / len(time2_vals)
                 print(f"  {int(bin_edges[i]):>4}-{int(bin_edges[i+1]):<4}: {bar:<50} {hist[i]:>5} ({pct:>4.1f}%)")
 
-def analyze_channel(data, channel_name, time_dilation, nominal_rate_hz, show_histograms=False, detrend_method='linear'):
+def analyze_channel_silent(data, time_dilation, nominal_rate_hz, detrend_method='linear', cal_periods=20):
+    """Analyze a single channel silently (no output)"""
+    
+    # Convert to phase records
+    data_sorted, phase_diffs, frequency_offset = calculate_phase_records(data, nominal_rate_hz, detrend_method)
+    
+    # Detect sawtooth pattern
+    correlation, sawtooth_amplitude, rollover_count, recommended_correction = detect_sawtooth_pattern(data_sorted, phase_diffs, cal_periods)
+    
+    if correlation is None:
+        correlation = 0
+        sawtooth_amplitude = 0
+        recommended_correction = 0
+        rollover_count = 0
+    
+    # TIME1 range analysis
+    time1_data = analyze_time1_range_analysis_silent(data_sorted, cal_periods, time_dilation)
+    
+    # Prepare return data
+    result = {
+        'correlation': correlation,
+        'sawtooth_amplitude': sawtooth_amplitude,
+        'recommended_correction': recommended_correction,
+        'frequency_offset': frequency_offset,
+        'rollover_count': rollover_count
+    }
+    
+    # Add TIME1 range data if available
+    if time1_data:
+        result.update(time1_data)
+    
+    return result
+
+def analyze_channel(data, channel_name, time_dilation, nominal_rate_hz, show_histograms=False, detrend_method='linear', cal_periods=20):
     """Analyze a single channel"""
     
     print(f"\n{channel_name} Analysis (time_dilation = {time_dilation}):")
@@ -388,7 +660,7 @@ def analyze_channel(data, channel_name, time_dilation, nominal_rate_hz, show_his
     print(f"Relative frequency offset: {frequency_offset / nominal_rate_hz:.2e}")
     
     # Detect sawtooth pattern
-    correlation, sawtooth_amplitude, rollover_count, recommended_correction = detect_sawtooth_pattern(data_sorted, phase_diffs)
+    correlation, sawtooth_amplitude, rollover_count, recommended_correction = detect_sawtooth_pattern(data_sorted, phase_diffs, cal_periods)
     
     if correlation is not None:
         print(f"\nSawtooth Detection:")
@@ -417,7 +689,128 @@ def analyze_channel(data, channel_name, time_dilation, nominal_rate_hz, show_his
         analyze_time1_distribution(data_sorted)
         analyze_time2_distribution(data_sorted)
     
-    return correlation, sawtooth_amplitude, recommended_correction
+    # Always show TIME1 range analysis
+    time1_data = analyze_time1_range_analysis(data_sorted, cal_periods, time_dilation)
+    
+    # Prepare return data
+    result = {
+        'correlation': correlation,
+        'sawtooth_amplitude': sawtooth_amplitude,
+        'recommended_correction': recommended_correction,
+        'frequency_offset': frequency_offset,
+        'rollover_count': rollover_count if correlation is not None else 0
+    }
+    
+    # Add TIME1 range data if available
+    if time1_data:
+        result.update(time1_data)
+    
+    return result
+
+def show_combined_analysis(results, chA_dilation, chB_dilation, nominal_rate_hz, show_histograms, detrend_method, cal_periods):
+    """Show combined analysis for both channels side by side"""
+    
+    print(f"\nCombined Channel Analysis:")
+    print(f"=" * 80)
+    
+    # Frequency Analysis
+    print(f"\nFrequency Analysis:")
+    print(f"-" * 80)
+    print(f"{'Metric':<30} {'Channel A':<20} {'Channel B':<20}")
+    print(f"{'-' * 30} {'-' * 20} {'-' * 20}")
+    
+    chA_freq_offset = results['A'].get('frequency_offset', 0)
+    chB_freq_offset = results['B'].get('frequency_offset', 0)
+    
+    print(f"{'Nominal rate (per channel)':<30} {nominal_rate_hz:.9f} Hz{'':<10} {nominal_rate_hz:.9f} Hz")
+    print(f"{'Frequency offset':<30} {chA_freq_offset:.9f} Hz{'':<10} {chB_freq_offset:.9f} Hz")
+    print(f"{'Relative frequency offset':<30} {chA_freq_offset/nominal_rate_hz:.2e}{'':<10} {chB_freq_offset/nominal_rate_hz:.2e}")
+    
+    # Sawtooth Detection
+    print(f"\nSawtooth Detection:")
+    print(f"-" * 80)
+    print(f"{'Metric':<30} {'Channel A':<20} {'Channel B':<20}")
+    print(f"{'-' * 30} {'-' * 20} {'-' * 20}")
+    
+    chA_correlation = results['A'].get('correlation', 0)
+    chB_correlation = results['B'].get('correlation', 0)
+    chA_amplitude = results['A'].get('sawtooth_amplitude', 0)
+    chB_amplitude = results['B'].get('sawtooth_amplitude', 0)
+    chA_rollovers = results['A'].get('rollover_count', 0)
+    chB_rollovers = results['B'].get('rollover_count', 0)
+    
+    print(f"{'CLOCK1 rollovers detected':<30} {chA_rollovers:<20} {chB_rollovers}")
+    print(f"{'Phase jump correlation':<30} {chA_correlation:.4f}{'':<16} {chB_correlation:.4f}")
+    print(f"{'Sawtooth amplitude (std dev)':<30} {chA_amplitude:.2f} ps{'':<13} {chB_amplitude:.2f} ps")
+    
+    # Status
+    chA_status = "STRONG sawtooth pattern detected" if chA_amplitude > 50 and abs(chA_correlation) > 0.1 else "Weak or no sawtooth pattern"
+    chB_status = "STRONG sawtooth pattern detected" if chB_amplitude > 50 and abs(chB_correlation) > 0.1 else "Weak or no sawtooth pattern"
+    print(f"{'Status':<30} {chA_status:<20} {chB_status}")
+    
+    # TIME1 Range Analysis (if we have the data)
+    if 'time1_min' in results['A'] and 'time1_min' in results['B']:
+        print(f"\nTIME1 Range Analysis (with time_dilation applied):")
+        print(f"-" * 80)
+        print(f"{'Metric':<30} {'Channel A':<20} {'Channel B':<20}")
+        print(f"{'-' * 30} {'-' * 20} {'-' * 20}")
+        
+        chA_time1_min = results['A']['time1_min']
+        chB_time1_min = results['B']['time1_min']
+        chA_time1_max = results['A']['time1_max']
+        chB_time1_max = results['B']['time1_max']
+        chA_time1_min_ns = results['A']['time1_min_ns']
+        chB_time1_min_ns = results['B']['time1_min_ns']
+        chA_time1_max_ns = results['A']['time1_max_ns']
+        chB_time1_max_ns = results['B']['time1_max_ns']
+        chA_coverage = results['A']['coverage_percent']
+        chB_coverage = results['B']['coverage_percent']
+        chA_gap = results['A']['gap_ns']
+        chB_gap = results['B']['gap_ns']
+        
+        print(f"{'Min TIME1 (counts)':<30} {chA_time1_min:<20} {chB_time1_min}")
+        print(f"{'Max TIME1 (counts)':<30} {chA_time1_max:<20} {chB_time1_max}")
+        print(f"{'Raw TIME1 range (counts)':<30} {chA_time1_max - chA_time1_min:<20} {chB_time1_max - chB_time1_min}")
+        print(f"{'Min TIME1 (ns)':<30} {chA_time1_min_ns:.3f}{'':<16} {chB_time1_min_ns:.3f}")
+        print(f"{'Max TIME1 (ns)':<30} {chA_time1_max_ns:.3f}{'':<16} {chB_time1_max_ns:.3f}")
+        print(f"{'TIME1 range (ns)':<30} {chA_time1_max_ns - chA_time1_min_ns:.3f}{'':<16} {chB_time1_max_ns - chB_time1_min_ns:.3f}")
+        print(f"{'Coverage of 100ns range':<30} {chA_coverage:.1f}%{'':<17} {chB_coverage:.1f}%")
+        print(f"{'Gap (ns)':<30} {chA_gap:.3f}{'':<16} {chB_gap:.3f}")
+        
+        # normLSB Statistics
+        chA_normLSB_mean = results['A']['normLSB_mean']
+        chB_normLSB_mean = results['B']['normLSB_mean']
+        chA_normLSB_std = results['A']['normLSB_std']
+        chB_normLSB_std = results['B']['normLSB_std']
+        chA_normLSB_min = results['A']['normLSB_min']
+        chB_normLSB_min = results['B']['normLSB_min']
+        chA_normLSB_max = results['A']['normLSB_max']
+        chB_normLSB_max = results['B']['normLSB_max']
+        chA_normLSB_base_mean = results['A'].get('normLSB_base_mean', chA_normLSB_mean)
+        chB_normLSB_base_mean = results['B'].get('normLSB_base_mean', chB_normLSB_mean)
+        chA_normLSB_base_std = results['A'].get('normLSB_base_std', chA_normLSB_std)
+        chB_normLSB_base_std = results['B'].get('normLSB_base_std', chB_normLSB_std)
+        chA_normLSB_base_min = results['A'].get('normLSB_base_min', chA_normLSB_min)
+        chB_normLSB_base_min = results['B'].get('normLSB_base_min', chB_normLSB_min)
+        chA_normLSB_base_max = results['A'].get('normLSB_base_max', chA_normLSB_max)
+        chB_normLSB_base_max = results['B'].get('normLSB_base_max', chB_normLSB_max)
+        
+        print(f"\nnormLSB Statistics:")
+        print(f"-" * 80)
+        print(f"{'Metric':<30} {'Channel A':<20} {'Channel B':<20}")
+        print(f"{'-' * 30} {'-' * 20} {'-' * 20}")
+        print(f"{'Raw Values (datasheet formula):':<30}")
+        print(f"{'  Min normLSB (ps)':<30} {chA_normLSB_base_min:.6f}{'':<13} {chB_normLSB_base_min:.6f}")
+        print(f"{'  Max normLSB (ps)':<30} {chA_normLSB_base_max:.6f}{'':<13} {chB_normLSB_base_max:.6f}")
+        print(f"{'  Mean normLSB (ps)':<30} {chA_normLSB_base_mean:.6f}{'':<13} {chB_normLSB_base_mean:.6f}")
+        print(f"{'  Std normLSB (ps)':<30} {chA_normLSB_base_std:.6f}{'':<13} {chB_normLSB_base_std:.6f}")
+        print(f"{'  Range (ps)':<30} {chA_normLSB_base_max - chA_normLSB_base_min:.6f}{'':<13} {chB_normLSB_base_max - chB_normLSB_base_min:.6f}")
+        print(f"{'With time_dilation applied:':<30}")
+        print(f"{'  Min normLSB (ps)':<30} {chA_normLSB_min:.6f}{'':<13} {chB_normLSB_min:.6f}")
+        print(f"{'  Max normLSB (ps)':<30} {chA_normLSB_max:.6f}{'':<13} {chB_normLSB_max:.6f}")
+        print(f"{'  Mean normLSB (ps)':<30} {chA_normLSB_mean:.6f}{'':<13} {chB_normLSB_mean:.6f}")
+        print(f"{'  Std normLSB (ps)':<30} {chA_normLSB_std:.6f}{'':<13} {chB_normLSB_std:.6f}")
+        print(f"{'  Range (ps)':<30} {chA_normLSB_max - chA_normLSB_min:.6f}{'':<13} {chB_normLSB_max - chB_normLSB_min:.6f}")
 
 def analyze_file(filename, nominal_rate_hz, show_histograms=False, show_plot=False, detrend_method='linear'):
     """Main analysis function"""
@@ -426,8 +819,9 @@ def analyze_file(filename, nominal_rate_hz, show_histograms=False, show_plot=Fal
         print(f"Error: File '{filename}' not found")
         sys.exit(1)
     
-    # Extract time_dilation values from startup banner
+    # Extract time_dilation values and CAL_PERIODS from startup banner
     chA_dilation, chB_dilation = extract_time_dilation_values(filename)
+    cal_periods = extract_cal_periods(filename)
     
     # Read data, skip garbage before startup banner
     all_data = []
@@ -461,22 +855,52 @@ def analyze_file(filename, nominal_rate_hz, show_histograms=False, show_plot=Fal
     print(f"Nominal Rate: {nominal_rate_hz} Hz")
     print()
     
-    # Analyze each channel
+    # Analyze each channel (silently, just collect data)
     results = {}
     
     if chA_data:
-        results['A'] = analyze_channel(chA_data, "Channel A", chA_dilation, nominal_rate_hz, show_histograms, detrend_method)
+        results['A'] = analyze_channel_silent(chA_data, chA_dilation, nominal_rate_hz, detrend_method, cal_periods)
     
     if chB_data:
-        results['B'] = analyze_channel(chB_data, "Channel B", chB_dilation, nominal_rate_hz, show_histograms, detrend_method)
+        results['B'] = analyze_channel_silent(chB_data, chB_dilation, nominal_rate_hz, detrend_method, cal_periods)
+    
+    # Show combined analysis if both channels present
+    if len(results) == 2:
+        show_combined_analysis(results, chA_dilation, chB_dilation, nominal_rate_hz, show_histograms, detrend_method, cal_periods)
     
     # Summary comparison if both channels present
     if len(results) == 2:
+        # Debug: Show the actual time_dilation values being used
+        print(f"\nDebug Information:")
+        print(f"-" * 80)
+        print(f"{'Metric':<30} {'Channel A':<20} {'Channel B':<20}")
+        print(f"{'-' * 30} {'-' * 20} {'-' * 20}")
+        print(f"{'time_dilation setting':<30} {chA_dilation:<20} {chB_dilation}")
+        
+        # Get TIME1 range data
+        chA_time1_min_ns = results['A'].get('time1_min_ns', 0)
+        chA_time1_max_ns = results['A'].get('time1_max_ns', 0)
+        chB_time1_min_ns = results['B'].get('time1_min_ns', 0)
+        chB_time1_max_ns = results['B'].get('time1_max_ns', 0)
+        chA_coverage = results['A'].get('coverage_percent', 0)
+        chB_coverage = results['B'].get('coverage_percent', 0)
+        chA_correlation = results['A'].get('correlation', 0)
+        chB_correlation = results['B'].get('correlation', 0)
+        
+        print(f"{'TIME1 range (ns)':<30} {chA_time1_max_ns - chA_time1_min_ns:.3f}{'':<16} {chB_time1_max_ns - chB_time1_min_ns:.3f}")
+        print(f"{'Expected 100ns coverage':<30} {'100.000':<20} {'100.000'}")
+        print(f"{'Coverage %':<30} {chA_coverage:.1f}%{'':<17} {chB_coverage:.1f}%")
+        print(f"{'Sawtooth correlation':<30} {chA_correlation:.4f}{'':<16} {chB_correlation:.4f}")
+        
         print(f"\nChannel Comparison Summary:")
         print(f"=" * 60)
         
-        chA_corr, chA_amp, chA_rec = results['A']
-        chB_corr, chB_amp, chB_rec = results['B']
+        chA_corr = results['A'].get('correlation', 0)
+        chA_amp = results['A'].get('sawtooth_amplitude', 0)
+        chA_rec = results['A'].get('recommended_correction', 0)
+        chB_corr = results['B'].get('correlation', 0)
+        chB_amp = results['B'].get('sawtooth_amplitude', 0)
+        chB_rec = results['B'].get('recommended_correction', 0)
         
         chA_corr_str = f"{chA_corr:.3f}" if chA_corr is not None else "N/A"
         chB_corr_str = f"{chB_corr:.3f}" if chB_corr is not None else "N/A"

@@ -39,8 +39,8 @@ void calculate_timestamp(tdc7200Channel* channel, int64_t pictick_ps) {
 
   // Calculate delta in picoseconds
   int64_t delta_ps = dcount * pictick_ps
-                   - (int64_t)channel->tof
-                   + (int64_t)channel->last_tof;
+                   - channel->tof
+                   + channel->last_tof;
 
   // Mixed-radix accumulation with automatic carry/borrow
   if (delta_ps >= 0) {

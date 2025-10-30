@@ -241,20 +241,12 @@ int64_t tdc7200Channel::read() {
   }
 
   // Final tof calculation
-  int64_t tof64 = (int64_t)tof_base + ring_ps;
+  tof = (int64_t)tof_base + ring_ps;
 
-  // Clamp to documented bounds
-  //if (tof64 < 300000LL) tof64 = 300000LL;
-  //if (tof64 > 100300000LL) tof64 = 100300000LL;
-
-  // Store result
-  tof = (int32_t)tof64;
-  optimized_tof = (int32_t)tof64;  // Keep for compatibility if needed
-  
-  // Ack all interrupts (measured: ~57 µs for read + write SPI transactions)
+   // Ack all interrupts (measured: ~57 µs for read + write SPI transactions)
   tdc_ack_int();
   
-  return (int64_t)tof;
+  return tof;
 }
 
 

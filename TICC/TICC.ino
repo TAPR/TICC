@@ -15,7 +15,7 @@
 extern const char SW_VERSION[17] = "20251031.1";
 extern const char SW_TAG[8] = "RELEASE";
 
-#include <stdint.h>             // define unint16_t, uint32_t
+#include <stdint.h>             // define uint16_t, uint32_t
 #include <SPI.h>                // SPI support
 #include <EEPROM.h>             // eeprom library
 #include "EnableInterrupt.h"    // use faster interrupt library

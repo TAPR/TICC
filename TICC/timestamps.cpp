@@ -132,8 +132,8 @@ Timestamp64 timestamp_difference(const Timestamp64* a, const Timestamp64* b) {
   if (positive) { hi = a; lo = b; }
   else          { hi = b; lo = a; }
   
-  // Calculate unsigned difference hi - lo
-  uint32_t sec = hi->seconds - lo->seconds;
+  // Calculate unsigned difference hi - lo (hi >= lo in timestamp ordering)
+  int32_t sec = hi->seconds - lo->seconds;
   uint64_t pico;
   
   if (hi->picos >= lo->picos) {
@@ -149,10 +149,10 @@ Timestamp64 timestamp_difference(const Timestamp64* a, const Timestamp64* b) {
   } else {
     // negate (sec, pico) in canonical form
     if (pico == 0) {
-      result.seconds = (uint32_t)(-(int32_t)sec);
+      result.seconds = -sec;
       result.picos = 0;
     } else {
-      result.seconds = (uint32_t)(-(int32_t)sec - 1);
+      result.seconds = -sec - 1;
       result.picos = PS_PER_SEC - pico;
     }
   }

@@ -128,6 +128,15 @@ const char msg_ok_baud_was[]   PROGMEM = "OK -- Baud rate was ";
 const char msg_ok_baud_now[]   PROGMEM = "; now ";
 const char msg_ok_baud_already[] PROGMEM = "OK -- Baud rate is already ";
 const char msg_ok_clock[]      PROGMEM = "OK -- Clock %s -> %s";
+const char msg_ok_wrap[]       PROGMEM = "OK -- Wrap Digits %d -> %d";
+const char msg_ok_places[]     PROGMEM = "OK -- Decimal Places %d -> %d";
+const char msg_ok_sync[]       PROGMEM = "OK -- Sync Mode %c -> %c";
+const char msg_ok_pictick[]    PROGMEM = "OK -- Coarse Tick %s -> %s";
+const char msg_ok_edge[]       PROGMEM = "OK -- Start Edge %c%c -> %c%c";
+const char msg_ok_names[]      PROGMEM = "OK -- Channel Names %c/%c -> %c/%c";
+const char msg_ok_names_with_3ch[] PROGMEM = "OK -- Channel Names %c/%c (%c) -> %c/%c (%c)";
+const char msg_ok_names_3ch_new[] PROGMEM = "OK -- Channel Names %c/%c -> %c/%c/%c";
+const char msg_ok_names_3ch[]  PROGMEM = "OK -- Channel Names %c/%c/%c -> %c/%c/%c";
 const char msg_poll_none[]     PROGMEM = "none)";
 
 // Error messages

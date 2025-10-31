@@ -12,7 +12,7 @@
  * firmware works.
  */
 
-extern const char SW_VERSION[17] = "20251030.1";
+extern const char SW_VERSION[17] = "20251031.1";
 extern const char SW_TAG[8] = "RELEASE";
 
 #include <stdint.h>             // define unint16_t, uint32_t
@@ -62,7 +62,6 @@ void setup() {}
 /****************************************************************
  * Interrupt Service Routines
  ****************************************************************/
-
 // ISR for timer. Capture PICcount on each channel's STOP 0->1 transition.
 void coarseTimer() {
   PICcount++;
@@ -77,7 +76,9 @@ void catch_stop1() {
   channels[1].PICstop = PICcount;
 }
 
-/****************************************************************/
+/****************************************************************
+ * main function
+ ****************************************************************/
 void loop() {
   ticc_setup();  // initialize and optionally go to config
   
@@ -89,9 +90,12 @@ void loop() {
     return;  // Exit loop to trigger fresh ticc_setup() call
   }
   
-  while (1) {    // this is the actual loop!
+  /****************************************************************
+   * processing loop starts here!
+   ****************************************************************/
+  while (1) {
 
-    // Single serial read for both config and poll gating (optimization)
+    // Single serial read for both config and poll
     bool output_allowed = (!config.POLL_CHAR);  // If no poll char set, always allow output
     
     if (Serial.available() > 0) {
@@ -120,10 +124,8 @@ void loop() {
     bool ready_ch0 = (digitalRead(channels[0].INTB) == 0);
     bool ready_ch1 = (digitalRead(channels[1].INTB) == 0);
     
+    // Both channels ready - process both simultaneously for better ordering
     if (ready_ch0 && ready_ch1) {
-      // Both channels ready - process both simultaneously for better ordering
-      
-      // Turn on both LEDs
       SET_LED_0; SET_EXT_LED_0;
       SET_LED_1; SET_EXT_LED_1;
       
@@ -140,13 +142,11 @@ void loop() {
         calculate_timestamp(&channels[0], PICTICK_PS);
         calculate_timestamp(&channels[1], PICTICK_PS);
         
-        // Turn off both LEDs
         CLR_LED_0; CLR_EXT_LED_0;
         CLR_LED_1; CLR_EXT_LED_1;
       }
       
     } else if (ready_ch0) {
-      // Only channel 0 ready
       SET_LED_0; SET_EXT_LED_0;
       
       if (config.MODE == Binary) {
@@ -166,7 +166,6 @@ void loop() {
       }
       
     } else if (ready_ch1) {
-      // Only channel 1 ready
       SET_LED_1; SET_EXT_LED_1;
       
       if (config.MODE == Binary) {
@@ -186,25 +185,22 @@ void loop() {
       }
     }
 
-    // Early exit optimization: skip output processing if no new timestamps are ready
-    // or if both channels have invalid first timestamps (totalize <= 1)
+    // Skip output processing if no new timestamps are ready
     if (!channels[0].new_ts_ready && !channels[1].new_ts_ready) {
-      continue; // Skip all output processing
+      continue; // skip output processing
     }
     
-    // Skip invalid first timestamp(s) - at least one channel must have totalize > 1
+    // or if both channels have invalid first timestamps (totalize <= 1)
     if ((channels[0].totalize <= 1) && (channels[1].totalize <= 1)) {
-      // Both channels still on first (invalid) timestamp, consume flags and skip
-      channels[0].new_ts_ready = 0;
-      channels[1].new_ts_ready = 0;
-      continue;
+      channels[0].new_ts_ready = 0; // consume flags
+      channels[1].new_ts_ready = 0; // consume flags
+      continue; // skip output processing
     }
 
     // Timestamp mode: print each timestamp in timestamp order (earlier timestamp first)
     if ((config.MODE == Timestamp) && output_allowed) {
+      // Both ready: print earlier timestamp first, then later one
       if (channels[0].new_ts_ready && channels[1].new_ts_ready) {
-        // Both ready: print earlier timestamp first, then later one
-        // Inline comparison for performance (avoids function call overhead)
         // Check if channel 0 timestamp < channel 1 timestamp (channel 0 is earlier)
         bool ch0_earlier = (channels[0].timestamp.seconds < channels[1].timestamp.seconds) ||
                         ((channels[0].timestamp.seconds == channels[1].timestamp.seconds) && 
@@ -380,8 +376,10 @@ void loop() {
                 }
               }
               
-              // Print chC (synthesized)
-              print_timestamp(line, sizeof(line), &chC, 'C');
+              // Print synthesized third channel using configured name (default 'C')
+              char third_ch_name = config.NAME_3CH;
+              if (third_ch_name == 0) third_ch_name = 'C';  // Fallback to default
+              print_timestamp(line, sizeof(line), &chC, third_ch_name);
               
               consume_both_flags();
               break;

@@ -17,7 +17,7 @@ enum MeasureMode : unsigned char {Timestamp, Paired_Timestamp, Binary, Interval,
 /*****************************************************************/
 // system defines
 #define BOARD_REVISION            'D'                   // production version is 'D'
-#define EEPROM_VERSION            (byte)     12         // eeprom struct version
+#define EEPROM_VERSION            (byte)     13         // eeprom struct version (13: added NAME_3CH for 3-Corner Hat mode)
 #define CONFIG_START              (byte)     0x00       // first byte of config in eeprom
 #define SER_NUM_START             (int16_t)  0x0FF0     // first byte of serial number in eeprom
 /*****************************************************************/
@@ -33,6 +33,7 @@ enum MeasureMode : unsigned char {Timestamp, Paired_Timestamp, Binary, Interval,
 #define DEFAULT_SYNC_MODE         (char)    'P'         // (P)rimary or (S)econdary
 #define DEFAULT_NAME_0            (char)    'A'
 #define DEFAULT_NAME_1            (char)    'B'
+#define DEFAULT_NAME_3CH          (char)    'C'
 #define DEFAULT_PROP_DELAY_0      (int64_t)  0
 #define DEFAULT_PROP_DELAY_1      (int64_t)  0
 #define DEFAULT_START_EDGE_0      (char)    'R'         // (R)ising or (F)alling
@@ -69,6 +70,7 @@ struct config_t {
   // per-channel settings, arrays of 2 for channels 0 and 1:
   char       START_EDGE[2];            // (R)ising (default) or (F)alling edge 
   char       NAME[2];                  // user-set channel name
+  char       NAME_3CH;                  // 3-Corner Hat synthesized channel name (default 'C')
   int64_t    PROP_DELAY[2];            // user-set offset value (ps)
   int64_t    TIME_DILATION[2];         // time dilation factor (default 2500)
   int64_t    FIXED_TIME2[2];           // if >0 use to replace time2 (default 0)
@@ -143,6 +145,7 @@ bool parseInt64Simple(const char *s, int64_t *out);
 bool parseDecimalScaled(const char *s, int64_t scale, int64_t *out);
 bool parseInt64Pair(const char *s, bool *set0, int64_t *v0, bool *set1, int64_t *v1);
 bool parseDecimalScaledPair(const char *s, int64_t scale, bool *set0, int64_t *v0, bool *set1, int64_t *v1);
+bool parseCharPair(const char *s, bool *set0, char *v0, bool *set1, char *v1, bool *set2 = nullptr, char *v2 = nullptr);
 char* getInputOrPrompt(const char* args, const char* prompt, char* buffer, size_t bufferSize);
 
 /*****************************************************************/

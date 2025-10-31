@@ -120,7 +120,7 @@
 extern size_t readLine(char *buf, size_t cap);
 extern char* trimInPlace(char *s);
 extern bool parseInt64Simple(const char *s, int64_t *out);
-extern bool parseCharPair(const char *s, bool *set0, char *v0, bool *set1, char *v1);
+extern bool parseCharPair(const char *s, bool *set0, char *v0, bool *set1, char *v1, bool *set2 = nullptr, char *v2 = nullptr);
 extern char* getInputOrPrompt(const char* args, const char* prompt, char* buffer, size_t bufferSize);
 // eeprom_write_config now in TICC.h
 extern void eeprom_clear();

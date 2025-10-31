@@ -39,6 +39,10 @@ void eeprom_write_config() {
 // Read config from EEPROM
 void eeprom_read_config() {
   EEPROM_readAnything(CONFIG_START, config);
+  // Initialize NAME_3CH to default if not set (for old configs without this field)
+  if (config.NAME_3CH == 0) {
+    config.NAME_3CH = DEFAULT_NAME_3CH;
+  }
 }
 
 // Get serial number from EEPROM

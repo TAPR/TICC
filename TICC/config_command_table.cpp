@@ -11,7 +11,7 @@ extern char* getInputOrPrompt(const char* args, const char* prompt, char* buffer
 extern bool parseInt64Simple(const char* input, int64_t* result);
 extern bool parseScientificNotation(const char* input, int64_t* result);
 extern bool parseScientificNotationPair(const char* input, int64_t* resultA, int64_t* resultB);
-extern bool parseCharPair(const char* input, bool* set0, char* v0, bool* set1, char* v1);
+extern bool parseCharPair(const char* input, bool* set0, char* v0, bool* set1, char* v1, bool* set2 = nullptr, char* v2 = nullptr);
 extern bool handleConfirmation(const char* message, bool interactive);
 extern bool handlePairConfirmation(int64_t oldA, int64_t oldB, int64_t newA, int64_t newB, 
                                   int64_t* configA, int64_t* configB, const char* name);
@@ -267,11 +267,16 @@ bool process_generic_command(char cmd, const char* args, bool interactive, const
   // Empty input (just Enter) means cancel and return to menu
   if (!input) return true;
   
+  // Get config pointer early (needed for CHAR_PAIR parsing logic)
+  void* config_ptr = (void*)pgm_read_word(&cmd_config->config_ptr);
+  
   // Parse input based on type
   bool valid = false;
   int64_t value = 0, valueA = 0, valueB = 0;
   char charValue = 0, charA = 0, charB = 0;
   bool set0 = false, set1 = false;
+  char char3CH = 0;
+  bool set3CH = false;
   
   switch (value_type) {
     case SIMPLE_INT:
@@ -295,7 +300,12 @@ bool process_generic_command(char cmd, const char* args, bool interactive, const
               valueB >= min_val && valueB <= max_val;
       break;
     case CHAR_PAIR:
-      valid = parseCharPair(input, &set0, &charA, &set1, &charB);
+      // For channel names, parse optional third character for 3-Corner Hat mode
+      if (config_ptr == config.NAME) {
+        valid = parseCharPair(input, &set0, &charA, &set1, &charB, &set3CH, &char3CH);
+      } else {
+        valid = parseCharPair(input, &set0, &charA, &set1, &charB);
+      }
       break;
     default:
       return false;
@@ -308,7 +318,6 @@ bool process_generic_command(char cmd, const char* args, bool interactive, const
   }
   
   // Update configuration based on type
-  void* config_ptr = (void*)pgm_read_word(&cmd_config->config_ptr);
   
   switch (value_type) {
     case SIMPLE_INT:
@@ -316,7 +325,7 @@ bool process_generic_command(char cmd, const char* args, bool interactive, const
         int16_t old = config.WRAP;
         config.WRAP = (int16_t)value;
         config_changed = 1;
-        snprintf(sharedBuffer, sizeof(sharedBuffer), "OK -- Wrap Digits %d -> %d", old, config.WRAP);
+        sprintf_P(sharedBuffer, msg_ok_wrap, old, config.WRAP);
         if (!handleConfirmation(sharedBuffer, interactive)) {
           config.WRAP = old;
           config_changed = 0;
@@ -325,7 +334,7 @@ bool process_generic_command(char cmd, const char* args, bool interactive, const
         int16_t old = config.PLACES;
         config.PLACES = (int16_t)value;
         config_changed = 1;
-        snprintf(sharedBuffer, sizeof(sharedBuffer), "OK -- Decimal Places %d -> %d", old, config.PLACES);
+        sprintf_P(sharedBuffer, msg_ok_places, old, config.PLACES);
         if (!handleConfirmation(sharedBuffer, interactive)) {
           config.PLACES = old;
           config_changed = 0;
@@ -338,7 +347,7 @@ bool process_generic_command(char cmd, const char* args, bool interactive, const
         char old = config.SYNC_MODE;
         config.SYNC_MODE = charValue;
         config_changed = 1;
-        snprintf(sharedBuffer, sizeof(sharedBuffer), "OK -- Sync Mode %c -> %c", old, charValue);
+        sprintf_P(sharedBuffer, msg_ok_sync, old, charValue);
         if (!handleConfirmation(sharedBuffer, interactive)) {
           config.SYNC_MODE = old;
           config_changed = 0;
@@ -404,7 +413,7 @@ bool process_generic_command(char cmd, const char* args, bool interactive, const
         char oldStr[32], newStr[32];
         formatPsAsUs(old, oldStr, sizeof(oldStr));
         formatPsAsUs(value, newStr, sizeof(newStr));
-        snprintf(sharedBuffer, sizeof(sharedBuffer), "OK -- Coarse Tick %s -> %s", oldStr, newStr);
+        sprintf_P(sharedBuffer, msg_ok_pictick, oldStr, newStr);
         configPrintln(sharedBuffer);
         
         // Manual confirmation
@@ -459,8 +468,7 @@ bool process_generic_command(char cmd, const char* args, bool interactive, const
           configPrintln("");
         }
         
-        snprintf(sharedBuffer, sizeof(sharedBuffer), "OK -- Start Edge %c%c -> %c%c", 
-                 old0, old1, config.START_EDGE[0], config.START_EDGE[1]);
+        sprintf_P(sharedBuffer, msg_ok_edge, old0, old1, config.START_EDGE[0], config.START_EDGE[1]);
         if (!handleConfirmation(sharedBuffer, interactive)) {
           config.START_EDGE[0] = old0;
           config.START_EDGE[1] = old1;
@@ -468,14 +476,34 @@ bool process_generic_command(char cmd, const char* args, bool interactive, const
         }
       } else if (config_ptr == config.NAME) {
         char old0 = config.NAME[0], old1 = config.NAME[1];
+        char old3CH = config.NAME_3CH;
         if (set0) config.NAME[0] = charA;
         if (set1) config.NAME[1] = charB;
+        if (set3CH) config.NAME_3CH = char3CH;
         config_changed = 1;
-        snprintf(sharedBuffer, sizeof(sharedBuffer), "OK -- Channel Names %c%c -> %c%c", 
-                 old0, old1, config.NAME[0], config.NAME[1]);
+        // Always show third channel in parentheses if it's set (non-zero), even if default
+        bool show_old_3ch = (old3CH != 0);
+        bool show_new_3ch = (config.NAME_3CH != 0);
+        
+        if (set3CH) {
+          // Setting third channel explicitly - show as "A/B -> C/D/E" (not in parentheses when being changed)
+          if (show_old_3ch && old3CH != DEFAULT_NAME_3CH) {
+            sprintf_P(sharedBuffer, msg_ok_names_3ch, old0, old1, old3CH, config.NAME[0], config.NAME[1], config.NAME_3CH);
+          } else {
+            sprintf_P(sharedBuffer, msg_ok_names_3ch_new, old0, old1, config.NAME[0], config.NAME[1], config.NAME_3CH);
+          }
+        } else {
+          // Not setting third channel - always show in parentheses if it's set (even if default)
+          if (show_new_3ch) {
+            sprintf_P(sharedBuffer, msg_ok_names_with_3ch, old0, old1, old3CH, config.NAME[0], config.NAME[1], config.NAME_3CH);
+          } else {
+            sprintf_P(sharedBuffer, msg_ok_names, old0, old1, config.NAME[0], config.NAME[1]);
+          }
+        }
         if (!handleConfirmation(sharedBuffer, interactive)) {
           config.NAME[0] = old0;
           config.NAME[1] = old1;
+          config.NAME_3CH = old3CH;
           config_changed = 0;
         }
       }

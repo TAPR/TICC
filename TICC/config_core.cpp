@@ -194,8 +194,12 @@ bool parseInt64Pair(const char *s, bool *set0, int64_t *v0, bool *set1, int64_t 
 }
 
 // Parse pair syntax for non-numeric values (like edges "R/F" or names "A/B")
-bool parseCharPair(const char *s, bool *set0, char *v0, bool *set1, char *v1) {
+// Optionally parse a third character for names (e.g., "A/B/F")
+bool parseCharPair(const char *s, bool *set0, char *v0, bool *set1, char *v1, bool *set2, char *v2) {
   if (!s) return false;
+  
+  // Initialize optional third parameter if provided
+  if (set2) *set2 = false;
   
   // Handle run-together format (e.g., "RR", "RF")
   if (strlen(s) == 2 && s[0] != '/' && s[1] != ' ') {
@@ -205,7 +209,7 @@ bool parseCharPair(const char *s, bool *set0, char *v0, bool *set1, char *v1) {
     return true;
   }
   
-  // Handle separated format (e.g., "R/F", "R F")
+  // Handle separated format (e.g., "R/F", "R F", or "A/B/F")
   const char *separator = strchr(s, '/');
   if (!separator) {
     // Try space separator
@@ -240,13 +244,47 @@ bool parseCharPair(const char *s, bool *set0, char *v0, bool *set1, char *v1) {
   }
   
   if (*(separator+1)) {
-    size_t l = strlcpy(tmp, separator+1, sizeof(tmp)); (void)l;
-    char *t = trimInPlace(tmp);
-    if (strlen(t) == 1) {
-      *v1 = t[0];
-      *set1 = true;
+    // Check for second separator (third character for names)
+    const char *separator2 = strchr(separator+1, '/');
+    
+    if (separator2 && set2 && v2) {
+      // Three-part format: "A/B/F"
+      // Extract second character (between first and second separator)
+      size_t l = (size_t)(separator2 - (separator + 1));
+      if (l >= sizeof(tmp)) l = sizeof(tmp) - 1;
+      memcpy(tmp, separator + 1, l);
+      tmp[l] = '\0';
+      char *t = trimInPlace(tmp);
+      if (strlen(t) == 1) {
+        *v1 = t[0];
+        *set1 = true;
+      } else {
+        *set1 = false;
+      }
+      
+      // Extract third character (after second separator)
+      if (*(separator2+1)) {
+        l = strlcpy(tmp, separator2+1, sizeof(tmp)); (void)l;
+        t = trimInPlace(tmp);
+        if (strlen(t) == 1) {
+          *v2 = t[0];
+          *set2 = true;
+        } else {
+          *set2 = false;
+        }
+      } else {
+        *set2 = false;
+      }
     } else {
-      *set1 = false;
+      // Two-part format: "A/B"
+      size_t l = strlcpy(tmp, separator+1, sizeof(tmp)); (void)l;
+      char *t = trimInPlace(tmp);
+      if (strlen(t) == 1) {
+        *v1 = t[0];
+        *set1 = true;
+      } else {
+        *set1 = false;
+      }
     }
   } else { 
     *set1 = false; 
@@ -461,6 +499,7 @@ struct config_t defaultConfig() {
   x.BAUD_RATE = DEFAULT_BAUD_RATE;
   x.NAME[0] = DEFAULT_NAME_0;
   x.NAME[1] = DEFAULT_NAME_1;
+  x.NAME_3CH = DEFAULT_NAME_3CH;
   x.PROP_DELAY[0] = DEFAULT_PROP_DELAY_0;
   x.PROP_DELAY[1] = DEFAULT_PROP_DELAY_1;
   x.START_EDGE[0] = DEFAULT_START_EDGE_0;

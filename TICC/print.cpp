@@ -214,7 +214,7 @@ int print_timestamp(
   if (places > 0) {
     *p++ = '.';
     
-    // Fractional part using advisor's fast method, truncated to places
+    // Fractional part truncated to places
     if (places == 12) {
       // Full precision - most common case
       frac12_to_chars_fast(t->picos, p);
@@ -251,7 +251,42 @@ int print_timestamp(
   return p - out;
 }
 
-
+// Print timestamp difference - handles canonical form for negative values
+// Converts canonical form to printable form, then calls print_timestamp
+int print_timestamp_difference(
+  char* out,
+  size_t out_size,
+  const Timestamp64* diff,
+  char ch_name,
+  bool use_wrap = true
+) {
+  if (!out || out_size < 32 || !diff) return -1;
+  
+  bool is_negative = (diff->seconds < 0);
+  
+  // Convert canonical form to printable form if needed
+  Timestamp64 printable;
+  
+  if (is_negative && diff->picos > 0) {
+    // Canonical form: {-X, Y} represents -X + Y/PS_PER_SEC
+    // Convert to printable: calculate actual value, then extract integer/fractional parts
+    int64_t total_ps = (int64_t)diff->seconds * PS_PER_SEC + (int64_t)diff->picos;
+    int64_t abs_total_ps = (total_ps < 0) ? -total_ps : total_ps;
+    int32_t int_sec = (int32_t)(abs_total_ps / PS_PER_SEC);
+    uint64_t frac_pico = (uint64_t)(abs_total_ps % PS_PER_SEC);
+    
+    // Store in printable form with negative sign in seconds
+    printable.seconds = -int_sec;
+    printable.picos = frac_pico;
+  } else {
+    // Not canonical form or no fractional part - use as-is
+    printable.seconds = diff->seconds;
+    printable.picos = diff->picos;
+  }
+  
+  // Delegate to print_timestamp with converted printable form
+  return print_timestamp(out, out_size, &printable, ch_name, use_wrap);
+}
 
 // Efficient 64-bit integer printing function
 // Based on print_timestamp model but simplified for integers only

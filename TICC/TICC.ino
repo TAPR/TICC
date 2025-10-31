@@ -344,7 +344,7 @@ void loop() {
               // Calculate time interval from channel 0 to channel 1
               Timestamp64 interval = timestamp_difference(&channels[1].timestamp, &channels[0].timestamp);
               char line[64];
-              print_timestamp(line, sizeof(line), &interval, '\0', false);  // No wrap, no channel name
+              print_timestamp_difference(line, sizeof(line), &interval, '\0', false);  // No wrap, no channel name
               consume_both_flags();
               break;
             }
@@ -359,20 +359,40 @@ void loop() {
               print_timestamp(line, sizeof(line), &channels[1].timestamp, (char)channels[1].name);
               
               // Calculate chC = int(channel 1) + (channel 1 - channel 0)
-              Timestamp64 interval = timestamp_difference(&channels[1].timestamp, &channels[0].timestamp);
+              // Use timestamp_difference_ps() for the interval (small, safe)
+              // Keep integer seconds separate to avoid overflow
+              int64_t interval_ps = timestamp_difference_ps(&channels[1].timestamp, &channels[0].timestamp);
+              
+              // Start with int(ch1) = {ch1.seconds, 0}
               Timestamp64 chC;
+              chC.seconds = channels[1].timestamp.seconds;
               
-              // chC uses the integer seconds from channel 1, plus the fractional difference
-              chC.seconds = channels[1].timestamp.seconds;  // int(channel 1) - integer seconds from channel 1
-              chC.picos = interval.picos;              // (channel 1 - channel 0) fractional part
-              
-              // Handle negative fractional differences (interval.seconds < 0 means negative difference)
-              if (interval.seconds < 0) {
-                // The fractional part is in complement representation, convert to normal
-                if (interval.picos != 0) {
-                  chC.picos = PS_PER_SEC - interval.picos;
-                  // Since we're subtracting from the integer seconds, borrow if needed
-                  chC.seconds -= 1;
+              // Add the interval (in picoseconds) to the fractional part
+              if (interval_ps >= 0) {
+                // Positive interval: add to picos, handle carry
+                chC.picos = (uint64_t)interval_ps;
+                if (chC.picos >= PS_PER_SEC) {
+                  chC.seconds += (int32_t)(chC.picos / PS_PER_SEC);
+                  chC.picos %= PS_PER_SEC;
+                }
+              } else {
+                // Negative interval: subtract from seconds, borrow if needed
+                int64_t abs_ps = -interval_ps;
+                uint64_t abs_picos = (uint64_t)abs_ps;
+                
+                if (abs_picos == 0) {
+                  // Whole second difference - just subtract seconds
+                  chC.picos = 0;
+                  chC.seconds -= (int32_t)(abs_ps / PS_PER_SEC);
+                } else {
+                  // Fractional difference - need to borrow
+                  uint32_t sec_to_borrow = (uint32_t)(abs_picos / PS_PER_SEC);
+                  uint64_t rem_picos = abs_picos % PS_PER_SEC;
+                  
+                  if (sec_to_borrow > 0 || rem_picos > 0) {
+                    chC.seconds -= (int32_t)(sec_to_borrow + 1);
+                    chC.picos = PS_PER_SEC - rem_picos;
+                  }
                 }
               }
               

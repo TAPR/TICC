@@ -5,7 +5,7 @@
 
 #include "tdc7200.h"  // For Timestamp64 definition
 
-// Ultra-fast timestamp formatting using advisor's optimized approach
+// Ultra-fast timestamp formatting
 // Performance: 548 measurements/second (tested) with PLACES/WRAP support
 int print_timestamp(
   char* out,

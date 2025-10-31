@@ -269,22 +269,73 @@ int print_timestamp_difference(
   
   if (is_negative && diff->picos > 0) {
     // Canonical form: {-X, Y} represents -X + Y/PS_PER_SEC
-    // Convert to printable: calculate actual value, then extract integer/fractional parts
+    // Calculate absolute value, then extract integer and fractional parts
     int64_t total_ps = (int64_t)diff->seconds * PS_PER_SEC + (int64_t)diff->picos;
     int64_t abs_total_ps = (total_ps < 0) ? -total_ps : total_ps;
     int32_t int_sec = (int32_t)(abs_total_ps / PS_PER_SEC);
     uint64_t frac_pico = (uint64_t)(abs_total_ps % PS_PER_SEC);
     
-    // Store in printable form with negative sign in seconds
-    printable.seconds = -int_sec;
-    printable.picos = frac_pico;
+    // Handle values between -1 and 0: format manually to print "-0.XXX"
+    if (int_sec == 0 && frac_pico > 0) {
+      // Format manually for negative fractional values between -1 and 0
+      char* p = out;
+      *p++ = '-';
+      *p++ = '0';
+      *p++ = '.';
+      
+      // Format fractional part
+      // Get places from config
+      uint8_t places;
+      if (config_cached) {
+        places = cached_places;
+      } else {
+        extern struct config_t config;
+        places = (config.PLACES > 12) ? 12 : ((config.PLACES < 0) ? 0 : config.PLACES);
+      }
+      
+      if (places > 0) {
+        if (places == 12) {
+          frac12_to_chars_fast(frac_pico, p);
+          p += 12;
+        } else if (places <= 6) {
+          uint32_t hi, lo;
+          split12_fast(frac_pico, &hi, &lo);
+          to6digits(hi, p);
+          p += places;
+        } else {
+          uint32_t hi, lo;
+          split12_fast(frac_pico, &hi, &lo);
+          to6digits(hi, p);
+          p += 6;
+          to6digits(lo, p);
+          p += (places - 6);
+        }
+      }
+      
+      // Add CRLF
+      if (ch_name && ch_name != ' ') {
+        p[0] = ' '; p[1] = 'c'; p[2] = 'h'; p[3] = ch_name;
+        p[4] = '\r'; p[5] = '\n';
+        p += 6;
+      } else {
+        p[0] = '\r'; p[1] = '\n';
+        p += 2;
+      }
+      
+      Serial.write((const uint8_t*)out, p - out);
+      return p - out;
+    } else {
+      // Convert to printable form: integer part is non-zero
+      printable.seconds = -int_sec;
+      printable.picos = frac_pico;
+    }
   } else {
-    // Not canonical form or no fractional part - use as-is
+    // Not in canonical form or has no fractional part - use as-is
     printable.seconds = diff->seconds;
     printable.picos = diff->picos;
   }
   
-  // Delegate to print_timestamp with converted printable form
+  // Format using print_timestamp with converted printable form
   return print_timestamp(out, out_size, &printable, ch_name, use_wrap);
 }
 

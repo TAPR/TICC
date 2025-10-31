@@ -120,7 +120,7 @@ void ticc_setup() {
   CLOCK_PERIOD = (PS_PER_SEC / config.CLOCK_HZ);
   CAL_PERIODS = config.CAL_PERIODS;
 
-  for (i = 0; i < 2; ++i) {  // 2 channels: A and B
+  for (i = 0; i < 2; ++i) {  // 2 channels: 0 and 1
     // initialize the channels struct variables
     channels[i].totalize = 0;
     channels[i].PICstop = 0;
@@ -189,8 +189,8 @@ void ticc_setup() {
   // race condition since catch_stop needs to trigger on rising
   // edge.  This buys time.
   enableInterrupt(COARSEint, coarseTimer, FALLING);  // enable counter interrupt
-  enableInterrupt(STOP_0, catch_stop0, RISING);      // enable interrupt to catch channel A
-  enableInterrupt(STOP_1, catch_stop1, RISING);      // enable interrupt to catch channel B
+  enableInterrupt(STOP_0, catch_stop0, RISING);      // enable interrupt to catch channel 0
+  enableInterrupt(STOP_1, catch_stop1, RISING);      // enable interrupt to catch channel 1
   digitalWrite(CLIENT_SYNC, LOW);                    // unassert -- results in ~22uS sync pulse
   pinMode(CLIENT_SYNC, INPUT);                       // set back to input just to be neat
 
@@ -209,7 +209,7 @@ void ticc_setup() {
       Serial.println(" decimal places)");
       break;
     case Interval:
-      Serial.print("# time interval A->B (seconds with ");
+      Serial.print("# time interval ch0->ch1 (seconds with ");
       Serial.print(config.PLACES);
       Serial.println(" decimal places)");
       break;
@@ -219,7 +219,7 @@ void ticc_setup() {
       Serial.println(" decimal places)");
       break;
     case Hat:
-      Serial.print("# timestamp ch0, ch1; interval chA->B (seconds with ");
+      Serial.print("# timestamp ch0, ch1; interval ch0->ch1 (seconds with ");
       Serial.print(config.PLACES);
       Serial.println(" decimal places)");
       break;

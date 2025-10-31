@@ -373,21 +373,21 @@ void tdc7200Channel::start_measurements() {
 
 // Flush all channels and reset their state
 void flush_all_channels() {
-  for (size_t i = 0; i < 2; ++i) {  // 2 channels: A and B
+  for (size_t i = 0; i < 2; ++i) {  // 2 channels: 0 and 1
     channels[i].flush_and_reset();
   }
 }
 
 // Stop measurements on all channels
 void stop_all_measurements() {
-  for (size_t i = 0; i < 2; ++i) {  // 2 channels: A and B
+  for (size_t i = 0; i < 2; ++i) {  // 2 channels: 0 and 1
     channels[i].stop_measurements();
   }
 }
 
 // Start measurements on all channels
 void start_all_measurements() {
-  for (size_t i = 0; i < 2; ++i) {  // 2 channels: A and B
+  for (size_t i = 0; i < 2; ++i) {  // 2 channels: 0 and 1
     channels[i].start_measurements();
   }
 }

@@ -117,10 +117,10 @@ void loop() {
     }
 
     // Check both channels simultaneously for better timestamp ordering
-    bool ready_chA = (digitalRead(channels[0].INTB) == 0);
-    bool ready_chB = (digitalRead(channels[1].INTB) == 0);
+    bool ready_ch0 = (digitalRead(channels[0].INTB) == 0);
+    bool ready_ch1 = (digitalRead(channels[1].INTB) == 0);
     
-    if (ready_chA && ready_chB) {
+    if (ready_ch0 && ready_ch1) {
       // Both channels ready - process both simultaneously for better ordering
       
       // Turn on both LEDs
@@ -145,8 +145,8 @@ void loop() {
         CLR_LED_1; CLR_EXT_LED_1;
       }
       
-    } else if (ready_chA) {
-      // Only channel A ready
+    } else if (ready_ch0) {
+      // Only channel 0 ready
       SET_LED_0; SET_EXT_LED_0;
       
       if (config.MODE == Binary) {
@@ -157,7 +157,7 @@ void loop() {
         calculate_timestamp(&channels[0], PICTICK_PS);
         CLR_LED_0; CLR_EXT_LED_0;
         
-        // Check if channel B became ready during processing
+        // Check if channel 1 became ready during processing
         if (digitalRead(channels[1].INTB) == 0) {
           SET_LED_1; SET_EXT_LED_1;
           calculate_timestamp(&channels[1], PICTICK_PS);
@@ -165,8 +165,8 @@ void loop() {
         }
       }
       
-    } else if (ready_chB) {
-      // Only channel B ready
+    } else if (ready_ch1) {
+      // Only channel 1 ready
       SET_LED_1; SET_EXT_LED_1;
       
       if (config.MODE == Binary) {
@@ -177,7 +177,7 @@ void loop() {
         calculate_timestamp(&channels[1], PICTICK_PS);
         CLR_LED_1; CLR_EXT_LED_1;
         
-        // Check if channel A became ready during processing
+        // Check if channel 0 became ready during processing
         if (digitalRead(channels[0].INTB) == 0) {
           SET_LED_0; SET_EXT_LED_0;
           calculate_timestamp(&channels[0], PICTICK_PS);
@@ -205,13 +205,13 @@ void loop() {
       if (channels[0].new_ts_ready && channels[1].new_ts_ready) {
         // Both ready: print earlier timestamp first, then later one
         // Inline comparison for performance (avoids function call overhead)
-        // Check if chA timestamp < chB timestamp (chA is earlier)
-        bool A_earlier = (channels[0].timestamp.seconds < channels[1].timestamp.seconds) ||
+        // Check if channel 0 timestamp < channel 1 timestamp (channel 0 is earlier)
+        bool ch0_earlier = (channels[0].timestamp.seconds < channels[1].timestamp.seconds) ||
                         ((channels[0].timestamp.seconds == channels[1].timestamp.seconds) && 
                          (channels[0].timestamp.picos < channels[1].timestamp.picos));
         
-        int first_ch = A_earlier ? 0 : 1;
-        int second_ch = A_earlier ? 1 : 0;
+        int first_ch = ch0_earlier ? 0 : 1;
+        int second_ch = ch0_earlier ? 1 : 0;
         
         char line[64];
         print_timestamp(line, sizeof(line), &channels[first_ch].timestamp, (char)channels[first_ch].name);
@@ -289,7 +289,7 @@ void loop() {
     if (config.MODE == Paired_Timestamp) {
       // Two-slot buffer; accumulate two successive samples (across either channel)
       // then emit exactly two lines per pair in fixed order: if both channels are
-      // present print chA then chB; if both are the same channel, print that
+      // present print channel 0 then channel 1; if both are the same channel, print that
       // channel twice.
       struct PairSlot {
         Timestamp64 t;
@@ -312,20 +312,20 @@ void loop() {
 
       // If we have a complete pair, emit in fixed order with poll gating
       if ((ts_pair_count == 2) && output_allowed) {
-          // Determine composition and enforce chA then chB order when both present
+          // Determine composition and enforce channel 0 then channel 1 order when both present
           if ((ts_pair[0].ch == 0 && ts_pair[1].ch == 1) || (ts_pair[0].ch == 1 && ts_pair[1].ch == 0)) {
-            // Mixed channels: find A then B
-            const PairSlot *A = (ts_pair[0].ch == 0) ? &ts_pair[0] : &ts_pair[1];
-            const PairSlot *B = (ts_pair[0].ch == 1) ? &ts_pair[0] : &ts_pair[1];
-            // Print chA timestamp
+            // Mixed channels: find channel 0 then channel 1
+            const PairSlot *ch0 = (ts_pair[0].ch == 0) ? &ts_pair[0] : &ts_pair[1];
+            const PairSlot *ch1 = (ts_pair[0].ch == 1) ? &ts_pair[0] : &ts_pair[1];
+            // Print channel 0 timestamp
             {
               char line[64];
-              print_timestamp(line, sizeof(line), &A->t, (char)channels[0].name);
+              print_timestamp(line, sizeof(line), &ch0->t, (char)channels[0].name);
             }
-            // Print chB timestamp
+            // Print channel 1 timestamp
             {
               char line[64];
-              print_timestamp(line, sizeof(line), &B->t, (char)channels[1].name);
+              print_timestamp(line, sizeof(line), &ch1->t, (char)channels[1].name);
             }
           } else {
             // Same channel twice: print both with that channel's name
@@ -345,7 +345,7 @@ void loop() {
         switch (config.MODE) {
           case Interval:
             {
-              // Calculate time interval A->B
+              // Calculate time interval from channel 0 to channel 1
               Timestamp64 interval = timestamp_difference(&channels[1].timestamp, &channels[0].timestamp);
               char line[64];
               print_timestamp(line, sizeof(line), &interval, '\0', false);  // No wrap, no channel name
@@ -354,21 +354,21 @@ void loop() {
             }
           case Hat:
             {
-              // 3-Cornered Hat mode: chA, chB, and chC (synthesized)
-              // chC = int(chB) + (chB - chA) - properly handle negative differences
+              // 3-Cornered Hat mode: channel 0, channel 1, and chC (synthesized)
+              // chC = int(channel 1) + (channel 1 - channel 0) - properly handle negative differences
               
-              // Print chA and chB timestamps
+              // Print channel 0 and channel 1 timestamps
               char line[64];
               print_timestamp(line, sizeof(line), &channels[0].timestamp, (char)channels[0].name);
               print_timestamp(line, sizeof(line), &channels[1].timestamp, (char)channels[1].name);
               
-              // Calculate chC = int(chB) + (chB - chA)
+              // Calculate chC = int(channel 1) + (channel 1 - channel 0)
               Timestamp64 interval = timestamp_difference(&channels[1].timestamp, &channels[0].timestamp);
               Timestamp64 chC;
               
-              // chC uses the integer seconds from chB, plus the fractional difference
-              chC.seconds = channels[1].timestamp.seconds;  // int(chB) - integer seconds from chB
-              chC.picos = interval.picos;              // (chB - chA) fractional part
+              // chC uses the integer seconds from channel 1, plus the fractional difference
+              chC.seconds = channels[1].timestamp.seconds;  // int(channel 1) - integer seconds from channel 1
+              chC.picos = interval.picos;              // (channel 1 - channel 0) fractional part
               
               // Handle negative fractional differences (interval.seconds < 0 means negative difference)
               if (interval.seconds < 0) {

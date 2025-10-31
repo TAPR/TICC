@@ -41,8 +41,8 @@ enum MeasureMode : unsigned char {Timestamp, Paired_Timestamp, Binary, Interval,
 #define DEFAULT_TIME_DILATION_1   (int64_t) 2500        // SWAG that seems to work
 #define DEFAULT_FIXED_TIME2_0     (int64_t) 0           // 0 to calculate, or fixed (~1135)
 #define DEFAULT_FIXED_TIME2_1     (int64_t) 0           // 0 to calculate, or fixed (~1135)
-#define DEFAULT_FUDGE0_0          (int64_t) 0           // Fudge channel A value (ps)
-#define DEFAULT_FUDGE0_1          (int64_t) 0           // Fudge channel B value (ps)
+#define DEFAULT_FUDGE0_0          (int64_t) 0           // Fudge channel 0 value (ps)
+#define DEFAULT_FUDGE0_1          (int64_t) 0           // Fudge channel 1 value (ps)
 #define DEFAULT_BAUD_RATE         (uint32_t) 115200     // Serial baud rate (default 115200)
 
 /*****************************************************************/

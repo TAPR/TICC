@@ -189,24 +189,23 @@ void loop() {
     if (!channels[0].new_ts_ready && !channels[1].new_ts_ready) {
       continue; // skip output processing
     }
-    
-    // Consume flags for channels that can't produce output based on mode
-    // Period/Interval/Hat modes require totalize >= 2 (need at least 2 timestamps for period calc)
-    bool mode_requires_ge2 = (config.MODE == Period || config.MODE == Interval || config.MODE == Hat);
-    if (mode_requires_ge2) {
-      // For modes requiring >= 2, consume flags if not met
-      if (channels[0].new_ts_ready && channels[0].totalize <= 2) {
-        channels[0].new_ts_ready = 0; // consume flag
-      }
-      if (channels[1].new_ts_ready && channels[1].totalize <= 2) {
-        channels[1].new_ts_ready = 0; // consume flag
-      }
-    } else {
-      // For other modes (Timestamp, Paired_Timestamp, Debug), consume flags if both have totalize <= 1
-      if ((channels[0].totalize <= 1) && (channels[1].totalize <= 1)) {
-        channels[0].new_ts_ready = 0; // consume flags
-        channels[1].new_ts_ready = 0;
-      }
+     
+    // or if not output_allowed, but here consume flags anyway
+     if (!output_allowed) {
+      channels[0].new_ts_ready = 0; // consume flags
+      channels[1].new_ts_ready = 0;
+      continue; // skip output processing
+    }
+
+    // All modes: throw away first timestamp (totalize == 1) because it may be garbage
+    // Non-Period modes: need totalize >= 2 (after throwing away first)
+    // Period mode: need two good timestamps after first, so need totalize >= 3
+    uint8_t min_totalize = (config.MODE == Period) ? 3 : 2;
+    if (channels[0].new_ts_ready && channels[0].totalize < min_totalize) {
+      channels[0].new_ts_ready = 0; // consume flag
+    }
+    if (channels[1].new_ts_ready && channels[1].totalize < min_totalize) {
+      channels[1].new_ts_ready = 0; // consume flag
     }
     
     // Skip if no valid timestamps remain after consuming invalid ones
@@ -222,13 +221,7 @@ void loop() {
       }
     }
 
-    // or if not output_allowed
-    if (!output_allowed) {
-      channels[0].new_ts_ready = 0; // consume flags
-      channels[1].new_ts_ready = 0;
-      continue; // skip output processing
-    }
-
+   
     // Call output function based on mode
     // output functions are in print.cpp
     switch (config.MODE) {

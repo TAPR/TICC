@@ -13,7 +13,7 @@ const char pg_advanced_title[] PROGMEM = "-- Advanced Settings --";
 const char it_mode[]           PROGMEM = "A - Mode (currently: ";
 const char it_wrap[]           PROGMEM = "B - Timestamp Wrap digits (currently: ";
 const char it_places[]         PROGMEM = "C - Output Decimal Places (currently: ";
-const char it_edge[]           PROGMEM = "D - Trigger Edge A/B (currently: ";  // Hidden but kept for undocumented access
+const char it_edge[]           PROGMEM = "D - Trigger Edge ch0/ch1 (currently: ";  // Hidden but kept for undocumented access
 const char it_sync[]           PROGMEM = "D - Primary/Secondary (currently: ";
 const char it_names[]          PROGMEM = "E - Channel Names (currently: ";
 const char it_pollchar[]       PROGMEM = "F - Poll Character (currently: ";
@@ -33,7 +33,7 @@ const char it_exit3[]          PROGMEM = "3 - Reset all to defaults and restart"
 const char it_mode_ts[]        PROGMEM = "A1 - Timestamp";
 const char it_mode_paired[]    PROGMEM = "A2 - Paired Timestamp";
 const char it_mode_bin[]       PROGMEM = "A3 - Binary Timestamp";
-const char it_mode_int[]       PROGMEM = "A4 - Time Interval A -> B";
+const char it_mode_int[]       PROGMEM = "A4 - Time Interval ch0->ch1";
 const char it_mode_period[]    PROGMEM = "A5 - Period";
 const char it_mode_3ch[]       PROGMEM = "A6 - 3-Cornered Hat";
 const char it_mode_debug[]     PROGMEM = "A7 - Debug";
@@ -43,7 +43,7 @@ const char it_mode_null[]      PROGMEM = "A8 - Null Output";
 const char desc_timestamp[]    PROGMEM = "Timestamp";
 const char desc_paired[]       PROGMEM = "Paired Timestamp";
 const char desc_binary[]       PROGMEM = "Binary Timestamp";
-const char desc_interval[]     PROGMEM = "Time Interval A->B";
+const char desc_interval[]     PROGMEM = "Time Interval ch0->ch1";
 const char desc_period[]       PROGMEM = "Period";
 const char desc_timelab[]      PROGMEM = "3-Cornered Hat";
 const char desc_debug[]        PROGMEM = "Debug";
@@ -60,10 +60,10 @@ const char it_baud_230400[]    PROGMEM = "H6 - 230400 bps";
 // Advanced submenu items
 const char it_adv_clock[]      PROGMEM = "G1 - Clock Speed MHz (currently: ";
 const char it_adv_pictick[]    PROGMEM = "G2 - Coarse Tick us (currently: ";
-const char it_adv_prop[]       PROGMEM = "G3 - Propagation Delay ps A/B (currently: ";
-const char it_adv_dilation[]   PROGMEM = "G4 - Time Dilation A/B (currently: ";
-const char it_adv_fixed[]      PROGMEM = "G5 - fixedTime2 ps A/B (currently: ";
-const char it_adv_fudge[]      PROGMEM = "G6 - FUDGE0 ps A/B (currently: ";
+const char it_adv_prop[]       PROGMEM = "G3 - Propagation Delay ps ch0/ch1 (currently: ";
+const char it_adv_dilation[]   PROGMEM = "G4 - Time Dilation ch0/ch1 (currently: ";
+const char it_adv_fixed[]      PROGMEM = "G5 - fixedTime2 ps ch0/ch1 (currently: ";
+const char it_adv_fudge[]      PROGMEM = "G6 - FUDGE0 ps ch0/ch1 (currently: ";
 
 // Prompts and status messages
 const char ln_current_mode[]   PROGMEM = "Current mode: ";
@@ -80,18 +80,18 @@ const char ln_current_baudrate[] PROGMEM = ")";
 // Input prompts
 const char prompt_wrap[]       PROGMEM = "Wrap Digits (0..10): ";
 const char prompt_places[]     PROGMEM = "Output Decimal Places (0..12): ";
-const char prompt_edge[]       PROGMEM = "Enter Edges A/B (R or F): ";
+const char prompt_edge[]       PROGMEM = "Enter Edges ch0/ch1 (R or F): ";
 const char prompt_sync[]       PROGMEM = "Enter P or S: ";
-const char prompt_names[]      PROGMEM = "Enter Names A/B (any two chars): ";
+const char prompt_names[]      PROGMEM = "Enter Names ch0/ch1 (any two chars): ";
 const char prompt_poll[]       PROGMEM = "Enter Poll Character (- to clear): ";
 
 // Advanced prompts
 const char prompt_clock[]      PROGMEM = "Clock Hz (e.g., 1e7 for 10 MHz): ";
 const char prompt_pictick[]    PROGMEM = "Coarse Tick ps (e.g., 1e8 for 100 us): ";
-const char prompt_prop[]       PROGMEM = "Propagation Delay A/B ps (e.g., 40/40 or 1e6/2e6): ";
-const char prompt_dilation[]   PROGMEM = "Time Dilation A/B ps (e.g., 40/40 or 1e6/2e6): ";
-const char prompt_fixed[]      PROGMEM = "Fixed Time2 A/B ps (e.g., 40/40 or 1e6/2e6): ";
-const char prompt_fudge[]      PROGMEM = "FUDGE0 A/B ps (e.g., 40/40 or 1e6/2e6): ";
+const char prompt_prop[]       PROGMEM = "Propagation Delay ch0/ch1 ps (e.g., 40/40 or 1e6/2e6): ";
+const char prompt_dilation[]   PROGMEM = "Time Dilation ch0/ch1 ps (e.g., 40/40 or 1e6/2e6): ";
+const char prompt_fixed[]      PROGMEM = "Fixed Time2 ch0/ch1 ps (e.g., 40/40 or 1e6/2e6): ";
+const char prompt_fudge[]      PROGMEM = "FUDGE0 ch0/ch1 ps (e.g., 40/40 or 1e6/2e6): ";
 
 // Confirmation messages
 const char ln_save_eeprom[]    PROGMEM = "Save to EEPROM with 'W' and restart for change to take effect.";
@@ -109,7 +109,7 @@ const char mode_timestamp[]    PROGMEM = "Paired Timestamp";
 const char mode_strict[]       PROGMEM = "Strict Timestamp";
 const char mode_immediate[]    PROGMEM = "Immediate Timestamp";
 const char mode_binary[]       PROGMEM = "Binary Timestamp";
-const char mode_interval[]     PROGMEM = "Time Interval A->B";
+const char mode_interval[]     PROGMEM = "Time Interval ch0->ch1";
 const char mode_period[]       PROGMEM = "Period";
 const char mode_timelab[]      PROGMEM = "3-Cornered Hat";
 const char mode_debug[]        PROGMEM = "Debug";
@@ -231,7 +231,7 @@ const char mode_name_timestamp[] PROGMEM = "Timestamp";
 const char mode_name_paired[] PROGMEM = "Paired_Timestamp";
 const char mode_name_binary[] PROGMEM = "Binary Timestamp";
 const char mode_name_period[] PROGMEM = "Period";
-const char mode_name_interval[] PROGMEM = "Time Interval A->B";
+const char mode_name_interval[] PROGMEM = "Time Interval ch0->ch1";
 const char mode_name_hat[] PROGMEM = "3-Cornered Hat";
 const char mode_name_debug[] PROGMEM = "Debug";
 const char mode_name_null[] PROGMEM = "Null Output";

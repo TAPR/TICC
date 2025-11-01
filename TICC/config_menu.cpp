@@ -607,9 +607,18 @@ bool process_menu_command() {
 
 // Process info command
 bool process_info_command() {
-  configPrintln("");
-  // print_config(config); // Call existing function
-  configPrintln("");
+  // Print startup screen - same format as ticc_setup()
+  Serial.println("# ");
+  configPrintlnProg(startup_ticc_title);
+  configPrintlnProg(startup_copyright);
+  Serial.println("# ");
+  
+  configPrintlnProg(startup_config_separator);
+  configPrintlnProg(startup_config_header);
+  print_config(config);
+  configPrintlnProg(startup_config_separator);
+  Serial.println("# ");
+  
   return true;
 }
 

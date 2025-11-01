@@ -423,10 +423,10 @@ void print_period_mode(tdc7200Channel* channels) {
   // Track if this is the first period calculation for each channel
   static bool first_period[2] = {true, true};
   
-  // Determine which channels are ready with sufficient totalize
+  // Determine which channels are ready (totalize filtering done in TICC.ino)
   bool ready_ch[2];
   for (int ci = 0; ci < 2; ++ci) {
-    ready_ch[ci] = channels[ci].new_ts_ready && (channels[ci].totalize > 2);
+    ready_ch[ci] = channels[ci].new_ts_ready;
   }
   
   // If both channels are ready, print in channel order (ch0 then ch1)
@@ -481,7 +481,7 @@ void print_period_mode(tdc7200Channel* channels) {
 // Debug mode: output raw TDC7200 register values plus calculated timestamp
 void print_debug_mode(tdc7200Channel* channels) {
   for (int ci = 0; ci < 2; ++ci) {
-    if (channels[ci].new_ts_ready && (channels[ci].totalize > 2)) {
+    if (channels[ci].new_ts_ready) {
       char line[128];
       size_t n = 0;
       
@@ -567,76 +567,68 @@ void print_paired_timestamp_mode(tdc7200Channel* channels) {
 }
 
 // Interval mode: print time interval from channel 0 to channel 1
-// Only prints when both channels are ready
+// Called only when both channels are ready (checked in TICC.ino)
 void print_interval_mode(tdc7200Channel* channels) {
-  // Check if both channels are ready (with sufficient totalize)
-  if (channels[0].new_ts_ready && channels[1].new_ts_ready && 
-      channels[0].totalize > 2 && channels[1].totalize > 2) {
-    // Calculate time interval from channel 0 to channel 1
-    Timestamp64 interval = timestamp_difference(&channels[1].timestamp, &channels[0].timestamp);
-    char line[64];
-    print_timestamp_difference(line, sizeof(line), &interval, '\0', false);  // No wrap, no channel name
-    
-    channels[0].new_ts_ready = 0;  // consume both
-    channels[1].new_ts_ready = 0;
-  }
+  // Calculate time interval from channel 0 to channel 1
+  Timestamp64 interval = timestamp_difference(&channels[1].timestamp, &channels[0].timestamp);
+  char line[64];
+  print_timestamp_difference(line, sizeof(line), &interval, '\0', false);  // No wrap, no channel name
+  
+  channels[0].new_ts_ready = 0;  // consume both
+  channels[1].new_ts_ready = 0;
 }
 
 // 3-Cornered Hat mode: print channel 0, channel 1, and synthesized chC
-// Only prints when both channels are ready
+// Called only when both channels are ready (checked in TICC.ino)
 void print_hat_mode(tdc7200Channel* channels) {
-  // Check if both channels are ready (with sufficient totalize)
-  if (channels[0].new_ts_ready && channels[1].new_ts_ready && 
-      channels[0].totalize > 2 && channels[1].totalize > 2) {
-    // Print channel 0 and channel 1 timestamps
-    char line[64];
-    print_timestamp(line, sizeof(line), &channels[0].timestamp, (char)channels[0].name);
-    print_timestamp(line, sizeof(line), &channels[1].timestamp, (char)channels[1].name);
+  // Print channel 0 and channel 1 timestamps
+  char line[64];
+  print_timestamp(line, sizeof(line), &channels[0].timestamp, (char)channels[0].name);
+  print_timestamp(line, sizeof(line), &channels[1].timestamp, (char)channels[1].name);
+  
+  // Calculate ch2 = int(channel 1) + (channel 1 - channel 0)
+  // Use timestamp_difference_ps() for the interval (small, safe)
+  // Keep integer seconds separate to avoid overflow
+  int64_t interval_ps = timestamp_difference_ps(&channels[1].timestamp, &channels[0].timestamp);
+  
+  // Start with int(ch1) = {ch1.seconds, 0}
+  Timestamp64 ch2;
+  ch2.seconds = channels[1].timestamp.seconds;
+  
+  // Add the interval (in picoseconds) to the fractional part
+  if (interval_ps >= 0) {
+    // Positive interval: add to picos, handle carry
+    ch2.picos = (uint64_t)interval_ps;
+    if (ch2.picos >= PS_PER_SEC) {
+      ch2.seconds += (int32_t)(ch2.picos / PS_PER_SEC);
+      ch2.picos %= PS_PER_SEC;
+    }
+  } else {
+    // Negative interval: subtract from seconds, borrow if needed
+    int64_t abs_ps = -interval_ps;
+    uint64_t abs_picos = (uint64_t)abs_ps;
     
-    // Calculate ch2 = int(channel 1) + (channel 1 - channel 0)
-    // Use timestamp_difference_ps() for the interval (small, safe)
-    // Keep integer seconds separate to avoid overflow
-    int64_t interval_ps = timestamp_difference_ps(&channels[1].timestamp, &channels[0].timestamp);
-    
-    // Start with int(ch1) = {ch1.seconds, 0}
-    Timestamp64 ch2;
-    ch2.seconds = channels[1].timestamp.seconds;
-    
-    // Add the interval (in picoseconds) to the fractional part
-    if (interval_ps >= 0) {
-      // Positive interval: add to picos, handle carry
-      ch2.picos = (uint64_t)interval_ps;
-      if (ch2.picos >= PS_PER_SEC) {
-        ch2.seconds += (int32_t)(ch2.picos / PS_PER_SEC);
-        ch2.picos %= PS_PER_SEC;
-      }
+    if (abs_picos == 0) {
+      // Whole second difference - just subtract seconds
+      ch2.picos = 0;
+      ch2.seconds -= (int32_t)(abs_ps / PS_PER_SEC);
     } else {
-      // Negative interval: subtract from seconds, borrow if needed
-      int64_t abs_ps = -interval_ps;
-      uint64_t abs_picos = (uint64_t)abs_ps;
+      // Fractional difference - need to borrow
+      uint32_t sec_to_borrow = (uint32_t)(abs_picos / PS_PER_SEC);
+      uint64_t rem_picos = abs_picos % PS_PER_SEC;
       
-      if (abs_picos == 0) {
-        // Whole second difference - just subtract seconds
-        ch2.picos = 0;
-        ch2.seconds -= (int32_t)(abs_ps / PS_PER_SEC);
-      } else {
-        // Fractional difference - need to borrow
-        uint32_t sec_to_borrow = (uint32_t)(abs_picos / PS_PER_SEC);
-        uint64_t rem_picos = abs_picos % PS_PER_SEC;
-        
-        if (sec_to_borrow > 0 || rem_picos > 0) {
-          ch2.seconds -= (int32_t)(sec_to_borrow + 1);
-          ch2.picos = PS_PER_SEC - rem_picos;
-        }
+      if (sec_to_borrow > 0 || rem_picos > 0) {
+        ch2.seconds -= (int32_t)(sec_to_borrow + 1);
+        ch2.picos = PS_PER_SEC - rem_picos;
       }
     }
-    
-    // Print synthesized ch2 using configured name (default 'C')
-    char ch2_name = config.NAME_CH2;
-    if (ch2_name == 0) ch2_name = 'C';  // Fallback to default
-    print_timestamp(line, sizeof(line), &ch2, ch2_name);
-    
-    channels[0].new_ts_ready = 0;  // consume both
-    channels[1].new_ts_ready = 0;
   }
+  
+  // Print synthesized ch2 using configured name (default 'C')
+  char ch2_name = config.NAME_CH2;
+  if (ch2_name == 0) ch2_name = 'C';  // Fallback to default
+  print_timestamp(line, sizeof(line), &ch2, ch2_name);
+  
+  channels[0].new_ts_ready = 0;  // consume both
+  channels[1].new_ts_ready = 0;
 }

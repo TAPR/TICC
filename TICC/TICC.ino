@@ -185,17 +185,16 @@ void loop() {
       }
     }
 
-    // Skip output processing:
-    // if no new timestamps are ready
+    // Skip output processing if no new timestamps are ready
     if (!channels[0].new_ts_ready && !channels[1].new_ts_ready) {
       continue; // skip output processing
     }
     
     // Consume flags for channels that can't produce output based on mode
-    // Period/Interval/Hat modes require totalize > 2 (need at least 3 timestamps for period calc)
+    // Period/Interval/Hat modes require totalize >= 2 (need at least 2 timestamps for period calc)
     bool mode_requires_ge2 = (config.MODE == Period || config.MODE == Interval || config.MODE == Hat);
     if (mode_requires_ge2) {
-      // For modes requiring > 2, consume flags for channels with totalize <= 2
+      // For modes requiring >= 2, consume flags if not met
       if (channels[0].new_ts_ready && channels[0].totalize <= 2) {
         channels[0].new_ts_ready = 0; // consume flag
       }
@@ -213,6 +212,14 @@ void loop() {
     // Skip if no valid timestamps remain after consuming invalid ones
     if (!channels[0].new_ts_ready && !channels[1].new_ts_ready) {
       continue; // skip output processing
+    }
+
+    // Interval and Hat modes require both channels to be ready
+    // If only one is ready, skip output (don't consume flags - wait for both)
+    if (config.MODE == Interval || config.MODE == Hat) {
+      if (!channels[0].new_ts_ready || !channels[1].new_ts_ready) {
+        continue; // skip output processing (flags remain set for next iteration)
+      }
     }
 
     // or if not output_allowed

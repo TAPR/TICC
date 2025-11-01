@@ -1,12 +1,11 @@
-// print.cpp -- optimized 64-bit printing routines for TICC
+// print.cpp -- optimized 64-bit printing routines
+// and output print functions for TICC
 
 #include <Arduino.h>
 #include "TICC.h"
 #include "tdc7200.h"
 #include "timestamps.h"
 #include "print.h"
-
-// External variables now defined in TICC.h
 
 // Fast 64-bit to 12-digit conversion
 #define M6 1000000
@@ -594,22 +593,22 @@ void print_hat_mode(tdc7200Channel* channels) {
     print_timestamp(line, sizeof(line), &channels[0].timestamp, (char)channels[0].name);
     print_timestamp(line, sizeof(line), &channels[1].timestamp, (char)channels[1].name);
     
-    // Calculate chC = int(channel 1) + (channel 1 - channel 0)
+    // Calculate ch2 = int(channel 1) + (channel 1 - channel 0)
     // Use timestamp_difference_ps() for the interval (small, safe)
     // Keep integer seconds separate to avoid overflow
     int64_t interval_ps = timestamp_difference_ps(&channels[1].timestamp, &channels[0].timestamp);
     
     // Start with int(ch1) = {ch1.seconds, 0}
-    Timestamp64 chC;
-    chC.seconds = channels[1].timestamp.seconds;
+    Timestamp64 ch2;
+    ch2.seconds = channels[1].timestamp.seconds;
     
     // Add the interval (in picoseconds) to the fractional part
     if (interval_ps >= 0) {
       // Positive interval: add to picos, handle carry
-      chC.picos = (uint64_t)interval_ps;
-      if (chC.picos >= PS_PER_SEC) {
-        chC.seconds += (int32_t)(chC.picos / PS_PER_SEC);
-        chC.picos %= PS_PER_SEC;
+      ch2.picos = (uint64_t)interval_ps;
+      if (ch2.picos >= PS_PER_SEC) {
+        ch2.seconds += (int32_t)(ch2.picos / PS_PER_SEC);
+        ch2.picos %= PS_PER_SEC;
       }
     } else {
       // Negative interval: subtract from seconds, borrow if needed
@@ -618,24 +617,24 @@ void print_hat_mode(tdc7200Channel* channels) {
       
       if (abs_picos == 0) {
         // Whole second difference - just subtract seconds
-        chC.picos = 0;
-        chC.seconds -= (int32_t)(abs_ps / PS_PER_SEC);
+        ch2.picos = 0;
+        ch2.seconds -= (int32_t)(abs_ps / PS_PER_SEC);
       } else {
         // Fractional difference - need to borrow
         uint32_t sec_to_borrow = (uint32_t)(abs_picos / PS_PER_SEC);
         uint64_t rem_picos = abs_picos % PS_PER_SEC;
         
         if (sec_to_borrow > 0 || rem_picos > 0) {
-          chC.seconds -= (int32_t)(sec_to_borrow + 1);
-          chC.picos = PS_PER_SEC - rem_picos;
+          ch2.seconds -= (int32_t)(sec_to_borrow + 1);
+          ch2.picos = PS_PER_SEC - rem_picos;
         }
       }
     }
     
-    // Print synthesized third channel using configured name (default 'C')
-    char third_ch_name = config.NAME_3CH;
-    if (third_ch_name == 0) third_ch_name = 'C';  // Fallback to default
-    print_timestamp(line, sizeof(line), &chC, third_ch_name);
+    // Print synthesized ch2 using configured name (default 'C')
+    char ch2_name = config.NAME_CH2;
+    if (ch2_name == 0) ch2_name = 'C';  // Fallback to default
+    print_timestamp(line, sizeof(line), &ch2, ch2_name);
     
     channels[0].new_ts_ready = 0;  // consume both
     channels[1].new_ts_ready = 0;

@@ -429,8 +429,8 @@ void print_config(config_t x) {
   sprintf(tmpbuf, "Serial Baud Rate: %lu", (unsigned long)x.BAUD_RATE);
   configPrintln(tmpbuf);
   
-  // Channel Names
-  sprintf(tmpbuf, "Channel Names: %c/%c", x.NAME[0], x.NAME[1]);
+  // Channel Names (always show ch2 in parentheses to remind user)
+  sprintf(tmpbuf, "Channel Names: %c/%c (%c)", x.NAME[0], x.NAME[1], x.NAME_CH2);
   configPrintln(tmpbuf);
   
   // Poll Character
@@ -499,7 +499,7 @@ struct config_t defaultConfig() {
   x.BAUD_RATE = DEFAULT_BAUD_RATE;
   x.NAME[0] = DEFAULT_NAME_0;
   x.NAME[1] = DEFAULT_NAME_1;
-  x.NAME_3CH = DEFAULT_NAME_3CH;
+  x.NAME_CH2 = DEFAULT_NAME_CH2;
   x.PROP_DELAY[0] = DEFAULT_PROP_DELAY_0;
   x.PROP_DELAY[1] = DEFAULT_PROP_DELAY_1;
   x.START_EDGE[0] = DEFAULT_START_EDGE_0;

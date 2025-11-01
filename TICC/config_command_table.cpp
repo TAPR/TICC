@@ -275,8 +275,8 @@ bool process_generic_command(char cmd, const char* args, bool interactive, const
   int64_t value = 0, valueA = 0, valueB = 0;
   char charValue = 0, charA = 0, charB = 0;
   bool set0 = false, set1 = false;
-  char char3CH = 0;
-  bool set3CH = false;
+  char char_ch2 = 0;
+  bool set_ch2 = false;
   
   switch (value_type) {
     case SIMPLE_INT:
@@ -302,7 +302,7 @@ bool process_generic_command(char cmd, const char* args, bool interactive, const
     case CHAR_PAIR:
       // For channel names, parse optional third character for 3-Corner Hat mode
       if (config_ptr == config.NAME) {
-        valid = parseCharPair(input, &set0, &charA, &set1, &charB, &set3CH, &char3CH);
+        valid = parseCharPair(input, &set0, &charA, &set1, &charB, &set_ch2, &char_ch2);
       } else {
         valid = parseCharPair(input, &set0, &charA, &set1, &charB);
       }
@@ -476,34 +476,19 @@ bool process_generic_command(char cmd, const char* args, bool interactive, const
         }
       } else if (config_ptr == config.NAME) {
         char old0 = config.NAME[0], old1 = config.NAME[1];
-        char old3CH = config.NAME_3CH;
+        char old_ch2 = config.NAME_CH2;
         if (set0) config.NAME[0] = charA;
         if (set1) config.NAME[1] = charB;
-        if (set3CH) config.NAME_3CH = char3CH;
+        if (set_ch2) config.NAME_CH2 = char_ch2;
         config_changed = 1;
-        // Always show third channel in parentheses if it's set (non-zero), even if default
-        bool show_old_3ch = (old3CH != 0);
-        bool show_new_3ch = (config.NAME_3CH != 0);
         
-        if (set3CH) {
-          // Setting third channel explicitly - show as "A/B -> C/D/E" (not in parentheses when being changed)
-          if (show_old_3ch && old3CH != DEFAULT_NAME_3CH) {
-            sprintf_P(sharedBuffer, msg_ok_names_3ch, old0, old1, old3CH, config.NAME[0], config.NAME[1], config.NAME_3CH);
-          } else {
-            sprintf_P(sharedBuffer, msg_ok_names_3ch_new, old0, old1, config.NAME[0], config.NAME[1], config.NAME_3CH);
-          }
-        } else {
-          // Not setting third channel - always show in parentheses if it's set (even if default)
-          if (show_new_3ch) {
-            sprintf_P(sharedBuffer, msg_ok_names_with_3ch, old0, old1, old3CH, config.NAME[0], config.NAME[1], config.NAME_3CH);
-          } else {
-            sprintf_P(sharedBuffer, msg_ok_names, old0, old1, config.NAME[0], config.NAME[1]);
-          }
-        }
+        // Always show ch2 in parentheses to remind user
+        sprintf_P(sharedBuffer, msg_ok_names_with_3ch, old0, old1, old_ch2, config.NAME[0], config.NAME[1], config.NAME_CH2);
+        
         if (!handleConfirmation(sharedBuffer, interactive)) {
           config.NAME[0] = old0;
           config.NAME[1] = old1;
-          config.NAME_3CH = old3CH;
+          config.NAME_CH2 = old_ch2;
           config_changed = 0;
         }
       }

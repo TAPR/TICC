@@ -381,9 +381,9 @@ void show_main_menu() {
   snprintf(line + strlen(line), sizeof(line) - strlen(line), "%c)", config.SYNC_MODE);
   configPrintln(line);
   
-  // E - Channel Names (was F)
+  // E - Channel Names (was F) - always show ch2 in parentheses
   copyProgStrToBuffer(it_names, line, sizeof(line));
-  snprintf(line + strlen(line), sizeof(line) - strlen(line), "%c/%c)", config.NAME[0], config.NAME[1]);
+  snprintf(line + strlen(line), sizeof(line) - strlen(line), "%c/%c (%c))", config.NAME[0], config.NAME[1], config.NAME_CH2);
   configPrintln(line);
   
   // F - Poll Character (was G)

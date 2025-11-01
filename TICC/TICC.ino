@@ -12,7 +12,7 @@
  * firmware works.
  */
 
-extern const char SW_VERSION[17] = "20251031.1";
+extern const char SW_VERSION[17] = "20251101.1";
 extern const char SW_TAG[8] = "RELEASE";
 
 #include <stdint.h>             // define uint16_t, uint32_t
@@ -185,7 +185,8 @@ void loop() {
       }
     }
 
-    // Skip output processing if no new timestamps are ready
+    // Skip output processing:
+    // if no new timestamps are ready
     if (!channels[0].new_ts_ready && !channels[1].new_ts_ready) {
       continue; // skip output processing
     }
@@ -197,32 +198,38 @@ void loop() {
       continue; // skip output processing
     }
 
-    // Call appropriate output function based on current mode (only if output allowed)
-    if (output_allowed) {
-      switch (config.MODE) {
-        case Timestamp:
-          print_timestamp_mode(channels);
-          break;
-        case Period:
-          print_period_mode(channels);
-          break;
-        case Debug:
-          print_debug_mode(channels);
-          break;
-        case Paired_Timestamp:
-          print_paired_timestamp_mode(channels);
-          break;
-        case Interval:
-          print_interval_mode(channels);
-          break;
-        case Hat:
-          print_hat_mode(channels);
-          break;
-        default:
-          // Null or unknown mode - do nothing
-          break;
-      }
+    // or if not output_allowed
+    if (!output_allowed) {
+      channels[0].new_ts_ready = 0; // consume flags
+      channels[1].new_ts_ready = 0; // consume flags
+      continue; // skip output processing
     }
+
+    // Call output function based on mode
+    // output functions are in print.cpp
+    switch (config.MODE) {
+      case Timestamp:
+        print_timestamp_mode(channels);
+        break;
+      case Period:
+        print_period_mode(channels);
+        break;
+      case Debug:
+        print_debug_mode(channels);
+        break;
+      case Paired_Timestamp:
+        print_paired_timestamp_mode(channels);
+        break;
+      case Interval:
+        print_interval_mode(channels);
+        break;
+      case Hat:
+        print_hat_mode(channels);
+        break;
+      default:
+        // Null or unknown mode - do nothing
+        break;
+      }
 
   }  // while (1) loop
 

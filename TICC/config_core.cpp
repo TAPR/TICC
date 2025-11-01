@@ -369,10 +369,10 @@ void handle_config_change_exit() {
 
 // Print current configuration
 void print_config(config_t x) {
-  char tmpbuf[64];
+  char tmpbuf[128];
   
   // Software Version
-  strcpy(tmpbuf, "Software Version: ");
+  strcpy_P(tmpbuf, cfg_sw_version);
   strcat(tmpbuf, SW_VERSION);
   if (strlen(SW_TAG) > 0) {
     strcat(tmpbuf, " (");
@@ -382,62 +382,66 @@ void print_config(config_t x) {
   configPrintln(tmpbuf);
   
   // EEPROM Version and Board Version
-  sprintf(tmpbuf, "EEPROM Version: %d, Board Version: %c", EEPROM.read(CONFIG_START), x.BOARD_REV);
+  sprintf_P(tmpbuf, cfg_eeprom_version, EEPROM.read(CONFIG_START), x.BOARD_REV);
   configPrintln(tmpbuf);
   
   // Board Serial Number
-  strcpy(tmpbuf, "Board Serial Number: ");
+  strcpy_P(tmpbuf, cfg_serial_number);
   strcat(tmpbuf, x.SER_NUM);
   configPrintln(tmpbuf);
   
   // Measurement Mode (most important param)
-  strcpy(tmpbuf, "Measurement Mode: ");
+  strcpy_P(tmpbuf, cfg_measurement_mode);
   switch (x.MODE) {
-     case Timestamp: strcat(tmpbuf, "Timestamp"); break;
-    case Paired_Timestamp: strcat(tmpbuf, "Paired_Timestamp"); break;
-    case Binary: strcat(tmpbuf, "Binary Timestamp"); break;
-    case Period: strcat(tmpbuf, "Period"); break;
-    case Interval: strcat(tmpbuf, "Time Interval A->B"); break;
-    case Hat: strcat(tmpbuf, "3-Cornered Hat"); break;
-    case Debug: strcat(tmpbuf, "Debug"); break;
-    case Null: strcat(tmpbuf, "Null Output"); break;
+     case Timestamp: strcat_P(tmpbuf, mode_name_timestamp); break;
+    case Paired_Timestamp: strcat_P(tmpbuf, mode_name_paired); break;
+    case Binary: strcat_P(tmpbuf, mode_name_binary); break;
+    case Period: strcat_P(tmpbuf, mode_name_period); break;
+    case Interval: strcat_P(tmpbuf, mode_name_interval); break;
+    case Hat: strcat_P(tmpbuf, mode_name_hat); break;
+    case Debug: strcat_P(tmpbuf, mode_name_debug); break;
+    case Null: strcat_P(tmpbuf, mode_name_null); break;
   }
   configPrintln(tmpbuf);
   
   // Timestamp Wrap
-  strcpy(tmpbuf, "Timestamp Wrap: ");
+  strcpy_P(tmpbuf, cfg_timestamp_wrap);
   if (x.WRAP <= 0) {
-    sprintf(tmpbuf + strlen(tmpbuf), "%d (no wrap)", x.WRAP);
+    sprintf_P(tmpbuf + strlen(tmpbuf), wrap_no_wrap_fmt, x.WRAP);
   } else if (x.WRAP <= 9) {
     uint32_t wrap_seconds = 1;
     for (int i = 0; i < x.WRAP; i++) wrap_seconds *= 10;
-    sprintf(tmpbuf + strlen(tmpbuf), "%d (wraps at %lu seconds)", x.WRAP, (unsigned long)wrap_seconds);
+    sprintf_P(tmpbuf + strlen(tmpbuf), wrap_seconds_fmt, x.WRAP, (unsigned long)wrap_seconds);
   } else {
-    sprintf(tmpbuf + strlen(tmpbuf), "%d (wraps at 1e%d seconds)", x.WRAP, x.WRAP);
+    sprintf_P(tmpbuf + strlen(tmpbuf), wrap_scientific_fmt, x.WRAP, x.WRAP);
   }
   configPrintln(tmpbuf);
   
   // Output Decimal Places
-  sprintf(tmpbuf, "Output Decimal Places: %d", x.PLACES);
+  sprintf_P(tmpbuf, cfg_decimal_places, x.PLACES);
   configPrintln(tmpbuf);
   
   // SyncMode
-  sprintf(tmpbuf, "SyncMode: %c", x.SYNC_MODE);
+  sprintf_P(tmpbuf, cfg_sync_mode, x.SYNC_MODE);
   configPrintln(tmpbuf);
   
   // Serial Baud Rate
-  sprintf(tmpbuf, "Serial Baud Rate: %lu", (unsigned long)x.BAUD_RATE);
+  sprintf_P(tmpbuf, cfg_baud_rate, (unsigned long)x.BAUD_RATE);
   configPrintln(tmpbuf);
   
   // Channel Names (always show ch2 in parentheses to remind user)
-  sprintf(tmpbuf, "Channel Names: %c/%c (%c)", x.NAME[0], x.NAME[1], x.NAME_CH2);
+  sprintf_P(tmpbuf, cfg_channel_names, x.NAME[0], x.NAME[1], x.NAME_CH2);
   configPrintln(tmpbuf);
   
   // Poll Character
   if (x.POLL_CHAR) {
-    sprintf(tmpbuf, "Poll Character: %c", x.POLL_CHAR);
+    char pollbuf[32];
+    strcpy_P(pollbuf, cfg_poll_char);
+    pollbuf[strlen(pollbuf)] = x.POLL_CHAR;
+    pollbuf[strlen(pollbuf) + 1] = '\0';
+    strcpy(tmpbuf, pollbuf);
   } else {
-    strcpy(tmpbuf, "Poll Character: none");
+    strcpy_P(tmpbuf, cfg_poll_none);
   }
   configPrintln(tmpbuf);
   
@@ -445,38 +449,50 @@ void print_config(config_t x) {
   int64_t MHz = x.CLOCK_HZ / 1000000;
   int64_t Hz = MHz * 1000000;
   int64_t fract = x.CLOCK_HZ - Hz;
-  sprintf(tmpbuf, "Clock Speed: %ld.%06ld MHz", (int32_t)MHz, (int32_t)fract);
+  sprintf_P(tmpbuf, cfg_clock_speed, (int32_t)MHz, (int32_t)fract);
   configPrintln(tmpbuf);
   
   // Coarse tick
   int64_t us = x.PICTICK_PS / 1000000;
   int64_t ps = us * 1000000;
   int64_t ps_fract = x.PICTICK_PS - ps;
-  sprintf(tmpbuf, "Coarse tick: %ld.%06ld usec", (int32_t)us, (int32_t)ps_fract);
+  sprintf_P(tmpbuf, cfg_coarse_tick, (int32_t)us, (int32_t)ps_fract);
   configPrintln(tmpbuf);
   
   // Cal Periods
-  sprintf(tmpbuf, "Cal Periods: %d", x.CAL_PERIODS);
+  sprintf_P(tmpbuf, cfg_cal_periods, x.CAL_PERIODS);
   configPrintln(tmpbuf);
   
   // PropDelay
-  sprintf(tmpbuf, "PropDelay: %ld (ch0), %ld (ch1)", (long)x.PROP_DELAY[0], (long)x.PROP_DELAY[1]);
+  strcpy_P(tmpbuf, cfg_prop_delay);
+  char propbuf[32];
+  sprintf(propbuf, "%ld (ch0), %ld (ch1)", (long)x.PROP_DELAY[0], (long)x.PROP_DELAY[1]);
+  strcat(tmpbuf, propbuf);
   configPrintln(tmpbuf);
   
   // Timeout
-  sprintf(tmpbuf, "Timeout: 0x%.2X", x.TIMEOUT);
+  sprintf_P(tmpbuf, cfg_timeout, x.TIMEOUT);
   configPrintln(tmpbuf);
   
   // Time Dilation
-  sprintf(tmpbuf, "Time Dilation: %ld (ch0), %ld (ch1)", (long)x.TIME_DILATION[0], (long)x.TIME_DILATION[1]);
+  strcpy_P(tmpbuf, cfg_time_dilation);
+  char dilbuf[32];
+  sprintf(dilbuf, "%ld (ch0), %ld (ch1)", (long)x.TIME_DILATION[0], (long)x.TIME_DILATION[1]);
+  strcat(tmpbuf, dilbuf);
   configPrintln(tmpbuf);
   
   // FIXED_TIME2
-  sprintf(tmpbuf, "FIXED_TIME2: %ld (ch0), %ld (ch1)", (long)x.FIXED_TIME2[0], (long)x.FIXED_TIME2[1]);
+  strcpy_P(tmpbuf, cfg_fixed_time2);
+  char fixbuf[32];
+  sprintf(fixbuf, "%ld (ch0), %ld (ch1)", (long)x.FIXED_TIME2[0], (long)x.FIXED_TIME2[1]);
+  strcat(tmpbuf, fixbuf);
   configPrintln(tmpbuf);
   
   // FUDGE0
-  sprintf(tmpbuf, "FUDGE0: %ld (ch0), %ld (ch1)", (long)x.FUDGE0[0], (long)x.FUDGE0[1]);
+  strcpy_P(tmpbuf, cfg_fudge0);
+  char fudbuf[32];
+  sprintf(fudbuf, "%ld (ch0), %ld (ch1)", (long)x.FUDGE0[0], (long)x.FUDGE0[1]);
+  strcat(tmpbuf, fudbuf);
   configPrintln(tmpbuf);
 }
 

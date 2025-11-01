@@ -174,4 +174,59 @@ const char ln_discarded_changes[] PROGMEM = "Discarded changes.";
 const char ln_applying_resuming[] PROGMEM = "Applying changes and resuming operation...";
 const char ln_defaults_written[] PROGMEM = "Defaults written. Restarting...";
 
+// Startup banner strings
+const char startup_ticc_title[] PROGMEM = "TAPR TICC Timestamping Counter";
+const char startup_copyright[] PROGMEM = "Copyright 2016-2025 N8UR, K9TRV, NH6Z, WA8YWQ";
+const char startup_config_header[] PROGMEM = "TICC Configuration: ";
+const char startup_config_separator[] PROGMEM = "#####################";
+
+// Startup mode messages
+const char startup_mode_timestamp[] PROGMEM = "timestamp (seconds with ";
+const char startup_mode_paired[] PROGMEM = "paired channel-order timestamp (seconds with ";
+const char startup_mode_interval[] PROGMEM = "time interval ch0->ch1 (seconds with ";
+const char startup_mode_period[] PROGMEM = "period (seconds with ";
+const char startup_mode_hat[] PROGMEM = "timestamp ch0, ch1; interval ch0->ch1 (seconds with ";
+const char startup_mode_debug[] PROGMEM = "time1 time2 clock1 cal1 cal2 PICstop tof timestamp";
+const char startup_mode_binary[] PROGMEM = "Binary Timestamp mode - 12 byte frames:";
+const char startup_mode_binary_desc[] PROGMEM = "header (0x55,0xAA), channel (1 byte), PICstop (4 bytes), tof (4 bytes), CRC (1 byte)";
+const char startup_mode_null[] PROGMEM = "null output mode - no data";
+const char startup_decimal_places[] PROGMEM = " decimal places)";
+
+// print_config labels
+const char cfg_sw_version[] PROGMEM = "Software Version: ";
+const char cfg_eeprom_version[] PROGMEM = "EEPROM Version: %d, Board Version: %c";
+const char cfg_serial_number[] PROGMEM = "Board Serial Number: ";
+const char cfg_measurement_mode[] PROGMEM = "Measurement Mode: ";
+const char cfg_timestamp_wrap[] PROGMEM = "Timestamp Wrap: ";
+const char cfg_decimal_places[] PROGMEM = "Output Decimal Places: %d";
+const char cfg_sync_mode[] PROGMEM = "SyncMode: %c";
+const char cfg_baud_rate[] PROGMEM = "Serial Baud Rate: %lu";
+const char cfg_channel_names[] PROGMEM = "Channel Names: %c/%c (%c)";
+const char cfg_poll_char[] PROGMEM = "Poll Character: ";
+const char cfg_poll_none[] PROGMEM = "Poll Character: none";
+const char cfg_clock_speed[] PROGMEM = "Clock Speed: %ld.%06ld MHz";
+const char cfg_coarse_tick[] PROGMEM = "Coarse tick: %ld.%06ld usec";
+const char cfg_cal_periods[] PROGMEM = "Cal Periods: %d";
+const char cfg_timeout[] PROGMEM = "Timeout: 0x%02x";
+const char cfg_prop_delay[] PROGMEM = "Propagation Delay ps: ";
+const char cfg_time_dilation[] PROGMEM = "Time Dilation ps: ";
+const char cfg_fixed_time2[] PROGMEM = "fixedTime2 ps: ";
+const char cfg_fudge0[] PROGMEM = "FUDGE0 ps: ";
+const char cfg_start_edge[] PROGMEM = "Start Edge: %c/%c";
+
+// Mode names for print_config
+const char mode_name_timestamp[] PROGMEM = "Timestamp";
+const char mode_name_paired[] PROGMEM = "Paired_Timestamp";
+const char mode_name_binary[] PROGMEM = "Binary Timestamp";
+const char mode_name_period[] PROGMEM = "Period";
+const char mode_name_interval[] PROGMEM = "Time Interval A->B";
+const char mode_name_hat[] PROGMEM = "3-Cornered Hat";
+const char mode_name_debug[] PROGMEM = "Debug";
+const char mode_name_null[] PROGMEM = "Null Output";
+
+// Wrap format strings
+const char wrap_no_wrap_fmt[] PROGMEM = "%d (no wrap)";
+const char wrap_seconds_fmt[] PROGMEM = "%d (wraps at %lu seconds)";
+const char wrap_scientific_fmt[] PROGMEM = "%d (wraps at 1e%d seconds)";
+
 #endif

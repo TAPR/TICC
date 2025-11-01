@@ -11,6 +11,8 @@
 #include "tdc7200.h"
 #include "print.h"
 #include "setup.h"
+#include "config_menu_text.h"
+#include "TICC.h"
 
 // Forward declarations for ISRs (defined in TICC.ino)
 void coarseTimer();
@@ -82,14 +84,14 @@ void ticc_setup() {
 
   // print banner -- all non-data output lines begin with "#" so they're seen as comments
   Serial.println("# ");
-  Serial.println("# TAPR TICC Timestamping Counter");
-  Serial.println("# Copyright 2016-2025 N8UR, K9TRV, NH6Z, WA8YWQ");
+  configPrintlnProg(startup_ticc_title);
+  configPrintlnProg(startup_copyright);
   Serial.println("# ");
   
-  Serial.println("#####################");
-  Serial.println("# TICC Configuration: ");
+  configPrintlnProg(startup_config_separator);
+  configPrintlnProg(startup_config_header);
   print_config(config);
-  Serial.println("#####################");
+  configPrintlnProg(startup_config_separator);
   Serial.println("# ");
 
   // get and save config change (skip once after exiting config menu via '#')
@@ -197,42 +199,66 @@ void ticc_setup() {
   // print header to stdout (unless restart is pending)
   if (!request_restart) {
     Serial.println("# ");
+    char line[128];
     switch (config.MODE) {
     case Timestamp:
-      Serial.print("# timestamp (seconds with ");
+      strcpy_P(line, startup_mode_timestamp);
+      Serial.print("# ");
+      Serial.print(line);
       Serial.print(config.PLACES);
-      Serial.println(" decimal places)");
+      strcpy_P(line, startup_decimal_places);
+      Serial.println(line);
       break;
     case Paired_Timestamp:
-      Serial.print("# paired channel-order timestamp (seconds with ");
+      strcpy_P(line, startup_mode_paired);
+      Serial.print("# ");
+      Serial.print(line);
       Serial.print(config.PLACES);
-      Serial.println(" decimal places)");
+      strcpy_P(line, startup_decimal_places);
+      Serial.println(line);
       break;
     case Interval:
-      Serial.print("# time interval ch0->ch1 (seconds with ");
+      strcpy_P(line, startup_mode_interval);
+      Serial.print("# ");
+      Serial.print(line);
       Serial.print(config.PLACES);
-      Serial.println(" decimal places)");
+      strcpy_P(line, startup_decimal_places);
+      Serial.println(line);
       break;
     case Period:
-      Serial.print("# period (seconds with ");
+      strcpy_P(line, startup_mode_period);
+      Serial.print("# ");
+      Serial.print(line);
       Serial.print(config.PLACES);
-      Serial.println(" decimal places)");
+      strcpy_P(line, startup_decimal_places);
+      Serial.println(line);
       break;
     case Hat:
-      Serial.print("# timestamp ch0, ch1; interval ch0->ch1 (seconds with ");
+      strcpy_P(line, startup_mode_hat);
+      Serial.print("# ");
+      Serial.print(line);
       Serial.print(config.PLACES);
-      Serial.println(" decimal places)");
+      strcpy_P(line, startup_decimal_places);
+      Serial.println(line);
       break;
     case Debug:
-      Serial.println("# time1 time2 clock1 cal1 cal2 PICstop tof timestamp");
+      Serial.print("# ");
+      strcpy_P(line, startup_mode_debug);
+      Serial.println(line);
       break;
     case Binary:
-      Serial.println("# Binary Timestamp mode - 12 byte frames:");
-      Serial.println("# header (0x55,0xAA), channel (1 byte), PICstop (4 bytes), tof (4 bytes), CRC (1 byte)");
+      Serial.print("# ");
+      strcpy_P(line, startup_mode_binary);
+      Serial.println(line);
+      Serial.print("# ");
+      strcpy_P(line, startup_mode_binary_desc);
+      Serial.println(line);
       Serial.println();
       break;
     case Null:
-      Serial.println("# null output mode - no data");
+      Serial.print("# ");
+      strcpy_P(line, startup_mode_null);
+      Serial.println(line);
       break;
   }  // switch
   }  // if (!request_restart)

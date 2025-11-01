@@ -197,216 +197,32 @@ void loop() {
       continue; // skip output processing
     }
 
-    // Timestamp mode: print each timestamp in timestamp order (earlier timestamp first)
-    if ((config.MODE == Timestamp) && output_allowed) {
-      // Both ready: print earlier timestamp first, then later one
-      if (channels[0].new_ts_ready && channels[1].new_ts_ready) {
-        // Check if channel 0 timestamp < channel 1 timestamp (channel 0 is earlier)
-        bool ch0_earlier = (channels[0].timestamp.seconds < channels[1].timestamp.seconds) ||
-                        ((channels[0].timestamp.seconds == channels[1].timestamp.seconds) && 
-                         (channels[0].timestamp.picos < channels[1].timestamp.picos));
-        
-        int first_ch = ch0_earlier ? 0 : 1;
-        int second_ch = ch0_earlier ? 1 : 0;
-        
-        char line[64];
-        print_timestamp(line, sizeof(line), &channels[first_ch].timestamp, (char)channels[first_ch].name);
-        print_timestamp(line, sizeof(line), &channels[second_ch].timestamp, (char)channels[second_ch].name);
-        
-        channels[0].new_ts_ready = 0;  // consume both
-        channels[1].new_ts_ready = 0;
-        } else {
-        // Only one ready: print that one
-        for (int ci = 0; ci < 2; ++ci) {
-          if (channels[ci].new_ts_ready) {
-            char line[64];
-            print_timestamp(line, sizeof(line), &channels[ci].timestamp, (char)channels[ci].name);
-            channels[ci].new_ts_ready = 0;  // consume
-          }
-        }
+    // Call appropriate output function based on current mode (only if output allowed)
+    if (output_allowed) {
+      switch (config.MODE) {
+        case Timestamp:
+          print_timestamp_mode(channels);
+          break;
+        case Period:
+          print_period_mode(channels);
+          break;
+        case Debug:
+          print_debug_mode(channels);
+          break;
+        case Paired_Timestamp:
+          print_paired_timestamp_mode(channels);
+          break;
+        case Interval:
+          print_interval_mode(channels);
+          break;
+        case Hat:
+          print_hat_mode(channels);
+          break;
+        default:
+          // Null or unknown mode - do nothing
+          break;
       }
     }
-
-    // Period mode: print period (timestamp - previous_timestamp) for each channel
-    if ((config.MODE == Period) && output_allowed) {
-      // Static buffer to store previous timestamps for each channel
-      static Timestamp64 prev_timestamp[2] = {{0, 0}, {0, 0}};
-      
-      for (int ci = 0; ci < 2; ++ci) {
-        if (channels[ci].new_ts_ready && (channels[ci].totalize > 2)) {
-          // Calculate period: current timestamp - previous timestamp from buffer
-          Timestamp64 period = timestamp_difference(&channels[ci].timestamp, 
-              &prev_timestamp[ci]);
-          char line[64];
-          print_timestamp(line, sizeof(line), &period, (char)channels[ci].name, false);  // No wrap
-          
-          channels[ci].new_ts_ready = 0;  // consume
-          
-          // Update buffer with current timestamp for next calculation
-          prev_timestamp[ci] = channels[ci].timestamp;
-        }
-      }
-    }
-
-    // Debug mode: output raw TDC7200 register values plus calculated timestamp
-    if ((config.MODE == Debug) && output_allowed) {
-      for (int ci = 0; ci < 2; ++ci) {
-        if (channels[ci].new_ts_ready && (channels[ci].totalize > 2)) {
-          char line[128];
-          size_t n = 0;
-          
-          // Raw TDC7200 values (6 digits each)
-          n += sprintf(line + n, "%06lu ", (unsigned long)channels[ci].time1Result);
-          n += sprintf(line + n, "%06lu ", (unsigned long)channels[ci].time2Result);
-          n += sprintf(line + n, "%06lu ", (unsigned long)channels[ci].clock1Result);
-          n += sprintf(line + n, "%06lu ", (unsigned long)channels[ci].cal1Result);
-          n += sprintf(line + n, "%06lu ", (unsigned long)channels[ci].cal2Result);
-          
-          // Write the line so far
-          Serial.write((const uint8_t*)line, n);
-          
-          // PICstop (int64_t - use new print_int64 function)
-          print_int64(channels[ci].PICstop, false);
-          Serial.write(' ');
-          
-          // tof (int64_t - use new print_int64 function) 
-          print_int64(channels[ci].tof, false);
-          Serial.write(' ');
-          
-          // timestamp (no WRAP, PLACES=12) with channel name
-          print_timestamp(line, sizeof(line), &channels[ci].timestamp, (char)channels[ci].name, false);
-          
-          channels[ci].new_ts_ready = 0;  // consume
-        }
-      }
-    }
-
-    // Paired_Timestamp mode: assemble and print pairs without timeout
-    if (config.MODE == Paired_Timestamp) {
-      // Two-slot buffer; accumulate two successive samples (across either channel)
-      // then emit exactly two lines per pair in fixed order: if both channels are
-      // present print channel 0 then channel 1; if both are the same channel, print that
-      // channel twice.
-      struct PairSlot {
-        Timestamp64 t;
-        uint8_t ch;
-      };
-      static PairSlot ts_pair[2];
-      static uint8_t ts_pair_count = 0;
-
-      // Ingest any fresh samples into the pair buffer
-      for (int ci = 0; ci < 2; ++ci) {
-        if (channels[ci].new_ts_ready) {
-          if (ts_pair_count < 2) {
-            ts_pair[ts_pair_count].t = channels[ci].timestamp;
-            ts_pair[ts_pair_count].ch = (uint8_t)ci;
-            ts_pair_count++;
-          }
-          channels[ci].new_ts_ready = 0;  // consume
-        }
-      }
-
-      // If we have a complete pair, emit in fixed order with poll gating
-      if ((ts_pair_count == 2) && output_allowed) {
-          // Determine composition and enforce channel 0 then channel 1 order when both present
-          if ((ts_pair[0].ch == 0 && ts_pair[1].ch == 1) || (ts_pair[0].ch == 1 && ts_pair[1].ch == 0)) {
-            // Mixed channels: find channel 0 then channel 1
-            const PairSlot *ch0 = (ts_pair[0].ch == 0) ? &ts_pair[0] : &ts_pair[1];
-            const PairSlot *ch1 = (ts_pair[0].ch == 1) ? &ts_pair[0] : &ts_pair[1];
-            // Print channel 0 timestamp
-            {
-              char line[64];
-              print_timestamp(line, sizeof(line), &ch0->t, (char)channels[0].name);
-            }
-            // Print channel 1 timestamp
-            {
-              char line[64];
-              print_timestamp(line, sizeof(line), &ch1->t, (char)channels[1].name);
-            }
-          } else {
-            // Same channel twice: print both with that channel's name
-            uint8_t ci = ts_pair[0].ch;
-            char cname = channels[ci].name;
-            for (int k = 0; k < 2; ++k) {
-              char line[64];
-              print_timestamp(line, sizeof(line), &ts_pair[k].t, cname);
-            }
-          }
-          ts_pair_count = 0;  // clear pair buffer after printing
-      }
-    }
-
-    // Shared pairing logic for Interval and 3-Cornered Hat modes
-    if (both_channels_ready() && output_allowed) {
-        switch (config.MODE) {
-          case Interval:
-            {
-              // Calculate time interval from channel 0 to channel 1
-              Timestamp64 interval = timestamp_difference(&channels[1].timestamp, &channels[0].timestamp);
-              char line[64];
-              print_timestamp_difference(line, sizeof(line), &interval, '\0', false);  // No wrap, no channel name
-              consume_both_flags();
-              break;
-            }
-          case Hat:
-            {
-              // 3-Cornered Hat mode: channel 0, channel 1, and chC (synthesized)
-              // chC = int(channel 1) + (channel 1 - channel 0) - properly handle negative differences
-              
-              // Print channel 0 and channel 1 timestamps
-              char line[64];
-              print_timestamp(line, sizeof(line), &channels[0].timestamp, (char)channels[0].name);
-              print_timestamp(line, sizeof(line), &channels[1].timestamp, (char)channels[1].name);
-              
-              // Calculate chC = int(channel 1) + (channel 1 - channel 0)
-              // Use timestamp_difference_ps() for the interval (small, safe)
-              // Keep integer seconds separate to avoid overflow
-              int64_t interval_ps = timestamp_difference_ps(&channels[1].timestamp, &channels[0].timestamp);
-              
-              // Start with int(ch1) = {ch1.seconds, 0}
-              Timestamp64 chC;
-              chC.seconds = channels[1].timestamp.seconds;
-              
-              // Add the interval (in picoseconds) to the fractional part
-              if (interval_ps >= 0) {
-                // Positive interval: add to picos, handle carry
-                chC.picos = (uint64_t)interval_ps;
-                if (chC.picos >= PS_PER_SEC) {
-                  chC.seconds += (int32_t)(chC.picos / PS_PER_SEC);
-                  chC.picos %= PS_PER_SEC;
-                }
-              } else {
-                // Negative interval: subtract from seconds, borrow if needed
-                int64_t abs_ps = -interval_ps;
-                uint64_t abs_picos = (uint64_t)abs_ps;
-                
-                if (abs_picos == 0) {
-                  // Whole second difference - just subtract seconds
-                  chC.picos = 0;
-                  chC.seconds -= (int32_t)(abs_ps / PS_PER_SEC);
-                } else {
-                  // Fractional difference - need to borrow
-                  uint32_t sec_to_borrow = (uint32_t)(abs_picos / PS_PER_SEC);
-                  uint64_t rem_picos = abs_picos % PS_PER_SEC;
-                  
-                  if (sec_to_borrow > 0 || rem_picos > 0) {
-                    chC.seconds -= (int32_t)(sec_to_borrow + 1);
-                    chC.picos = PS_PER_SEC - rem_picos;
-                  }
-                }
-              }
-              
-              // Print synthesized third channel using configured name (default 'C')
-              char third_ch_name = config.NAME_3CH;
-              if (third_ch_name == 0) third_ch_name = 'C';  // Fallback to default
-              print_timestamp(line, sizeof(line), &chC, third_ch_name);
-              
-              consume_both_flags();
-              break;
-            }
-          default: break;
-        }
-      }
 
   }  // while (1) loop
 

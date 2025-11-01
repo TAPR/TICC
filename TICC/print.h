@@ -32,6 +32,14 @@ void update_cached_config();
 // Efficient 64-bit integer printing function
 void print_int64(int64_t value, bool add_crlf = true);
 
+// Output mode routines - modify channel flags and print formatted output
+void print_timestamp_mode(tdc7200Channel* channels);
+void print_period_mode(tdc7200Channel* channels);
+void print_debug_mode(tdc7200Channel* channels);
+void print_paired_timestamp_mode(tdc7200Channel* channels);
+void print_interval_mode(tdc7200Channel* channels);
+void print_hat_mode(tdc7200Channel* channels);
+
 // Timestamp difference functions moved to timestamps.h
 
 #endif // PRINT_H

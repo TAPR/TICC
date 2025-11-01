@@ -80,7 +80,6 @@ struct config_t {
 
 /*****************************************************************/
 // External variables (defined in config_core.cpp)
-extern char SER_NUM[17];
 extern uint8_t config_changed;
 extern config_t config;
 extern config_t config_backup;

@@ -128,7 +128,7 @@ extern void eeprom_clear();
 
 // External variables from TICC.ino
 extern volatile uint8_t request_restart;
-// config_changed, config, SW_VERSION, SW_TAG, and SER_NUM now in TICC.h
+// config_changed, config, SW_VERSION, SW_TAG now in TICC.h
 
 // Single shared buffer to reduce memory usage
 char sharedBuffer[128];
@@ -627,7 +627,7 @@ bool process_version_command() {
     app_c(p, r, ')');
   }
   app_s(p, r, ", Board serial: ");
-  app_s(p, r, SER_NUM);
+  app_s(p, r, config.SER_NUM);
   
   // Single print call - configPrintln adds # prefix
   configPrintln(versionStr);
@@ -682,10 +682,35 @@ bool process_eeprom_clear_command() {
   readLine(sharedBuffer, sizeof(sharedBuffer));
   char *input = trimInPlace(sharedBuffer);
   if (strcmp(input, "YES") == 0) {
+    // Save current serial number before clearing
+    int32_t saved_x, saved_y;
+    EEPROM_readAnything(SER_NUM_START, saved_x);
+    EEPROM_readAnything(SER_NUM_START + 4, saved_y);
+    
+    // Show current serial and prompt to keep
+    configPrintln("");
+    configPrintProg(ln_serial_current);
+    configPrintln(config.SER_NUM);
+    configPrintProg(ln_serial_keep_prompt);
+    configPrint("> ");
+    readLine(sharedBuffer, sizeof(sharedBuffer));
+    char *keep = trimInPlace(sharedBuffer);
+    
     configPrintlnProg(ln_eeprom_clearing);
     eeprom_clear();
+    
+    // If user wants to keep the serial, restore it
+    if (strcasecmp(keep, "Y") == 0) {
+      configPrintlnProg(ln_serial_keeping);
+      EEPROM_writeAnything(SER_NUM_START, saved_x);
+      EEPROM_writeAnything(SER_NUM_START + 4, saved_y);
+    } else {
+      configPrintlnProg(ln_serial_regenerating);
+    }
+    
     configPrintlnProg(ln_eeprom_cleared);
-    return false; // Exit config system
+    request_restart = 1;  // Set restart flag
+    return false; // Exit config system with restart
   } else {
     configPrintlnProg(ln_eeprom_cancelled);
   }

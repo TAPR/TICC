@@ -12,10 +12,11 @@
 #include <EEPROM.h>
 #include <Arduino.h>
 #include "config.h"
+#include "config_menu_text.h"
+#include "TICC.h"
 
 // External variables
 extern config_t config;
-extern char SER_NUM[17];
 
 // Write default configuration to EEPROM at specified offset
 void eeprom_write_config_default(uint16_t offset) {
@@ -62,17 +63,18 @@ void get_serial_number() {
   // If no serial number, make one
   if (((x == 0xFFFFFFFF) && (y == 0xFFFFFFFF)) ||
       ((x == 0x00000000) && (y == 0x00000000))) {
-    Serial.println("No serial number found... making one");
+    configPrintlnProg(startup_serial_found);
     randomSeed(analogRead(A0));  // seed with noise from A0
     x = random(0xFFFF);
     randomSeed(analogRead(A3));  // seed with noise from A3
     y = random(0xFFFF);
     EEPROM_writeAnything(SER_NUM_START, x);
     EEPROM_writeAnything(SER_NUM_START + 4, y);
-    sprintf(SER_NUM, "%04lX%04lX", x, y); 
-    Serial.print("Serial Number: ");
-    Serial.println(SER_NUM);
+    sprintf(config.SER_NUM, "%04lX%04lX", x, y); 
+    configPrintProg(startup_serial_display);
+    Serial.println(config.SER_NUM);
     delay(7500);
+  } else {
+    sprintf(config.SER_NUM, "%04lX%04lX", x, y);
   }
-  sprintf(SER_NUM, "%04lX%04lX", x, y);
 }

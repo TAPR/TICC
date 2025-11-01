@@ -13,7 +13,6 @@ extern const char SW_VERSION[17];
 extern const char SW_TAG[8];
 
 // System-wide variables
-extern char SER_NUM[17];
 extern uint8_t config_changed;
 extern config_t config;
 extern config_t config_backup;

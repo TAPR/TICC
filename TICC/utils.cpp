@@ -8,6 +8,8 @@
 #include "config.h"
 #include "tdc7200.h"
 #include "utils.h"
+#include "config_menu_text.h"
+#include "TICC.h"
 
 // External global variables from TICC.ino
 extern volatile int64_t PICcount;
@@ -121,12 +123,12 @@ bool handle_config_request() {
   config_requested = 0;  // Clear the flag
   
   // Stop TDC7200 measurements to prevent new data during config
-  Serial.println("# Stopping measurements for config...");
+  configPrintlnProg(startup_stopping_measurements);
   stop_all_measurements();
   
   // Flush any pending measurements from TDC7200 chips to prevent
   // them from appearing after returning from config menu
-  Serial.println("# Flushing pending measurements before config...");
+  configPrintlnProg(startup_flushing_measurements);
   flush_all_channels();
   
   // Small delay to ensure buffer is fully cleared
@@ -154,7 +156,7 @@ bool handle_config_request() {
   }
   
   // Restart measurements after config changes
-  Serial.println("# Restarting measurements...");
+  configPrintlnProg(startup_restarting_measurements);
   start_all_measurements();
   
   // Clear the config_changed flag for next time

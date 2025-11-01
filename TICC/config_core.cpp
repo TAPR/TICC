@@ -17,7 +17,7 @@
 #include "TICC.h"
 
 // External variables referenced by other files
-char SER_NUM[17];          // set by get_ser_num();
+// SER_NUM is now part of config_t struct
 
 // Serial I/O helper functions
 void configPrint(const char* msg) {
@@ -502,7 +502,8 @@ struct config_t defaultConfig() {
   x.VERSION = EEPROM_VERSION;
   strncpy(x.SW_VERSION, SW_VERSION, sizeof(x.SW_VERSION));
   x.BOARD_REV = BOARD_REVISION;
-  strncpy(x.SER_NUM, SER_NUM, sizeof(x.SER_NUM));
+  // SER_NUM is set by get_serial_number() before this is called
+  strncpy(x.SER_NUM, config.SER_NUM, sizeof(x.SER_NUM));
   x.MODE = DEFAULT_MODE;
   x.POLL_CHAR = DEFAULT_POLL_CHAR;
   x.CLOCK_HZ = DEFAULT_CLOCK_HZ;

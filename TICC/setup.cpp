@@ -53,20 +53,22 @@ void ticc_setup() {
   /*******************************************
    * Configuration read/change/store
    *******************************************/
-  // check or assign serial number
+  
+  // Initialize serial at default baud rate for all operations
+  Serial.end();  // first close in case we've come here from a break
+  Serial.begin(115200);  // Use default baud rate for initial operations
+  delay(1500);
+  Serial.flush();
+  
+  // check or assign serial number (must be done before checking/config defaults)
   get_serial_number();
-
+  
   // if no config stored, or wrong version, restore from default
   if (EEPROM.read(CONFIG_START) != EEPROM_VERSION) {
-    // Need to initialize serial at default rate to show message
-    Serial.end();  // first close in case we've come here from a break
-    Serial.begin(115200);  // Use default baud rate for initial message
-    delay(1500);
-    Serial.flush();
-    Serial.println("No config found.  Writing default...");
+    configPrintlnProg(startup_no_config);
     eeprom_write_config_default(CONFIG_START);
   }
-
+  
   // read config and set global vars
   eeprom_read_config();
   lastMODE = config.MODE;
@@ -97,7 +99,7 @@ void ticc_setup() {
   // get and save config change (skip once after exiting config menu via '#')
   if (!skip_config_prompt_once) {
     // New config system startup check
-    Serial.println("# Type any character for config menu");
+    configPrintlnProg(startup_config_request);
     Serial.print("# ");
     bool configRequested = false;
     for (int i = 6; i >= 0; --i) {  // wait ~6 sec so user can type something

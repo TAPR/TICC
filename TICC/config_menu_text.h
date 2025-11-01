@@ -152,6 +152,10 @@ const char ln_eeprom_confirm[] PROGMEM = "Type 'YES' to confirm: ";
 const char ln_eeprom_clearing[] PROGMEM = "Clearing entire EEPROM...";
 const char ln_eeprom_cleared[] PROGMEM = "EEPROM cleared. Restarting...";
 const char ln_eeprom_cancelled[] PROGMEM = "EEPROM clear cancelled.";
+const char ln_serial_current[] PROGMEM = "Current serial number: ";
+const char ln_serial_keep_prompt[] PROGMEM = "Keep this serial number? (Y/N): ";
+const char ln_serial_keeping[] PROGMEM = "Serial number will be preserved.";
+const char ln_serial_regenerating[] PROGMEM = "Serial number will be regenerated.";
 
 // Config change messages
 const char ln_restart_default[] PROGMEM = "Restarting with default settings.";
@@ -179,6 +183,14 @@ const char startup_ticc_title[] PROGMEM = "TAPR TICC Timestamping Counter";
 const char startup_copyright[] PROGMEM = "Copyright 2016-2025 N8UR, K9TRV, NH6Z, WA8YWQ";
 const char startup_config_header[] PROGMEM = "TICC Configuration: ";
 const char startup_config_separator[] PROGMEM = "#####################";
+const char startup_no_config[] PROGMEM = "No config found.  Writing default...";
+const char startup_serial_found[] PROGMEM = "No serial number found... making one";
+const char startup_serial_display[] PROGMEM = "Serial Number: ";
+const char startup_restart_retry[] PROGMEM = "Restart requested, reinitializing system...";
+const char startup_stopping_measurements[] PROGMEM = "Stopping measurements for config...";
+const char startup_flushing_measurements[] PROGMEM = "Flushing pending measurements before config...";
+const char startup_restarting_measurements[] PROGMEM = "Restarting measurements...";
+const char startup_config_request[] PROGMEM = "Type any character for config menu";
 
 // Startup mode messages
 const char startup_mode_timestamp[] PROGMEM = "timestamp (seconds with ";

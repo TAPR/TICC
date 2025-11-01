@@ -26,6 +26,8 @@ extern const char SW_TAG[8] = "RELEASE";
 #include "print.h"              // optimized 64-bit printing routines
 #include "setup.h"              // initialization functions
 #include "utils.h"              // utility functions
+#include "config_menu_text.h"   // PROGMEM menu strings
+#include "TICC.h"               // system-wide definitions
 
 // Performance-critical variables: local copies of config values used in hot path
 // These are copied from config at startup for faster access during timestamp processing
@@ -86,7 +88,7 @@ void loop() {
   if (request_restart) {
     request_restart = 0;  // Clear the flag
     just_restarted = 1;   // Set flag for next loop iteration
-    Serial.println("# Restart requested, reinitializing system...");
+    configPrintlnProg(startup_restart_retry);
     return;  // Exit loop to trigger fresh ticc_setup() call
   }
   

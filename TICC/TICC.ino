@@ -191,17 +191,34 @@ void loop() {
       continue; // skip output processing
     }
     
-    // or if both channels have invalid first timestamps (totalize <= 1)
-    if ((channels[0].totalize <= 1) && (channels[1].totalize <= 1)) {
-      channels[0].new_ts_ready = 0; // consume flags
-      channels[1].new_ts_ready = 0; // consume flags
+    // Consume flags for channels that can't produce output based on mode
+    // Period/Interval/Hat modes require totalize > 2 (need at least 3 timestamps for period calc)
+    bool mode_requires_ge2 = (config.MODE == Period || config.MODE == Interval || config.MODE == Hat);
+    if (mode_requires_ge2) {
+      // For modes requiring > 2, consume flags for channels with totalize <= 2
+      if (channels[0].new_ts_ready && channels[0].totalize <= 2) {
+        channels[0].new_ts_ready = 0; // consume flag
+      }
+      if (channels[1].new_ts_ready && channels[1].totalize <= 2) {
+        channels[1].new_ts_ready = 0; // consume flag
+      }
+    } else {
+      // For other modes (Timestamp, Paired_Timestamp, Debug), consume flags if both have totalize <= 1
+      if ((channels[0].totalize <= 1) && (channels[1].totalize <= 1)) {
+        channels[0].new_ts_ready = 0; // consume flags
+        channels[1].new_ts_ready = 0;
+      }
+    }
+    
+    // Skip if no valid timestamps remain after consuming invalid ones
+    if (!channels[0].new_ts_ready && !channels[1].new_ts_ready) {
       continue; // skip output processing
     }
 
     // or if not output_allowed
     if (!output_allowed) {
       channels[0].new_ts_ready = 0; // consume flags
-      channels[1].new_ts_ready = 0; // consume flags
+      channels[1].new_ts_ready = 0;
       continue; // skip output processing
     }
 

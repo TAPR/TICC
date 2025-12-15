@@ -24,12 +24,12 @@ Arduino sketch folder.
 Binary ".hex" files are in the binaries/ folder.  Several upload
 tools for Windows, Linux, and Mac are in the bin/ folder.  Instructions 
 for using one of them, AVRDUDESS, will be in an appendix to the updated 
-User Guide which will be in the docs/ folder as soon as it's ready.
+User Guide which is in the docs/ folder.
 
 See the CHANGES.md file for more details about versions.  This
 is just a short summary:
 
-October 2025: This is a new release in which much of the code has been
+December 2025: This is a new release in which much of the code has been
 rewritten with (hopefully) better performance, more features, and 
 several bug fixes.  Highlights:
 * New timestamp modes -- strict ascending timestamp order, or paired

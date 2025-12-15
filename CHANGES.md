@@ -1,6 +1,6 @@
 # TICC Change Log
 
-## Version 202510xx
+## Version 20251215.1
 
 **Major Release** - Most of the code has been rewritten and new algorithms
 introduced.  Bug fixes, new capabilities, rewritten configuration menu

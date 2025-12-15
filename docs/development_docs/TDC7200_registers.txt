@@ -1,3 +1,5 @@
+Data from TDC7200 data sheet
+
 Addr   Name                   Description                         Width  Default
 -----  ---------------------  ---------------------------------  -----  -------
 00h    CONFIG1                Configuration Register 1            8      00h

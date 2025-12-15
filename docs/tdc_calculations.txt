@@ -1,68 +1,77 @@
+Extract from TDC7200 datasheet:
+
+
 8.4.1 Calibration
-The time measurements performed by the TDC7200 are based on an internal time base which is represented as
-the LSB value of the TIME1 to TIME6 results registers. The typical LSB value can be seen in Electrical
-Characteristics. However, the actual value of the LSB can vary depending on environmental variables
-(temperature, systematic noise, etc.). This variation can introduce significant error into the measurement result.
-There is also an offset error in the measurement due to certain internal delays in the device.
-In order to compensate for these errors and to calculate the actual LSB value, calibration needs to be performed.
-The TDC7200 calibration consists of two measurement cycles of the external CLOCK. The first is a
-measurement of a single clock cycle period of the external clock; the second measurement is for the number of
-external CLOCK periods set by the CALIBRATION2_PERDIOS in the CONFIG2 register. The results from the
-calibration measurements are stored in the CALIBRATION1 and CALIBRATION2 registers.
-The two-point calibration is used to determine the actual LSB in real time in order to convert the TIME1 to TIME6
-results from number of delays to a real time-of-flight (TOF) number. As discussed in the next sections, the
-calibrations will be used for calculating time-of-flight (TOF) in measurement modes 1 and 2.
+The time measurements performed by the TDC7200 are based on an 
+internal time base which is represented as the LSB value of the TIME1 
+to TIME6 results registers. The typical LSB value can be seen in
+Electrical Characteristics. However, the actual value of the LSB can 
+vary depending on environmental variables (temperature, systematic 
+noise, etc.). This variation can introduce significant error into 
+the measurement result.  There is also an offset error in the measurement 
+due to certain internal delays in the device.  In order to compensate 
+for these errors and to calculate the actual LSB value, calibration 
+needs to be performed.
+
+The TDC7200 calibration consists of two measurement cycles of the 
+external CLOCK. The first is a measurement of a single clock cycle 
+period of the external clock; the second measurement is for the number 
+of external CLOCK periods set by the CALIBRATION2_PERIODS in the 
+CONFIG2 register. The results from the calibration measurements are 
+stored in the CALIBRATION1 and CALIBRATION2 registers.  The two-point 
+calibration is used to determine the actual LSB in real time in order 
+to convert the TIME1 to TIME6 results from number of delays to a real 
+time-of-flight (TOF) number.  As discussed in the next sections, the 
+1calibrations will be used for calculating time-of-flight (TOF) in 
+measurement modes 1 and 2.
 
 8.4.2.2 Measurement Mode 2
-In measurement mode 2, the internal ring oscillator of the TDC7200 is used only to count fractional parts of the
-total measured time. As shown in Figure 18, the internal ring oscillator starts counting from when it receives the
-START signal until the first rising edge of the CLOCK. Then, the internal ring oscillator switches off, and the
-Clock counter starts counting the clock cycles of the external CLOCK input until a STOP pulse is received. The
-internal ring oscillator again starts counting from the STOP signal until the next rising edge of the CLOCK.
+In measurement mode 2, the internal ring oscillator of the TDC7200 is 
+used only to count fractional parts of the total measured time. As shown 
+in Figure 18, the internal ring oscillator starts counting from when it 
+receives the START signal until the first rising edge of the CLOCK. Then, 
+the internal ring oscillator switches off, and the Clock counter starts 
+counting the clock cycles of the external CLOCK input until a STOP pulse 
+is received. The internal ring oscillator again starts counting from the 
+STOP signal until the next rising edge of the CLOCK.
 
 8.4.2.2.1 Calculating Time-of-Flight (TOF) (Measurement Mode 2)
-The time-of-flight (TOF) between the START to the n
-th STOP can be calculated using Equation 2:
+The time-of-flight (TOF) between the START to the nth STOP can be 
+calculated using Equation 2:
 
 TOF_n = normLSB(TIME1 - Time(n-1)) + (CLOCK_COUNT1(n))(CLOCKperiod)
-
 normLSB = CLOCKperiod / calCount
-
 CalCount = (CALIBRATION2 - CALIBRATION1) / ((CALIBRATION2_PERIODS)-1)
 
-where
-• TOFn
-[sec] = time-of-flight measurement from the START to the n
-th STOP
-• TIME1 = time 1 measurement given by the TDC7200 register address 0x10
-• TIME(n+1) = (n+1) time measurement, where n=1 to 5( TIME2 to TIME6 registers)
-• normLSB [sec] = normalized LSB value from calibration
-• CLOCK_COUNTn = nth clock count, where n=1 to 5( CLOCK_COUNT1 to CLOCK_COUNT5)
-• CLOCKperiod [sec] = external CLOCK period
-• CALIBRATION1 [count] = TDC count for first calibration cycle
-• CALIBRATION2 [count] = TDC count for second calibration cycle
-• CALIBRATION2_PERIODS = setting for the second calibration; located in register CONFIG2 (2)
+where:
+TOFn [sec] = time-of-flight measurement from the START to the nth STOP 
+TIME1 = time 1 measurement given by the TDC7200 register address 0x10
+TIME(n+1) = (n+1) time measurement, where n=1 to 5 (TIME2 to TIME6
+    registers)
+normLSB [sec] = normalized LSB value from calibration
+CLOCK_COUNTn = nth clock count, where n=1 to 5( CLOCK_COUNT1 to
+    CLOCK_COUNT5)
+CLOCKperiod [sec] = external CLOCK period
+CALIBRATION1 [count] = TDC count for first calibration cycle 
+CALIBRATION2 [count] = TDC count for second calibration cycle 
+CALIBRATION2_PERIODS = setting for the second calibration; located 
+    in register CONFIG2 (2)
 
-[200~For example, assume the time-of-flight between the START to the 1
-st STOP is desired, and the following
-readouts were obtained:
-• CALIBRATION2 = 23133 (decimal)
-• CALIBRATION1 = 2315 (decimal)
-• CALIBRATION2_PERIODS = 10
-• CLOCK = 8MHz
-• TIME1 = 2147 (decimal)
-• TIME2 = 201 (decimal)
-• CLOCK_COUNT1 = 318 (decimal)
+For example, assume the time-of-flight between the START to the 1st 
+STOP is desired, and the following readouts were obtained:
+CALIBRATION2 = 23133 (decimal)
+CALIBRATION1 = 2315 (decimal)
+CALIBRATION2_PERIODS = 10
+CLOCK = 8MHz
+TIME1 = 2147 (decimal)
+TIME2 = 201 (decimal)
+CLOCK_COUNT1 = 318 (decimal)
 
 Therefore, the calculation for time-of-flight is:
 
 calCount = (23133 - 2315) / (10 -1)
-
-CLOCKperiod = 1 / 8 MHz = 5.4e-11
-normLSB = (1/8 MHz) / calCount = 5.4e-11
-
+CLOCKperiod = 1 / 8 MHz = 5.4e-11 normLSB = (1/8 MHz) / calCount = 5.4e-11
 TOF1 = (2147)(5.4e-11) + (318)(1/8MHz) - 201(5.40e-11)
-
 TOF1 = 39.855 us
 
 

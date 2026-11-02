@@ -428,6 +428,9 @@ void show_main_menu() {
   
   copyProgStrToBuffer(it_exit3, line, sizeof(line));
   configPrintln(line);
+
+  copyProgStrToBuffer(it_exit4, line, sizeof(line));
+  configPrintln(line);
 }
 
 // Show mode submenu
@@ -741,6 +744,11 @@ bool process_exit_command(char cmd) {
       config = defaultConfig();
       eeprom_write_config();
       configPrintlnProg(ln_defaults_written);
+      request_restart = 1;  // Set restart flag
+      return false; // Exit config system with restart
+    case '4':
+      configPrintlnProg(ln_restarting_nosave);
+      config_changed = 0;
       request_restart = 1;  // Set restart flag
       return false; // Exit config system with restart
     default:

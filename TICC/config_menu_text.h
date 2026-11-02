@@ -28,6 +28,7 @@ const char it_show_menu[]      PROGMEM = "M - Show this menu again";
 const char it_exit1[]          PROGMEM = "1 - Discard changes and exit";
 const char it_exit2[]          PROGMEM = "2 - Apply changes and resume operation";
 const char it_exit3[]          PROGMEM = "3 - Reset all to defaults and restart";
+const char it_exit4[]          PROGMEM = "4 - Restart now (no save)";
 
 // Mode submenu items
 const char it_mode_ts[]        PROGMEM = "A1 - Timestamp";
@@ -177,6 +178,7 @@ const char ln_changes_after_restart[] PROGMEM = "(Changes will take effect after
 const char ln_discarded_changes[] PROGMEM = "Discarded changes.";
 const char ln_applying_resuming[] PROGMEM = "Applying changes and resuming operation...";
 const char ln_defaults_written[] PROGMEM = "Defaults written. Restarting...";
+const char ln_restarting_nosave[] PROGMEM = "Restarting now (unsaved changes discarded)...";
 
 // Startup banner strings
 const char startup_ticc_title[] PROGMEM = "TAPR TICC Timestamping Counter";

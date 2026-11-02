@@ -3,7 +3,7 @@
  * TICC.ino - master sketch file
  * TICC Time interval Counter based on TICC Shield using TDC7200
  *
- * Copyright John Ackermann N8UR 2016-2025
+ * Copyright John Ackermann N8UR 2016-2026
  * Portions Copyright George Byrkit K9TRV 2016
  * Portions Copyright Jeremy McDermond NH6Z 2016
  * Licensed under BSD 2-clause license
@@ -12,8 +12,8 @@
  * firmware works.
  */
 
-extern const char SW_VERSION[17] = "20251215.1";
-extern const char SW_TAG[8] = "RELEASE";
+extern const char SW_VERSION[17] = "20261102.1";
+extern const char SW_TAG[8] = "BETA";
 
 #include <stdint.h>             // define uint16_t, uint32_t
 #include <SPI.h>                // SPI support
@@ -192,27 +192,46 @@ void loop() {
       continue; // skip output processing
     }
      
-    // or if not output_allowed, but here consume flags anyway
-     if (!output_allowed) {
-      channels[0].new_ts_ready = 0; // consume flags
-      channels[1].new_ts_ready = 0;
-      continue; // skip output processing
+    // Reject captures before coarse counter is usable.
+    // calculate_timestamp() has already incremented totalize.
+    if (channels[0].new_ts_ready && channels[0].PICstop < 2) {
+        channels[0].totalize--;         // undo prior totalize++
+        channels[0].new_ts_ready = 0;   // consume flag
     }
 
-    // All modes: throw away first timestamp (totalize == 1) because it may be garbage
-    // Non-Period modes: need totalize >= 2 (after throwing away first)
-    // Period mode: need two good timestamps after first, so need totalize >= 3
-    uint8_t min_totalize = (config.MODE == Period) ? 3 : 2;
-    if (channels[0].new_ts_ready && channels[0].totalize < min_totalize) {
-      channels[0].new_ts_ready = 0; // consume flag
+    if (channels[1].new_ts_ready && channels[1].PICstop < 2) {
+        channels[1].totalize--;         // undo prior totalize++
+        channels[1].new_ts_ready = 0;   // consume flag
     }
-    if (channels[1].new_ts_ready && channels[1].totalize < min_totalize) {
-      channels[1].new_ts_ready = 0; // consume flag
-    }
-    
-    // Skip if no valid timestamps remain after consuming invalid ones
+
+    // No valid timestamps available
     if (!channels[0].new_ts_ready && !channels[1].new_ts_ready) {
-      continue; // skip output processing
+        continue;       // skip output processing
+    }
+
+    // Polling/output gate: suppress output, but retain valid counts.
+    if (!output_allowed) {
+        channels[0].new_ts_ready = 0;
+        channels[1].new_ts_ready = 0;
+        continue;
+    }
+
+    // First valid timestamp establishes Period baseline.
+    // Second valid timestamp permits first period output.
+    uint8_t min_totalize = (config.MODE == Period) ? 2 : 1;
+
+    if (channels[0].new_ts_ready &&
+        channels[0].totalize < min_totalize) {
+        channels[0].new_ts_ready = 0;
+    }
+
+    if (channels[1].new_ts_ready &&
+        channels[1].totalize < min_totalize) {
+        channels[1].new_ts_ready = 0;
+    }
+
+    if (!channels[0].new_ts_ready && !channels[1].new_ts_ready) {
+        continue;
     }
 
     // Interval and Hat modes require both channels to be ready
